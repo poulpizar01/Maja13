@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mkdirSync, unlinkSync } from 'node:fs';
+import { createStorage } from './storage.js';
 import multer from 'multer';
 import sharp from 'sharp';
 
@@ -345,12 +345,14 @@ app.delete('/api/admin/org/:id', requireAuth, requireApproved, requireManage, as
 
 // ---------- Galerie photo (publique en lecture, dépôt par les membres validés) ----------
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(ROOT, 'uploads');
-mkdirSync(UPLOAD_DIR, { recursive: true });
+const storage = createStorage({ url: process.env.STORAGE_URL, token: process.env.STORAGE_TOKEN, prefix: process.env.STORAGE_PREFIX ?? 'maja13/', dir: UPLOAD_DIR });
+console.log(`Stockage des images : ${storage.kind === 'cdn' ? 'CDN' : `local (${UPLOAD_DIR})`}`);
+// toujours servi : en dev c'est le stockage, en prod il sert encore les photos antérieures au CDN
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '30d', immutable: true }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 1 },
   fileFilter: (_req, f, cb) => cb(null, /^image\/(jpeg|png|webp|gif|heic|heif)$/.test(f.mimetype)) });
 const PHOTO_SELECT = `SELECT p.*, m.display_name, m.username, m.rank FROM photos p JOIN members m ON m.id = p.member_id WHERE p.deleted_at IS NULL`;
-const photoRow = r => ({ id: r.id, url: `/uploads/${r.file}`, thumb: `/uploads/${r.thumb}`, width: r.width, height: r.height, caption: r.caption, createdAt: r.created_at,
+const photoRow = r => ({ id: r.id, url: r.url, thumb: r.thumb_url, width: r.width, height: r.height, caption: r.caption, createdAt: r.created_at,
   author: { id: r.member_id, displayName: r.display_name, username: r.username, ...rankInfo(r.rank) } });
 
 app.get('/api/gallery', async (req, res) => {
@@ -361,17 +363,27 @@ app.get('/api/gallery', async (req, res) => {
 
 app.post('/api/gallery', requireAuth, requireApproved, (req, res, next) => upload.single('photo')(req, res, err => err ? res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Image trop lourde (15 Mo max)' : 'Fichier refusé' }) : next()), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Aucune image (jpg, png, webp, gif, heic)' });
+  let big, thumb;
   try {
-    const base = `${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`;
     const img = sharp(req.file.buffer, { animated: false }).rotate();
-    const big = await img.clone().resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true }).webp({ quality: 84 }).toFile(join(UPLOAD_DIR, `${base}.webp`));
-    await img.clone().resize({ width: 600, height: 600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 78 }).toFile(join(UPLOAD_DIR, `${base}-t.webp`));
-    const caption = String(req.body.caption ?? '').trim().slice(0, 200) || null;
-    const { rows: [ins] } = await pool.query('INSERT INTO photos (member_id, file, thumb, width, height, caption) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-      [req.member.id, `${base}.webp`, `${base}-t.webp`, big.width, big.height, caption]);
-    const { rows: [row] } = await pool.query(`${PHOTO_SELECT} AND p.id = $1`, [ins.id]);
-    res.status(201).json(photoRow(row));
-  } catch (e) { console.error(e); res.status(400).json({ error: "Image illisible" }); }
+    big = await img.clone().resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true }).webp({ quality: 84 }).toBuffer({ resolveWithObject: true });
+    thumb = await img.clone().resize({ width: 600, height: 600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 78 }).toBuffer();
+  } catch (e) { console.error(e); return res.status(400).json({ error: 'Image illisible' }); }
+  const base = `galerie/${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`;
+  const keys = [`${base}.webp`, `${base}-t.webp`];
+  let urls = [];
+  try {
+    urls = [await storage.put(keys[0], big.data, 'image/webp'), await storage.put(keys[1], thumb, 'image/webp')];
+  } catch (e) {
+    console.error(e);
+    if (urls[0]) storage.remove(keys[0], urls[0]).catch(() => {});
+    return res.status(502).json({ error: "Le stockage des images ne répond pas, réessaie dans un instant" });
+  }
+  const caption = String(req.body.caption ?? '').trim().slice(0, 200) || null;
+  const { rows: [ins] } = await pool.query('INSERT INTO photos (member_id, file, thumb, url, thumb_url, width, height, caption) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+    [req.member.id, keys[0], keys[1], urls[0], urls[1], big.info.width, big.info.height, caption]);
+  const { rows: [row] } = await pool.query(`${PHOTO_SELECT} AND p.id = $1`, [ins.id]);
+  res.status(201).json(photoRow(row));
 });
 
 app.delete('/api/gallery/:id', requireAuth, requireApproved, async (req, res) => {
@@ -379,7 +391,8 @@ app.delete('/api/gallery/:id', requireAuth, requireApproved, async (req, res) =>
   if (!p) return res.status(404).json({ error: 'not-found' });
   if (p.member_id !== req.member.id && !canAdmin(req.member)) return res.status(403).json({ error: 'forbidden' });
   await pool.query('UPDATE photos SET deleted_at = now() WHERE id = $1', [p.id]);
-  for (const f of [p.file, p.thumb]) { try { unlinkSync(join(UPLOAD_DIR, f)); } catch {} }
+  // la photo disparaît du site tout de suite ; un échec du stockage laisse seulement un fichier orphelin
+  for (const [key, url] of [[p.file, p.url], [p.thumb, p.thumb_url]]) await storage.remove(key, url).catch(e => console.error(e));
   res.json({ ok: true });
 });
 

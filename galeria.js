@@ -22,7 +22,7 @@
     photos = list; if (!photos.length) return;
     grid.innerHTML = photos.map((p, i) => `
       <figure class="galeria__item reveal is-in ${p.width > p.height * 1.4 ? 'is-wide' : ''}">
-        <button type="button" data-i="${i}"><img src="${p.thumb}" alt="${esc(p.caption)}" loading="lazy" width="${p.width}" height="${p.height}"></button>
+        <button type="button" data-i="${i}"><img src="${esc(p.thumb)}" alt="${esc(p.caption)}" loading="lazy" width="${p.width}" height="${p.height}"></button>
         <figcaption>${p.caption ? `<i>${esc(p.caption)}</i>` : ''}<b>${esc(p.author.displayName)}</b></figcaption>
       </figure>`).join('');
     grid.addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) show(Number(b.dataset.i)); });

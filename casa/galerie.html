@@ -85,7 +85,7 @@
     $('count').textContent = list.length; $('empty').hidden = list.length > 0;
     $('grid').innerHTML = list.map(p => `
       <figure class="gal-item" data-id="${p.id}">
-        <a href="..${p.url}" target="_blank" rel="noopener"><img src="..${p.thumb}" alt="${esc(p.caption)}" loading="lazy"></a>
+        <a href="${esc(p.url)}" target="_blank" rel="noopener"><img src="${esc(p.thumb)}" alt="${esc(p.caption)}" loading="lazy"></a>
         <figcaption>
           <b>${esc(p.author.displayName)}</b> <span class="muted">· ${fmt(p.createdAt)}</span>
           ${p.caption ? `<i>${esc(p.caption)}</i>` : ''}

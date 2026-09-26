@@ -124,3 +124,10 @@ ALTER TABLE members DROP CONSTRAINT IF EXISTS members_rank_fkey;
 ALTER TABLE members ADD CONSTRAINT members_rank_fkey FOREIGN KEY (rank) REFERENCES ranks(key) ON DELETE RESTRICT;
 ALTER TABLE org_entries DROP CONSTRAINT IF EXISTS org_entries_rank_fkey;
 ALTER TABLE org_entries ADD CONSTRAINT org_entries_rank_fkey FOREIGN KEY (rank) REFERENCES ranks(key) ON DELETE RESTRICT;
+
+-- v9 : galerie — URL publique de chaque fichier (disque local en dev, CDN en production) ;
+--      file / thumb deviennent les clés de stockage
+ALTER TABLE photos ADD COLUMN IF NOT EXISTS url TEXT;
+ALTER TABLE photos ADD COLUMN IF NOT EXISTS thumb_url TEXT;
+UPDATE photos SET url = '/uploads/' || file, thumb_url = '/uploads/' || thumb WHERE url IS NULL;
+ALTER TABLE photos ALTER COLUMN file TYPE VARCHAR(200), ALTER COLUMN thumb TYPE VARCHAR(200);

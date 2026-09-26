@@ -36,6 +36,8 @@ OLD_CID="$(lire DISCORD_CLIENT_ID)"
 OLD_CSECRET="$(lire DISCORD_CLIENT_SECRET)"
 OLD_GUILD="$(lire DISCORD_GUILD_ID)"
 OLD_ADMINS="$(lire ADMIN_DISCORD_IDS)"
+OLD_STORAGE_URL="$(lire STORAGE_URL)"
+OLD_STORAGE="$(lire STORAGE_TOKEN)"
 
 demander() {  # demander <invite> <valeur_actuelle> <variable_de_sortie> [-s]
   local invite="$1" actuel="$2" sortie="$3" secret="${4:-}" reponse
@@ -55,6 +57,8 @@ demander "Discord Client ID"                          "$OLD_CID"    CID
 demander "Discord Client Secret"                      "$OLD_CSECRET" CSECRET -s
 demander "ID du serveur Discord (guild)"              "$OLD_GUILD"  GUILD
 demander "IDs Discord des admins (virgules, optionnel)" "$OLD_ADMINS" ADMINS
+demander "URL du stockage d'images (vide = disque du serveur)" "$OLD_STORAGE_URL" STORAGE_URL
+[ -n "$STORAGE_URL" ] && demander "Token du stockage d'images" "$OLD_STORAGE" STORAGE -s || STORAGE=""
 
 [ -n "$DOMAIN" ] || { echo "Le nom de domaine est obligatoire."; exit 1; }
 
@@ -72,6 +76,8 @@ DISCORD_CLIENT_ID=$CID
 DISCORD_CLIENT_SECRET=$CSECRET
 DISCORD_GUILD_ID=$GUILD
 ADMIN_DISCORD_IDS=$ADMINS
+STORAGE_URL=$STORAGE_URL
+STORAGE_TOKEN=$STORAGE
 ENVF
 chmod 600 "$ENV"
 echo "-> $ENV ecrit."
