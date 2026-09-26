@@ -1,12 +1,11 @@
--- La Maja 13 — schéma de La Casa
+-- La Maja 13 — schéma de La Casa (appliqué à chaque démarrage : chaque bloc est idempotent)
 CREATE TABLE IF NOT EXISTS members (
   id            SERIAL PRIMARY KEY,
   discord_id    VARCHAR(32) UNIQUE NOT NULL,
   username      VARCHAR(64) NOT NULL,          -- pseudo Discord
   avatar        VARCHAR(128),                  -- hash avatar Discord
   display_name  VARCHAR(64),                   -- nom RP (modifiable par le membre)
-  rank          VARCHAR(20) NOT NULL DEFAULT 'recluta'
-                CHECK (rank IN ('jefe','segundo','palabrero','commandante','sicario','soldado','recluta')),
+  rank          VARCHAR(20),                   -- grade (table ranks) ; NULL = sans grade
   bio           TEXT,
   phone_rp      VARCHAR(32),
   is_admin      BOOLEAN NOT NULL DEFAULT FALSE,
@@ -39,11 +38,7 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_created ON messages (created_at DESC);
 
--- v4 : grade Dev Web
-ALTER TABLE members DROP CONSTRAINT IF EXISTS members_rank_check;
-ALTER TABLE members ADD CONSTRAINT members_rank_check CHECK (rank IN ('jefe','segundo','devweb','palabrero','commandante','sicario','soldado','recluta'));
-
--- v5 : organigramme public modifiable par le Jefe
+-- v5 : organigramme public
 CREATE TABLE IF NOT EXISTS org_entries (
   id          SERIAL PRIMARY KEY,
   rank        VARCHAR(20) NOT NULL,
@@ -53,25 +48,6 @@ CREATE TABLE IF NOT EXISTS org_entries (
   is_open     BOOLEAN NOT NULL DEFAULT FALSE,
   position    INTEGER NOT NULL DEFAULT 0
 );
-CREATE TABLE IF NOT EXISTS org_rank_desc (
-  rank        VARCHAR(20) PRIMARY KEY,
-  description TEXT
-);
-INSERT INTO org_entries (rank, name, subtitle, description, is_open, position)
-SELECT * FROM (VALUES
-  ('jefe','Hector Palma','38 ans · Salvador','Dirige l''ensemble de l''organisation. Définit les objectifs, les alliances et les règles. A le dernier mot sur toutes les opérations.',false,0),
-  ('segundo','Santiago C. Cardenas','30 ans · Salvador','Bras droit du Jefe. Assure la gestion quotidienne, fait le lien avec les Commandantes et supervise les opérations.',false,0),
-  ('palabrero','Dante',NULL,'Coordonne les Commandantes, veille au respect des règles et de la discipline, participe aux décisions stratégiques.',false,0),
-  ('commandante','Emilio',NULL,NULL,false,0),('commandante','Aguera',NULL,NULL,false,1),('commandante','Santiago M.',NULL,NULL,false,2),
-  ('sicario','Mac',NULL,NULL,false,0),('sicario','Diablo',NULL,NULL,false,1),('sicario','Aguera',NULL,NULL,false,2),('sicario','Emilio',NULL,NULL,false,3),
-  ('soldado','Hannah',NULL,NULL,false,0),('soldado','Karl',NULL,NULL,false,1),('soldado','Recrutement',NULL,NULL,true,2)
-) AS v(rank,name,subtitle,description,is_open,position)
-WHERE NOT EXISTS (SELECT 1 FROM org_entries);
-INSERT INTO org_rank_desc (rank, description) VALUES
-  ('commandante','Dirige une équipe sur le terrain, organise et mène les opérations quotidiennes, accompagne les nouveaux membres.'),
-  ('sicario','Exécute les missions confiées par les Commandantes, encadre les Soldados et assure la réussite des actions à risque.'),
-  ('soldado','Participe aux opérations, respecte les ordres et la hiérarchie, représente l''organisation par son comportement et progresse vers les grades supérieurs.')
-ON CONFLICT (rank) DO NOTHING;
 
 -- v6 : galerie photo
 CREATE TABLE IF NOT EXISTS photos (
@@ -104,3 +80,47 @@ CREATE TABLE IF NOT EXISTS pay_history (
   UNIQUE (week_end, discord_id)
 );
 CREATE INDEX IF NOT EXISTS idx_pay_history_discord ON pay_history (discord_id, week_end DESC);
+
+-- v8 : grades paramétrables depuis La Casa (page Hiérarchie)
+CREATE TABLE IF NOT EXISTS ranks (
+  key             VARCHAR(20) PRIMARY KEY,         -- identifiant technique, fixé à la création
+  label           VARCHAR(40) NOT NULL,            -- nom affiché
+  position        INTEGER NOT NULL DEFAULT 0,      -- ordre dans la hiérarchie (0 = sommet)
+  color           VARCHAR(7),                      -- couleur d'accent (#rrggbb)
+  description     TEXT,                            -- texte public sous la rangée de l'organigramme
+  featured        BOOLEAN NOT NULL DEFAULT FALSE,  -- grande carte sur l'organigramme public
+  can_admin       BOOLEAN NOT NULL DEFAULT FALSE,  -- accès à la Gestion (membres, tableau, taxes, armurerie)
+  can_manage      BOOLEAN NOT NULL DEFAULT FALSE,  -- pouvoirs complets (grades, hiérarchie, grades à pouvoirs)
+  is_default      BOOLEAN NOT NULL DEFAULT FALSE,  -- grade donné aux nouveaux comptes
+  discord_role_id VARCHAR(32) UNIQUE               -- rôle Discord qui attribue ce grade à la connexion
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ranks_single_default ON ranks ((true)) WHERE is_default;
+
+-- Reprise d'une base antérieure à la v8 (grades alors figés dans le code) : ne s'exécute
+-- qu'une fois, si la table ranks est vide alors que des membres ont déjà un grade.
+-- Sans effet sur une installation neuve ; peut être supprimé une fois la prod migrée.
+INSERT INTO ranks (key, label, position, color, featured, can_admin, can_manage, is_default)
+SELECT * FROM (VALUES
+  ('jefe','Jefe',0,'#9f2635',true,true,true,false), ('segundo','Segundo',1,'#b6512f',true,true,false,false),
+  ('devweb','Dev Web',2,NULL,false,true,true,false), ('palabrero','Palabrero',3,'#ad8a4e',true,false,false,false),
+  ('commandante','Commandante',4,'#8a7654',false,false,false,false), ('sicario','Sicario',5,'#6d6151',false,false,false,false),
+  ('soldado','Soldado',6,'#5a5142',false,false,false,false), ('recluta','Recluta',7,NULL,false,false,false,true)
+) AS v(key,label,position,color,featured,can_admin,can_manage,is_default)
+WHERE NOT EXISTS (SELECT 1 FROM ranks) AND EXISTS (SELECT 1 FROM members WHERE rank IS NOT NULL);
+DO $$ BEGIN
+  IF to_regclass('org_rank_desc') IS NOT NULL THEN
+    UPDATE ranks r SET description = d.description FROM org_rank_desc d WHERE d.rank = r.key AND r.description IS NULL;
+    DROP TABLE org_rank_desc;
+  END IF;
+END $$;
+
+-- les grades deviennent des références vers ranks
+ALTER TABLE members DROP CONSTRAINT IF EXISTS members_rank_check;
+ALTER TABLE members ALTER COLUMN rank DROP NOT NULL;
+ALTER TABLE members ALTER COLUMN rank DROP DEFAULT;
+UPDATE members SET rank = NULL WHERE rank IS NOT NULL AND rank NOT IN (SELECT key FROM ranks);
+DELETE FROM org_entries WHERE rank NOT IN (SELECT key FROM ranks);
+ALTER TABLE members DROP CONSTRAINT IF EXISTS members_rank_fkey;
+ALTER TABLE members ADD CONSTRAINT members_rank_fkey FOREIGN KEY (rank) REFERENCES ranks(key) ON DELETE RESTRICT;
+ALTER TABLE org_entries DROP CONSTRAINT IF EXISTS org_entries_rank_fkey;
+ALTER TABLE org_entries ADD CONSTRAINT org_entries_rank_fkey FOREIGN KEY (rank) REFERENCES ranks(key) ON DELETE RESTRICT;

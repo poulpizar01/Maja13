@@ -84,7 +84,7 @@
     return `<article class="msg ${mine ? 'msg--mine' : ''} ${grouped ? 'msg--grouped' : ''} ${!mine && isMentioned(m.content) ? 'msg--mention' : ''}" data-id="${m.id}">
       <img class="msg__avatar" src="${m.author.avatarUrl || '../assets/favicon.png'}" alt="">
       <div class="msg__body">
-        <header class="msg__head"><b class="msg__name">${esc(m.author.displayName)}</b><span class="msg__rank" data-rank="${m.author.rank}">${m.author.rankLabel}</span><time>${time(m.createdAt)}</time>${canDel ? `<button class="msg__del" data-del="${m.id}" title="Supprimer">✕</button>` : ''}</header>
+        <header class="msg__head"><b class="msg__name">${esc(m.author.displayName)}</b><span class="msg__rank" data-featured="${m.author.rankFeatured}">${esc(m.author.rankLabel || '')}</span><time>${time(m.createdAt)}</time>${canDel ? `<button class="msg__del" data-del="${m.id}" title="Supprimer">✕</button>` : ''}</header>
         <p class="msg__text">${linkify(m.content)}</p>
       </div>
     </article>`;
@@ -126,7 +126,7 @@
 
   function renderOnline(list) {
     $('onlineCount').textContent = list.length;
-    $('online').innerHTML = list.map(u => `<li><img src="${u.avatarUrl || '../assets/favicon.png'}" alt=""><span>${esc(u.displayName)}</span><i data-rank="${u.rank}">${u.rankLabel}</i></li>`).join('');
+    $('online').innerHTML = list.map(u => `<li><img src="${u.avatarUrl || '../assets/favicon.png'}" alt=""><span>${esc(u.displayName)}</span><i data-featured="${u.rankFeatured}">${esc(u.rankLabel || '')}</i></li>`).join('');
   }
 
   let es;

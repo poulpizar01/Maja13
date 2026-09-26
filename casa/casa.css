@@ -27,8 +27,8 @@
 .perfil__avatar-wrap{position:relative;width:140px;margin-bottom:18px}
 .perfil__avatar{width:140px;height:140px;border-radius:50%;border:2px solid var(--gold);box-shadow:0 0 40px rgba(201,164,92,.3);object-fit:cover}
 .perfil__rank{position:absolute;left:50%;bottom:-10px;transform:translateX(-50%);white-space:nowrap;font-family:var(--serif);font-size:10px;letter-spacing:.3em;text-transform:uppercase;padding:5px 12px;background:var(--bg);border:1px solid var(--gold);color:var(--gold3)}
-.perfil__rank[data-rank="jefe"],.perfil__rank[data-rank="segundo"]{background:linear-gradient(135deg,var(--gold3),var(--gold) 45%,var(--gold2));color:#120e08;font-weight:700}
-.perfil__rank[data-rank="recluta"]{border-style:dashed;color:var(--ink2)}
+.perfil__rank[data-featured="true"]{background:linear-gradient(135deg,var(--gold3),var(--gold) 45%,var(--gold2));color:#120e08;font-weight:700}
+.perfil__rank[data-norank]{border-style:dashed;color:var(--ink2)}
 .perfil__name{font-family:var(--display);font-size:46px;letter-spacing:.04em;line-height:1;color:var(--ink);margin:4px 0 6px}
 .perfil__discord{color:var(--ink2);font-size:15px}
 .perfil__discord b{font-weight:500;color:var(--ink)}
@@ -51,8 +51,8 @@
 .miembro{position:relative;text-align:center;border:1px solid var(--line);padding:22px 14px 18px;background:linear-gradient(180deg,rgba(201,164,92,.06),rgba(0,0,0,.2));transition:.3s}
 .miembro:hover{border-color:var(--gold);transform:translateY(-3px)}
 .miembro img{width:72px;height:72px;border-radius:50%;margin:0 auto 12px;border:1px solid var(--gold2);object-fit:cover}
-.miembro[data-rank="jefe"],.miembro[data-rank="segundo"]{border-color:var(--gold);box-shadow:0 0 30px rgba(201,164,92,.12)}
-.miembro[data-rank="jefe"] img,.miembro[data-rank="segundo"] img{border:2px solid var(--gold)}
+.miembro[data-featured="true"]{border-color:var(--gold);box-shadow:0 0 30px rgba(201,164,92,.12)}
+.miembro[data-featured="true"] img{border:2px solid var(--gold)}
 .miembro__name{display:block;font-family:var(--display);font-size:24px;letter-spacing:.04em;color:var(--ink);margin-top:4px}
 .miembro__user{display:block;font-size:13px;color:var(--ink2)}
 
@@ -112,7 +112,7 @@
 .chat__online img{width:28px;height:28px;border-radius:50%;border:1px solid var(--gold2);object-fit:cover}
 .chat__online span{flex:1;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat__online i,.msg__rank{font-style:normal;font-family:var(--serif);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold2)}
-[data-rank="jefe"],[data-rank="segundo"],[data-rank="devweb"]{color:var(--gold3)!important}
+.msg__rank[data-featured="true"],.chat__online i[data-featured="true"]{color:var(--gold3)!important}
 .chat__rules{font-size:13px;font-style:italic;color:var(--ink2);margin:14px 0 0}
 .chat__main{border:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:rgba(0,0,0,.25);position:relative}
 .chat__status{position:absolute;top:0;left:0;right:0;z-index:2;text-align:center;font-family:var(--serif);font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:#e0a29e;background:rgba(122,31,31,.35);padding:6px}
@@ -164,25 +164,48 @@
 .casa-fx{position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}
 
 /* hiérarchie (organigramme public) */
-.org-form{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 18px;align-items:end;border:1px solid var(--line);padding:22px;background:linear-gradient(180deg,rgba(201,164,92,.05),rgba(0,0,0,.25))}
-.org-form label,.org-desc label{font-family:var(--serif);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--gold2);margin:0}
-.org-form label small,.org-desc label small{text-transform:none;letter-spacing:0;font-family:var(--body);font-size:13px;color:var(--ink2)}
-.org-form__wide{grid-column:1/-1}
-.org-form__check{display:flex!important;align-items:center;gap:8px;text-transform:none!important;letter-spacing:0!important;font-family:var(--body)!important;font-size:15px!important;color:var(--ink)!important}
-.org-form__check input{accent-color:var(--gold)}
-.org-tier{margin-bottom:40px}
-.org-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:14px}
-.org-card{position:relative;border:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:8px;background:linear-gradient(180deg,rgba(201,164,92,.05),rgba(0,0,0,.25))}
-.org-card.is-open{border-style:dashed}
-.org-card .admin-input,.org-card .admin-select{margin-top:0}
-.org-card__row{display:flex;gap:8px;align-items:center}
-.org-card__row .admin-select{flex:1}
-.org-card__moves{display:flex;gap:4px}
-.org-card__moves .btn{padding:7px 11px;font-size:13px}
-.org-card__moves .btn:disabled{opacity:.3;cursor:default}
-.org-card__actions{display:flex;gap:8px;justify-content:space-between;margin-top:4px}
-.org-desc{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end;border-top:1px dotted var(--line);padding-top:12px}
-@media (max-width:760px){.org-form,.org-desc{grid-template-columns:1fr}}
+/* Hiérarchie : liste des grades (glisser-déposer) + aperçu de l'organigramme */
+.hier-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.grades{list-style:none;margin:0;padding:0;border:1px solid var(--line)}
+.grade{display:flex;align-items:stretch;border-bottom:1px solid var(--line);background:rgba(0,0,0,.2)}
+.grade:last-child{border-bottom:0}
+.grade__handle,.grade__handle-demo{color:var(--ink2);font-size:18px;line-height:1}
+.grade__handle{display:flex;align-items:center;padding:0 14px;cursor:grab;touch-action:none;user-select:none}
+.grade__handle:hover{color:var(--gold3)}
+.grade__main{flex:1;display:flex;align-items:center;gap:14px;min-width:0;padding:14px 18px 14px 0;background:none;border:0;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.grade__main:hover .grade__name,.grade__main:focus-visible .grade__name{color:var(--gold3)}
+.grade__dot{flex:none;display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid var(--line)}
+.grade__name{font-family:var(--serif);font-size:15px;letter-spacing:.12em;text-transform:uppercase;transition:color .2s}
+.grade__tags{flex:1;display:flex;flex-wrap:wrap;gap:6px}
+.grade__count{color:var(--ink2);font-style:italic;font-size:14px;white-space:nowrap}
+.grade__go{color:var(--gold);font-size:22px;line-height:1}
+.tag{font-family:var(--serif);font-size:9px;letter-spacing:.18em;text-transform:uppercase;padding:3px 8px;border:1px solid var(--line);color:var(--ink2)}
+.tag--gold{border-color:var(--gold2);color:var(--gold)}
+.is-ghost{opacity:.35}
+.tiers{display:flex;flex-direction:column;gap:10px}
+.tier{display:grid;grid-template-columns:170px 1fr auto;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--line);background:rgba(0,0,0,.18)}
+.tier--feat{border-color:var(--gold2)}
+.tier__label{display:flex;align-items:center;gap:10px;font-family:var(--serif);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold)}
+.tier__cards{display:flex;flex-wrap:wrap;gap:10px;min-height:52px;align-items:center}
+.tier__cards:empty::before{content:"Aucune case — glisse-en une ici ou clique sur +";color:var(--ink2);font-style:italic;font-size:14px;opacity:.7}
+.ocard{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:120px;padding:10px 16px;border:1px solid var(--line);background:rgba(201,164,92,.05);color:var(--ink);font:inherit;cursor:grab;transition:border-color .2s}
+.ocard:hover{border-color:var(--gold)}
+.ocard b{font-weight:500;font-size:16px}
+.ocard small{color:var(--ink2);font-style:italic;font-size:13px}
+.ocard--open{border-style:dashed;opacity:.7}
+.tier__add{width:40px;height:40px;border:1px dashed var(--gold2);background:none;color:var(--gold);font-size:22px;line-height:1;cursor:pointer}
+.tier__add:hover{border-style:solid;background:rgba(201,164,92,.1)}
+@media (max-width:760px){.tier{grid-template-columns:1fr auto}.tier__cards{grid-column:1/-1;grid-row:2}.grade__tags{display:none}}
+/* champs supplémentaires de casaForm */
+.modal--form{overflow-y:auto}
+.modal--form .modal__box{margin:auto}
+.modal__color{align-self:flex-start;width:64px;height:38px;padding:2px;border:1px solid var(--line);background:rgba(0,0,0,.35);cursor:pointer}
+.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px}
+.choice{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);cursor:pointer}
+.choice:has(input:checked){border-color:var(--gold);background:rgba(201,164,92,.07)}
+.choice b{display:block;font-weight:500;color:var(--ink);line-height:1.25}
+.choice small{display:block;color:var(--ink2);font-style:italic;font-size:13px}
+.modal__actions .modal__del{margin-right:auto}
 
 /* galerie (dépôt) */
 .upload{display:grid;grid-template-columns:1.2fr 1fr;gap:20px;border:1px solid var(--line);padding:22px;background:linear-gradient(180deg,rgba(201,164,92,.05),rgba(0,0,0,.25))}
@@ -350,17 +373,18 @@
 .chat__form{position:relative}
 
 /* ── Formulaires en modale, toasts, actions du bot ── */
-.modal--form .modal__box{width:min(520px,100%);text-align:left}
+.modal--form .modal__box{width:min(560px,100%);text-align:left;padding:28px 28px 22px}
 .modal--form .eyebrow,.modal--form .modal__title{text-align:center}
 .modal--form .modal__text{text-align:center;margin-bottom:18px}
-.modal__fields{display:flex;flex-direction:column;gap:12px;margin-bottom:18px}
+.modal__fields{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-bottom:18px}
+.modal__fields>*{grid-column:1/-1}
+.modal__fields>.modal__field--half{grid-column:auto}
 .modal__field{display:flex;flex-direction:column;gap:4px}
 .modal__field>span{font-family:var(--serif);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink2)}
 .modal__field small{color:var(--ink2);font-style:italic;font-size:13px}
 .modal__field .admin-input,.modal__field .admin-select{margin-top:0;font-size:16px}
 .modal__checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:4px 12px;max-height:220px;overflow:auto;padding:8px 10px;border:1px solid var(--line);background:rgba(0,0,0,.25)}
 .check{display:flex;align-items:center;gap:8px;font-size:15px;cursor:pointer;color:var(--ink)}
-.check input{accent-color:var(--gold);width:15px;height:15px}
 .modal__error{color:#e0a29e;font-size:14px;margin:-8px 0 14px;text-align:center}
 .toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);z-index:120;opacity:0;pointer-events:none;transition:.25s;max-width:min(92vw,560px);padding:12px 20px;border:1px solid var(--gold2);background:rgba(10,8,6,.96);color:var(--gold3);font-size:15px;text-align:center;box-shadow:0 20px 40px rgba(0,0,0,.6)}
 .toast.is-on{opacity:1;transform:translate(-50%,0)}
@@ -385,3 +409,14 @@
 .declarer__hist time{color:var(--ink2);font-size:13px;font-style:italic;white-space:nowrap}
 .stock-edit{background:none;border:0;border-bottom:1px dotted var(--gold2);color:var(--gold3);font:inherit;cursor:pointer;padding:0}
 .stock-edit:hover{border-bottom-style:solid;color:#fff}
+@media (max-width:560px){.modal__fields>.modal__field--half{grid-column:1/-1}}
+/* cases à cocher et boutons radio aux couleurs de la DA (remplacent les contrôles blancs du navigateur) */
+.check input,.choice input{-webkit-appearance:none;appearance:none;flex:none;display:inline-grid;place-content:center;width:16px;height:16px;margin:0;border:1px solid var(--gold2);background:rgba(0,0,0,.45);cursor:pointer;transition:border-color .2s,background .2s}
+.check input::before,.choice input::before{content:"";width:8px;height:8px;background:var(--gold);transform:scale(0);transition:transform .15s}
+.check input::before{width:10px;height:10px;clip-path:polygon(14% 44%,0 65%,50% 100%,100% 16%,80% 0,43% 62%)}
+.choice input{border-radius:50%;margin-top:4px}
+.choice input::before{border-radius:50%}
+.check input:checked,.choice input:checked{border-color:var(--gold);background:rgba(201,164,92,.12)}
+.check input:checked::before,.choice input:checked::before{transform:scale(1)}
+.check input:hover,.choice input:hover,.check input:focus-visible,.choice input:focus-visible{border-color:var(--gold3);outline:none}
+textarea.admin-input{resize:vertical;max-width:100%;min-height:60px}

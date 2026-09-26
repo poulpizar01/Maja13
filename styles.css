@@ -137,12 +137,12 @@ p{margin:0 0 1em}
 .rank__name{display:block;font-family:var(--display);font-size:30px;letter-spacing:.04em;color:var(--ink);margin-top:6px}
 .rank__age{display:block;font-size:14px;color:var(--ink2);font-style:italic;margin-top:2px}
 .rank p{max-width:420px;margin:12px auto 0;color:var(--ink2);font-size:15px}
-.rank--jefe{padding:34px 44px;border-color:var(--gold);box-shadow:0 0 50px rgba(201,164,92,.15)}
-.rank--jefe .rank__name{font-size:44px;background:linear-gradient(180deg,#f7e6b6,#c9a45c 55%,#8a6a34);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.rank--segundo{padding:28px 40px;border-color:rgba(201,164,92,.55)}
-.rank--segundo .rank__name{font-size:38px}
-.rank--palabrero .rank__name{font-size:34px}
-.rank--sol{min-width:160px}
+.rank--lvl1{padding:34px 44px;border-color:var(--gold);box-shadow:0 0 50px rgba(201,164,92,.15)}
+.rank--lvl1 .rank__name{font-size:44px;background:linear-gradient(180deg,#f7e6b6,#c9a45c 55%,#8a6a34);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.rank--lvl2{padding:28px 40px;border-color:rgba(201,164,92,.55)}
+.rank--lvl2 .rank__name{font-size:38px}
+.rank--lvl3 .rank__name{font-size:34px}
+.rank:not(.rank--feat){min-width:160px}
 .rank--open{border-style:dashed;opacity:.65}
 .rank--open .rank__name{color:var(--gold2);font-size:22px;letter-spacing:.1em}
 

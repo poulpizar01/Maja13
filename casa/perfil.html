@@ -47,7 +47,7 @@
     <div class="perfil__card">
       <div class="perfil__avatar-wrap">
         <img class="perfil__avatar" id="avatar" src="../assets/favicon.png" alt="" width="140" height="140">
-        <span class="perfil__rank" id="rank">Recluta</span>
+        <span class="perfil__rank" id="rank"></span>
       </div>
       <p class="eyebrow">Mon profil</p>
       <h1 class="perfil__name" id="displayName">—</h1>
@@ -120,7 +120,7 @@
   const fmt = d => d ? new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
   function render(m) {
     $('avatar').src = m.avatarUrl || '../assets/favicon.png';
-    $('rank').textContent = m.rankLabel; $('rank').dataset.rank = m.rank;
+    $('rank').textContent = m.rankLabel || 'Sans grade'; $('rank').dataset.featured = m.rankFeatured; $('rank').toggleAttribute('data-norank', !m.rank);
     $('displayName').textContent = m.displayName;
     $('username').textContent = '@' + m.username;
     $('joinedAt').textContent = fmt(m.joinedAt);
@@ -188,7 +188,7 @@
   const dur = iso => { const m = minutes(iso); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60 ? (m % 60) + ' min' : ''}`.trim() : `${m} min`; };
   async function partenairesOptions() {
     if (!FAMILIA) { try { FAMILIA = await (await fetch('../api/familia', { credentials: 'same-origin' })).json(); } catch { FAMILIA = []; } }
-    return FAMILIA.filter(m => m.discordId && m.discordId !== (ME && ME.discordId)).map(m => ({ value: m.discordId, label: `${m.displayName} · ${m.rankLabel}` }));
+    return FAMILIA.filter(m => m.discordId && m.discordId !== (ME && ME.discordId)).map(m => ({ value: m.discordId, label: m.rankLabel ? `${m.displayName} · ${m.rankLabel}` : m.displayName }));
   }
   function actCard(a) {
     let note = '', blocked = false;

@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="casa.css">
 <script src="casa.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 </head>
 <body class="casa-body">
 <div class="grain" aria-hidden="true"></div>
@@ -44,102 +45,156 @@
   <div class="section__head">
     <span class="numeral">✦</span>
     <h2>Hiérarchie</h2>
-    <p class="sub">L'organigramme affiché sur le site public</p>
+    <p class="sub">Les grades de la familia et l'organigramme du site public</p>
   </div>
   <div class="casa-loading" id="loading">Chargement…</div>
-  <p class="casa-toast" id="toast" hidden></p>
 
-  <section class="admin-block" id="addBlock" hidden>
-    <h3 class="admin-block__title">Ajouter une case</h3>
-    <form class="org-form" id="addForm">
-      <label>Grade<select class="admin-select" name="rank" id="addRank"></select></label>
-      <label>Nom affiché<input class="admin-input" name="name" maxlength="64" required placeholder="Ex : Marisol"></label>
-      <label>Sous-titre <small>(optionnel)</small><input class="admin-input" name="subtitle" maxlength="80" placeholder="Ex : 27 ans · Salvador"></label>
-      <label class="org-form__wide">Description <small>(affichée pour Jefe, Segundo, Palabrero)</small><textarea class="admin-input" name="description" rows="2" maxlength="600"></textarea></label>
-      <label class="org-form__check"><input type="checkbox" name="isOpen"> Poste à pourvoir (case en pointillés)</label>
-      <button class="btn btn--gold btn--sm" type="submit">Ajouter</button>
-    </form>
+  <section class="admin-block" id="ranksBlock" hidden>
+    <div class="hier-head">
+      <h3 class="admin-block__title">Grades</h3>
+      <button class="btn btn--gold btn--sm" type="button" id="newRank">+ Nouveau grade</button>
+    </div>
+    <p class="admin-block__hint">Du plus haut au plus bas. Glisse <span class="grade__handle-demo">⠿</span> pour changer l'ordre, clique sur un grade pour le modifier.</p>
+    <ol class="grades" id="ranks"></ol>
   </section>
 
-  <div id="tiers"></div>
-  <p class="admin-block__hint" style="margin-top:30px">Ce que tu modifies ici apparaît immédiatement dans la section « La Familia » du site public. Le nom affiché est libre : ce n'est pas lié aux comptes de La Casa.</p>
+  <section class="admin-block" id="orgBlock" hidden>
+    <h3 class="admin-block__title">Organigramme public</h3>
+    <p class="admin-block__hint">Ce que voient les visiteurs dans « La Familia ». Glisse une case pour la déplacer, même vers un autre grade ; clique dessus pour la modifier. Les noms sont libres, sans lien avec les comptes.</p>
+    <div class="tiers" id="tiers"></div>
+  </section>
 </main>
 
 <script>
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let data;
-  const toast = (msg, ok = true) => { const t = $('toast'); t.textContent = msg; t.className = 'casa-toast' + (ok ? '' : ' is-error'); t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 3000); };
   const api = (url, opt = {}) => fetch(url, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, ...opt })
     .then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('perfil.html'); throw 0; } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
+  const reload = async () => { data = await api('../api/admin/org'); render(); };
+  // exécute une modification puis recharge ; en cas d'erreur, recharge aussi (annule un glisser-déposer refusé)
+  const save = async (call, msg) => {
+    try { await call(); if (msg) casaToast(msg); } catch (err) { if (err) casaToast(err.message, false); }
+    await reload();
+  };
+  const json = (method, body) => ({ method, body: JSON.stringify(body) });
 
-  const rankOptions = sel => data.ranks.map(r => `<option value="${r.value}" ${r.value === sel ? 'selected' : ''}>${r.label}</option>`).join('');
+  // ---------- Grades ----------
+  const RIGHTS = [
+    { value: 'membre', label: 'Membre', hint: 'Espace membre seul.' },
+    { value: 'gestion', label: 'Gestion', hint: '+ membres, tableau, taxes, armurerie.' },
+    { value: 'complet', label: 'Pouvoirs complets', hint: '+ grades et hiérarchie.' },
+  ];
+  const rightsOf = r => r.canManage ? 'complet' : r.canAdmin ? 'gestion' : 'membre';
+  const tags = r => [
+    r.canManage ? '<span class="tag tag--gold">Pouvoirs complets</span>' : r.canAdmin ? '<span class="tag tag--gold">Gestion</span>' : '',
+    r.isDefault ? '<span class="tag">Nouveaux comptes</span>' : '',
+    r.featured ? '<span class="tag">Mis en avant</span>' : '',
+    r.discordRoleId ? '<span class="tag">Rôle Discord</span>' : '',
+  ].join('');
 
-  function render() {
-    $('addRank').innerHTML = rankOptions('soldado');
-    const byRank = {}; data.entries.forEach(e => (byRank[e.rank] = byRank[e.rank] || []).push(e));
-    $('tiers').innerHTML = data.ranks.map(({ value, label }) => {
-      const list = byRank[value] || [];
-      if (!list.length && !data.rankDesc[value]) return '';
-      return `<section class="admin-block org-tier">
-        <h3 class="admin-block__title">${label} <span class="badge badge--gold">${list.length}</span></h3>
-        <div class="org-cards">${list.map((e, i) => `
-          <form class="org-card ${e.is_open ? 'is-open' : ''}" data-id="${e.id}">
-            <div class="org-card__row">
-              <select class="admin-select" name="rank">${rankOptions(e.rank)}</select>
-              <div class="org-card__moves">
-                <button type="button" class="btn btn--ghost btn--sm" data-move="up" ${i === 0 ? 'disabled' : ''} title="Vers la gauche">‹</button>
-                <button type="button" class="btn btn--ghost btn--sm" data-move="down" ${i === list.length - 1 ? 'disabled' : ''} title="Vers la droite">›</button>
-              </div>
-            </div>
-            <input class="admin-input" name="name" value="${esc(e.name)}" maxlength="64" required placeholder="Nom affiché">
-            <input class="admin-input" name="subtitle" value="${esc(e.subtitle)}" maxlength="80" placeholder="Sous-titre (optionnel)">
-            <textarea class="admin-input" name="description" rows="2" maxlength="600" placeholder="Description (Jefe / Segundo / Palabrero)">${esc(e.description)}</textarea>
-            <label class="org-form__check"><input type="checkbox" name="isOpen" ${e.is_open ? 'checked' : ''}> Poste à pourvoir</label>
-            <div class="org-card__actions">
-              <button class="btn btn--gold btn--sm" type="submit">Enregistrer</button>
-              <button type="button" class="btn btn--ghost btn--sm btn--danger" data-del>Supprimer</button>
-            </div>
-          </form>`).join('')}</div>
-        <form class="org-desc" data-rank="${value}">
-          <label>Texte sous la rangée « ${label} » <small>(optionnel)</small><textarea class="admin-input" name="description" rows="2" maxlength="600">${esc(data.rankDesc[value])}</textarea></label>
-          <button class="btn btn--ghost btn--sm" type="submit">Enregistrer le texte</button>
-        </form>
-      </section>`;
-    }).join('');
+  function renderRanks() {
+    $('ranks').innerHTML = data.ranks.length ? data.ranks.map(r => `
+      <li class="grade" data-key="${esc(r.key)}">
+        <span class="grade__handle" title="Glisser pour réordonner" aria-hidden="true">⠿</span>
+        <button class="grade__main" type="button" data-edit>
+          <span class="grade__dot" style="background:${esc(r.color || 'transparent')}"></span>
+          <span class="grade__name">${esc(r.label)}</span>
+          <span class="grade__tags">${tags(r)}</span>
+          <span class="grade__count">${r.memberCount} membre${r.memberCount > 1 ? 's' : ''}</span>
+          <span class="grade__go" aria-hidden="true">›</span>
+        </button>
+      </li>`).join('') : '<li class="admin-empty">Aucun grade pour l\'instant : crée le premier (le plus haut) avec « + Nouveau grade ».</li>';
   }
-  const formBody = f => ({ rank: f.rank.value, name: f.name.value, subtitle: f.subtitle.value, description: f.description.value, isOpen: f.isOpen.checked });
 
-  async function load() {
-    const me = await api('../api/me');
-    if (!['jefe', 'devweb'].includes(me.rank)) { location.replace('perfil.html'); return; }
-    data = await api('../api/org'); render(); $('loading').hidden = true; $('addBlock').hidden = false;
-  }
-  $('addForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    try { data = await api('../api/admin/org', { method: 'POST', body: JSON.stringify(formBody(e.target)) }); render(); toast('Case ajoutée ✦'); }
-    catch (err) { toast('Erreur : ' + err.message, false); }
-  });
-  $('tiers').addEventListener('submit', async e => {
-    e.preventDefault(); const f = e.target;
-    try {
-      if (f.classList.contains('org-desc')) data = await api('../api/admin/org/rank-desc/' + f.dataset.rank, { method: 'PUT', body: JSON.stringify({ description: f.description.value }) });
-      else data = await api('../api/admin/org/' + f.dataset.id, { method: 'PATCH', body: JSON.stringify(formBody(f)) });
-      render(); toast('Enregistré ✦');
-    } catch (err) { toast('Erreur : ' + err.message, false); }
-  });
-  $('tiers').addEventListener('click', async e => {
-    const f = e.target.closest('.org-card'); if (!f) return;
-    const mv = e.target.closest('[data-move]');
-    if (mv) { data = await api(`../api/admin/org/${f.dataset.id}/move`, { method: 'POST', body: JSON.stringify({ dir: mv.dataset.move }) }); render(); return; }
-    if (e.target.closest('[data-del]')) {
-      if (await casaConfirm(`« ${f.name.value} » disparaîtra de l'organigramme public.`, { title: 'Supprimer cette case ?', ok: 'Supprimer', danger: true })) {
-        data = await api('../api/admin/org/' + f.dataset.id, { method: 'DELETE' }); render(); toast('Case supprimée');
-      }
+  async function editRank(r) {
+    const f = await casaForm([
+      { name: 'label', label: 'Nom du grade', required: true, value: r?.label, placeholder: 'Ex : Capitán', half: true },
+      { name: 'color', label: 'Couleur', type: 'color', value: r?.color, half: true },
+      { name: 'rights', label: 'Droits dans La Casa', type: 'radio', options: RIGHTS, value: r ? rightsOf(r) : 'membre' },
+      { name: 'isDefault', type: 'checkbox', value: r?.isDefault, text: 'Grade donné automatiquement aux nouveaux comptes' },
+      { name: 'featured', type: 'checkbox', value: r?.featured, text: 'Mettre en avant sur l\'organigramme public (grande carte)' },
+      { name: 'description', label: 'Texte public sous la rangée', type: 'textarea', rows: 2, value: r?.description, placeholder: 'Optionnel' },
+      { name: 'discordRoleId', label: 'Rôle Discord (optionnel)', value: r?.discordRoleId, placeholder: 'Ex : 1234567890123456',
+        hint: 'Donne ce grade automatiquement à la connexion (Discord : clic droit sur le rôle → Copier l\'identifiant).' },
+    ], { title: r ? r.label : 'Nouveau grade', ok: r ? 'Enregistrer' : 'Créer', del: r ? 'Supprimer' : '' });
+    if (!f) return;
+    if (f._delete) {
+      if (r.memberCount) return casaToast(`Impossible : ${r.memberCount} membre${r.memberCount > 1 ? 's ont' : ' a'} encore ce grade. Change leur grade dans Administration d'abord.`, false);
+      if (!await casaConfirm(`Le grade « ${r.label} » sera supprimé.`, { title: 'Supprimer ce grade ?', ok: 'Supprimer', danger: true })) return;
+      return save(() => api('../api/admin/ranks/' + encodeURIComponent(r.key), { method: 'DELETE' }), 'Grade supprimé');
     }
+    const body = { label: f.label, color: f.color, description: f.description, discordRoleId: f.discordRoleId,
+      isDefault: f.isDefault, featured: f.featured, canAdmin: f.rights !== 'membre', canManage: f.rights === 'complet' };
+    save(() => r ? api('../api/admin/ranks/' + encodeURIComponent(r.key), json('PATCH', body)) : api('../api/admin/ranks', json('POST', body)),
+      r ? 'Grade enregistré ✦' : 'Grade créé ✦');
+  }
+
+  // ---------- Organigramme ----------
+  function renderTiers() {
+    $('orgBlock').hidden = !data.ranks.length;
+    const byRank = {}; data.entries.forEach(e => (byRank[e.rank] = byRank[e.rank] || []).push(e));
+    $('tiers').innerHTML = data.ranks.map(r => `
+      <div class="tier ${r.featured ? 'tier--feat' : ''}">
+        <div class="tier__label"><span class="grade__dot" style="background:${esc(r.color || 'transparent')}"></span>${esc(r.label)}</div>
+        <div class="tier__cards" data-rank="${esc(r.key)}">${(byRank[r.key] || []).map(e => `
+          <button class="ocard ${e.is_open ? 'ocard--open' : ''}" type="button" data-id="${e.id}">
+            <b>${esc(e.name)}</b>${e.subtitle ? `<small>${esc(e.subtitle)}</small>` : ''}
+          </button>`).join('')}</div>
+        <button class="tier__add" type="button" data-add="${esc(r.key)}" title="Ajouter une case « ${esc(r.label)} »">+</button>
+      </div>`).join('');
+    document.querySelectorAll('.tier__cards').forEach(el => new Sortable(el, {
+      group: 'org', animation: 150, delayOnTouchOnly: true, delay: 150, ghostClass: 'is-ghost',
+      onEnd: ev => { if (ev.from !== ev.to || ev.oldIndex !== ev.newIndex) saveOrgOrder(); } }));
+  }
+
+  async function editEntry(e, rank) {
+    const r = data.ranks.find(x => x.key === (e?.rank || rank));
+    const f = await casaForm([
+      { name: 'name', label: 'Nom affiché', required: true, value: e?.name, placeholder: 'Ex : Marisol', half: true },
+      { name: 'subtitle', label: 'Sous-titre (optionnel)', value: e?.subtitle, placeholder: 'Ex : 27 ans · Salvador', half: true },
+      { name: 'description', label: 'Description (optionnel)', type: 'textarea', value: e?.description,
+        hint: r?.featured ? '' : 'Affichée seulement pour les grades mis en avant.' },
+      { name: 'isOpen', type: 'checkbox', value: e?.is_open, text: 'Poste à pourvoir (case en pointillés)' },
+    ], { title: e ? e.name : `Nouvelle case · ${r.label}`, ok: e ? 'Enregistrer' : 'Ajouter', del: e ? 'Supprimer' : '' });
+    if (!f) return;
+    if (f._delete) {
+      if (await casaConfirm(`« ${e.name} » disparaîtra de l'organigramme public.`, { title: 'Supprimer cette case ?', ok: 'Supprimer', danger: true }))
+        save(() => api('../api/admin/org/' + e.id, { method: 'DELETE' }), 'Case supprimée');
+      return;
+    }
+    const body = { rank: e?.rank || rank, name: f.name, subtitle: f.subtitle, description: f.description, isOpen: f.isOpen };
+    save(() => e ? api('../api/admin/org/' + e.id, json('PATCH', body)) : api('../api/admin/org', json('POST', body)), e ? 'Enregistré ✦' : 'Case ajoutée ✦');
+  }
+
+  function saveOrgOrder() {
+    const tiers = [...document.querySelectorAll('.tier__cards')].map(el => ({ rank: el.dataset.rank, ids: [...el.children].map(c => Number(c.dataset.id)) }));
+    save(() => api('../api/admin/org/order', json('PUT', { tiers })));
+  }
+
+  const render = () => { renderRanks(); renderTiers(); };
+  // la liste des grades garde le même élément d'un rendu à l'autre : un seul Sortable
+  new Sortable($('ranks'), { handle: '.grade__handle', draggable: '.grade', animation: 150, ghostClass: 'is-ghost',
+    onEnd: ev => { if (ev.oldIndex !== ev.newIndex) save(() => api('../api/admin/ranks/order', json('PUT', { keys: [...$('ranks').children].map(li => li.dataset.key) }))); } });
+
+  $('newRank').addEventListener('click', () => editRank(null));
+  $('ranks').addEventListener('click', e => {
+    const li = e.target.closest('[data-edit]')?.closest('.grade'); if (!li) return;
+    editRank(data.ranks.find(r => r.key === li.dataset.key));
   });
+  $('tiers').addEventListener('click', e => {
+    const add = e.target.closest('[data-add]'); if (add) return editEntry(null, add.dataset.add);
+    const c = e.target.closest('.ocard'); if (c) editEntry(data.entries.find(x => x.id === Number(c.dataset.id)));
+  });
+
+  (async () => {
+    const me = await api('../api/me');
+    if (!me.canManage) { location.replace('perfil.html'); return; }
+    casaNav(me);
+    await reload();
+    $('loading').hidden = true; $('ranksBlock').hidden = false;
+  })().catch(() => {});
   $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
-  load().catch(() => {});
 </script>
 </body>
 </html>

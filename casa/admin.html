@@ -78,9 +78,11 @@
   const api = (url, opt = {}) => fetch(url, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, ...opt })
     .then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('perfil.html'); throw 0; } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
 
-  const isTop = () => ['jefe', 'devweb'].includes(me.rank);
-  const rankSelect = (m, id) => `<select class="admin-select" data-id="${id}" data-field="rank" ${m.rank === 'jefe' && !isTop() ? 'disabled' : ''}>` +
-    ranks.filter(r => r.value !== 'jefe' || isTop()).map(r => `<option value="${r.value}" ${r.value === m.rank ? 'selected' : ''}>${r.label}</option>`).join('') + '</select>';
+  // les grades à pouvoirs complets ne s'attribuent / ne se retirent que par quelqu'un qui les a
+  const managesRank = key => !!ranks.find(r => r.key === key)?.canManage;
+  const rankSelect = (m, id) => `<select class="admin-select" data-id="${id}" data-field="rank" ${managesRank(m.rank) && !me.canManage ? 'disabled' : ''}>` +
+    `<option value="" ${m.rank ? '' : 'selected'}>— Sans grade —</option>` +
+    ranks.filter(r => !r.canManage || me.canManage || r.key === m.rank).map(r => `<option value="${r.key}" ${r.key === m.rank ? 'selected' : ''}>${esc(r.label)}</option>`).join('') + '</select>';
   const avatar = m => `<img class="admin-avatar" src="${m.avatarUrl || '../assets/favicon.png'}" alt="">`;
 
   function render(list) {

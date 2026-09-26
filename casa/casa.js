@@ -34,7 +34,7 @@ window.casaNav = function (me) {
   const g = document.getElementById('gestion'); if (!g) return;
   if (me && me.isAdmin) g.hidden = false;
   const org = document.getElementById('orgLink');
-  if (org && me && ['jefe', 'devweb'].includes(me.rank)) org.hidden = false;
+  if (org && me && me.canManage) org.hidden = false;
 };
 document.addEventListener('DOMContentLoaded', () => {
   const g = document.getElementById('gestion'); if (!g) return;
@@ -63,8 +63,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Formulaire dans une modale (même style que casaConfirm). Résout avec les
 // valeurs saisies, ou null si annulé. fields : [{ name, label, type, options, value, placeholder, required, min, hint }]
-// type : text | number | select | multiselect | textarea
-window.casaForm = function (fields, { title = 'Saisie', text = '', ok = 'Valider', cancel = 'Annuler', danger = false } = {}) {
+// half : true = demi-largeur (deux champs côte à côte)
+// type : text | number | select | multiselect | textarea | checkbox (value booléen, text = libellé de la case)
+//        | radio (options [{ value, label, hint }]) | color
+// del : libellé d'un bouton de suppression ; s'il est cliqué, résout avec { _delete: true }
+window.casaForm = function (fields, { title = 'Saisie', text = '', ok = 'Valider', cancel = 'Annuler', danger = false, del = '' } = {}) {
   return new Promise(resolve => {
     const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const wrap = document.createElement('div');
@@ -77,6 +80,7 @@ window.casaForm = function (fields, { title = 'Saisie', text = '', ok = 'Valider
         <div class="modal__fields"></div>
         <p class="modal__error" hidden></p>
         <div class="modal__actions">
+          ${del ? '<button class="btn btn--ghost btn--danger modal__del" type="button" data-del></button>' : ''}
           <button class="btn btn--ghost" type="button" data-cancel></button>
           <button class="btn ${danger ? 'btn--ghost btn--danger' : 'btn--gold'}" type="submit" data-ok></button>
         </div>
@@ -85,26 +89,35 @@ window.casaForm = function (fields, { title = 'Saisie', text = '', ok = 'Valider
     wrap.querySelector('.modal__text').textContent = text;
     wrap.querySelector('[data-cancel]').textContent = cancel;
     wrap.querySelector('[data-ok]').textContent = ok;
+    if (del) wrap.querySelector('[data-del]').textContent = del;
     const box = wrap.querySelector('.modal__fields');
     box.innerHTML = fields.map(f => {
       const opts = (f.options || []).map(o => typeof o === 'string' ? { value: o, label: o } : o);
       let ctrl;
       if (f.type === 'select') ctrl = `<select class="admin-select" name="${esc(f.name)}" ${f.required ? 'required' : ''}>${f.placeholder ? `<option value="">${esc(f.placeholder)}</option>` : ''}${opts.map(o => `<option value="${esc(o.value)}" ${o.value === f.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`;
       else if (f.type === 'multiselect') ctrl = `<div class="modal__checks">${opts.length ? opts.map(o => `<label class="check"><input type="checkbox" name="${esc(f.name)}" value="${esc(o.value)}"><span>${esc(o.label)}</span></label>`).join('') : '<span class="muted">Personne à sélectionner</span>'}</div>`;
-      else if (f.type === 'textarea') ctrl = `<textarea class="admin-input" name="${esc(f.name)}" rows="3" ${f.required ? 'required' : ''} placeholder="${esc(f.placeholder || '')}">${esc(f.value || '')}</textarea>`;
+      else if (f.type === 'textarea') ctrl = `<textarea class="admin-input" name="${esc(f.name)}" rows="${f.rows || 3}" ${f.required ? 'required' : ''} placeholder="${esc(f.placeholder || '')}">${esc(f.value || '')}</textarea>`;
+      else if (f.type === 'checkbox') ctrl = `<label class="check"><input type="checkbox" name="${esc(f.name)}" ${f.value ? 'checked' : ''}><span>${esc(f.text)}</span></label>`;
+      else if (f.type === 'radio') ctrl = `<div class="choices">${opts.map(o => `<label class="choice"><input type="radio" name="${esc(f.name)}" value="${esc(o.value)}" ${o.value === f.value ? 'checked' : ''}><span><b>${esc(o.label)}</b>${o.hint ? `<small>${esc(o.hint)}</small>` : ''}</span></label>`).join('')}</div>`;
+      else if (f.type === 'color') ctrl = `<input class="modal__color" type="color" name="${esc(f.name)}" value="${esc(f.value || '#c9a45c')}">`;
       else ctrl = `<input class="admin-input" type="${f.type === 'number' ? 'number' : 'text'}" name="${esc(f.name)}" value="${esc(f.value ?? '')}" ${f.required ? 'required' : ''} ${f.min != null ? `min="${f.min}"` : ''} ${f.max != null ? `max="${f.max}"` : ''} placeholder="${esc(f.placeholder || '')}" autocomplete="off" ${f.list ? `list="dl-${esc(f.name)}"` : ''}>${f.list ? `<datalist id="dl-${esc(f.name)}">${f.list.map(v => `<option value="${esc(v)}">`).join('')}</datalist>` : ''}`;
-      return `<label class="modal__field"><span>${esc(f.label)}${f.required ? ' *' : ''}</span>${ctrl}${f.hint ? `<small>${esc(f.hint)}</small>` : ''}</label>`;
+      // div : pas de <label> imbriqués, et le sélecteur de couleur ne s'ouvre qu'au clic sur sa pastille
+      const tag = ['checkbox', 'radio', 'multiselect', 'color'].includes(f.type) ? 'div' : 'label';
+      return `<${tag} class="modal__field${f.half ? ' modal__field--half' : ''}">${f.label ? `<span>${esc(f.label)}${f.required ? ' *' : ''}</span>` : ''}${ctrl}${f.hint ? `<small>${esc(f.hint)}</small>` : ''}</${tag}>`;
     }).join('');
     const err = wrap.querySelector('.modal__error');
     const close = v => { wrap.classList.remove('is-open'); setTimeout(() => wrap.remove(), 200); document.removeEventListener('keydown', onKey); resolve(v); };
     const onKey = e => { if (e.key === 'Escape') close(null); };
     wrap.querySelector('[data-cancel]').onclick = () => close(null);
+    if (del) wrap.querySelector('[data-del]').onclick = () => close({ _delete: true });
     wrap.onclick = e => { if (e.target === wrap) close(null); };
     wrap.querySelector('form').onsubmit = e => {
       e.preventDefault();
       const out = {};
       for (const f of fields) {
         if (f.type === 'multiselect') out[f.name] = [...box.querySelectorAll(`input[name="${f.name}"]:checked`)].map(i => i.value);
+        else if (f.type === 'checkbox') out[f.name] = box.querySelector(`[name="${f.name}"]`).checked;
+        else if (f.type === 'radio') out[f.name] = box.querySelector(`[name="${f.name}"]:checked`)?.value ?? '';
         else { const el = box.querySelector(`[name="${f.name}"]`); out[f.name] = f.type === 'number' ? (el.value === '' ? null : Number(el.value)) : el.value.trim(); }
         if (f.required && (out[f.name] === '' || out[f.name] == null || (Array.isArray(out[f.name]) && !out[f.name].length))) { err.textContent = `« ${f.label} » est obligatoire.`; err.hidden = false; return; }
         if (f.type === 'number' && out[f.name] != null && f.min != null && out[f.name] < f.min) { err.textContent = `« ${f.label} » doit être au moins ${f.min}.`; err.hidden = false; return; }

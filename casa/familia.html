@@ -58,9 +58,9 @@
     .then(list => {
       $('loading').hidden = true;
       $('grid').innerHTML = list.map(m => `
-        <article class="miembro" data-rank="${m.rank}">
+        <article class="miembro" data-featured="${m.rankFeatured}">
           <img src="${m.avatarUrl || '../assets/favicon.png'}" alt="" width="72" height="72">
-          <span class="rank__title">${m.rankLabel}</span>
+          <span class="rank__title">${(m.rankLabel || 'Sans grade').replace(/</g, '&lt;')}</span>
           <span class="miembro__name">${m.displayName.replace(/</g, '&lt;')}</span>
           <span class="miembro__user">@${m.username.replace(/</g, '&lt;')}</span>
         </article>`).join('');

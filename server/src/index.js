@@ -18,7 +18,7 @@ const ROOT = join(here, '..', '..');            // racine du dépôt (index.html
 const {
   PORT = 3000, BASE_URL, SESSION_SECRET, POSTGRES_PASSWORD,
   DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_GUILD_ID,
-  DISCORD_ROLE_MAP = '', ADMIN_DISCORD_IDS = '',
+  ADMIN_DISCORD_IDS = '',
 } = process.env;
 // en Docker, la base s'appelle "maja13-db" et seul POSTGRES_PASSWORD est fourni
 const DATABASE_URL = process.env.DATABASE_URL || (POSTGRES_PASSWORD && `postgres://maja13:${POSTGRES_PASSWORD}@maja13-db:5432/maja13`);
@@ -29,14 +29,26 @@ if (process.env.DEV_LOGIN === '1' && !DEV_LOGIN) { console.error('DEV_LOGIN=1 re
 for (const k of ['BASE_URL', 'SESSION_SECRET', ...(DEV_LOGIN ? [] : ['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET', 'DISCORD_GUILD_ID'])])
   if (!process.env[k]) { console.error(`Variable manquante dans .env : ${k}`); process.exit(1); }
 
-const RANKS = ['jefe', 'segundo', 'devweb', 'palabrero', 'commandante', 'sicario', 'soldado', 'recluta'];
-const RANK_LABEL = { jefe: 'Jefe', segundo: 'Segundo', devweb: 'Dev Web', palabrero: 'Palabrero', commandante: 'Commandante', sicario: 'Sicario', soldado: 'Soldado', recluta: 'Recluta' };
-const roleMap = Object.fromEntries(DISCORD_ROLE_MAP.split(',').filter(Boolean).map(p => p.split(':').map(s => s.trim())));
+// propriétaires du site : pouvoirs complets quel que soit leur grade (amorçage d'une installation neuve)
 const adminIds = new Set(ADMIN_DISCORD_IDS.split(',').map(s => s.trim()).filter(Boolean));
 
 const pool = new pg.Pool({ connectionString: DATABASE_URL });
 // applique le schéma au démarrage (idempotent)
 await pool.query(readFileSync(join(here, '..', 'sql', 'schema.sql'), 'utf8'));
+
+// ---------- Grades (table ranks, paramétrés depuis La Casa) ----------
+let ranks = [];                                  // du sommet à la base
+const loadRanks = async () => { ranks = (await pool.query('SELECT * FROM ranks ORDER BY position, label')).rows; };
+await loadRanks();
+const rankOf = key => ranks.find(r => r.key === key);
+const rankIndex = key => { const i = ranks.findIndex(r => r.key === key); return i < 0 ? ranks.length : i; };
+const publicRank = r => ({ key: r.key, label: r.label, position: r.position, color: r.color, description: r.description, featured: r.featured,
+  canAdmin: r.can_admin, canManage: r.can_manage, isDefault: r.is_default, discordRoleId: r.discord_role_id });
+// grade d'un membre tel qu'exposé aux pages (null = sans grade)
+const rankInfo = key => { const r = rankOf(key); return { rank: r ? r.key : null, rankLabel: r ? r.label : null, rankColor: r?.color || null, rankFeatured: !!r?.featured }; };
+const isOwner = m => adminIds.has(m.discord_id) || (DEV_LOGIN && m.discord_id === 'dev-local');
+const canManage = m => isOwner(m) || !!rankOf(m.rank)?.can_manage;
+const canAdmin = m => m.is_admin || canManage(m) || !!rankOf(m.rank)?.can_admin;
 const app = express();
 app.set('trust proxy', 1);                     // derrière Caddy / Nginx
 app.use(express.json({ limit: '32kb' }));
@@ -57,8 +69,8 @@ const SCOPES = 'identify guilds.members.read';
 app.get('/auth/discord', async (req, res) => {
   if (DEV_LOGIN) {
     const { rows: [row] } = await pool.query(`
-      INSERT INTO members (discord_id, username, display_name, rank, is_admin, status, approved_at, last_login)
-      VALUES ('dev-local', 'dev', 'Dev local', 'jefe', true, 'approved', now(), now())
+      INSERT INTO members (discord_id, username, display_name, is_admin, status, approved_at, last_login)
+      VALUES ('dev-local', 'dev', 'Dev local', true, 'approved', now(), now())
       ON CONFLICT (discord_id) DO UPDATE SET last_login = now()
       RETURNING id`);
     req.session.memberId = row.id;
@@ -94,25 +106,25 @@ app.get('/auth/discord/callback', async (req, res) => {
     const memberRes = await fetch(`${DISCORD_API}/users/@me/guilds/${DISCORD_GUILD_ID}/member`, auth);
     if (!memberRes.ok) return res.redirect('/casa/?error=not-member');
     const member = await memberRes.json();
-    const rankFromRole = RANKS.find(r => member.roles.some(id => roleMap[id] === r));   // le grade le plus élevé trouvé
-    const isAdmin = adminIds.has(user.id) || ['jefe', 'segundo', 'devweb'].includes(rankFromRole);
+    const rankFromRole = ranks.find(r => r.discord_role_id && member.roles.includes(r.discord_role_id))?.key ?? null;   // le grade le plus élevé trouvé
 
-    // 4. upsert membre — nouveau compte = en attente de validation par le Jefe ;
-    //    les IDs de ADMIN_DISCORD_IDS sont Jefe et validés d'office (amorçage)
-    const bootstrapJefe = adminIds.has(user.id);
+    // 4. upsert membre — nouveau compte = grade par défaut, en attente de validation ;
+    //    les IDs de ADMIN_DISCORD_IDS sont validés d'office et reçoivent le premier grade à pouvoirs complets (amorçage)
+    const owner = adminIds.has(user.id);
+    const startRank = owner ? ranks.find(r => r.can_manage)?.key : ranks.find(r => r.is_default)?.key;
     const { rows: [row] } = await pool.query(`
       INSERT INTO members (discord_id, username, avatar, display_name, rank, is_admin, status, approved_at, last_login)
       VALUES ($1, $2, $3, $4, COALESCE($5::text, $7::text), $6::boolean, $8::text, CASE WHEN $8::text = 'approved' THEN now() END, now())
       ON CONFLICT (discord_id) DO UPDATE SET
         username = EXCLUDED.username,
         avatar = EXCLUDED.avatar,
-        rank = CASE WHEN $6::boolean AND members.rank = 'recluta' THEN 'jefe' ELSE COALESCE($5::text, members.rank) END,
+        rank = COALESCE($5::text, members.rank, CASE WHEN $6::boolean THEN $7::text END),
         is_admin = members.is_admin OR EXCLUDED.is_admin,
         status = CASE WHEN $6::boolean THEN 'approved' ELSE members.status END,
         last_login = now()
       RETURNING id, status`,
-      [user.id, user.username, user.avatar, member.nick || user.global_name || user.username, rankFromRole || null,
-       bootstrapJefe, bootstrapJefe ? 'jefe' : 'recluta', bootstrapJefe ? 'approved' : 'pending']);
+      [user.id, user.username, user.avatar, member.nick || user.global_name || user.username, rankFromRole,
+       owner, startRank ?? null, owner ? 'approved' : 'pending']);
 
     req.session.memberId = row.id;
     res.redirect(row.status === 'approved' ? '/casa/perfil.html' : '/casa/espera.html');
@@ -125,8 +137,6 @@ app.get('/auth/discord/callback', async (req, res) => {
 app.post('/auth/logout', (req, res) => req.session.destroy(() => res.clearCookie('maja13.sid').json({ ok: true })));
 
 // ---------- API ----------
-const canAdmin = m => m.is_admin || ['jefe', 'segundo', 'devweb'].includes(m.rank);
-const isTop = m => ['jefe', 'devweb'].includes(m.rank);   // pouvoirs complets (nommer/rétrograder un Jefe, etc.)
 const requireAuth = (req, res, next) => req.session.memberId ? next() : res.status(401).json({ error: 'unauthenticated' });
 // charge le membre courant et exige un compte validé
 const requireApproved = async (req, res, next) => {
@@ -139,8 +149,8 @@ const requireAdmin = (req, res, next) => canAdmin(req.member) ? next() : res.sta
 const publicMember = m => ({
   id: m.id, discordId: m.discord_id, username: m.username,
   avatarUrl: m.avatar ? `https://cdn.discordapp.com/avatars/${m.discord_id}/${m.avatar}.${m.avatar.startsWith('a_') ? 'gif' : 'png'}?size=256` : null,
-  displayName: m.display_name, rank: m.rank, rankLabel: RANK_LABEL[m.rank], bio: m.bio, phoneRp: m.phone_rp,
-  isAdmin: canAdmin(m), status: m.status, joinedAt: m.joined_at, lastLogin: m.last_login, approvedAt: m.approved_at,
+  displayName: m.display_name, ...rankInfo(m.rank), bio: m.bio, phoneRp: m.phone_rp,
+  isAdmin: canAdmin(m), canManage: canManage(m), status: m.status, joinedAt: m.joined_at, lastLogin: m.last_login, approvedAt: m.approved_at,
 });
 
 app.get('/api/me', requireAuth, async (req, res) => {
@@ -162,16 +172,20 @@ app.patch('/api/me', requireAuth, requireApproved, async (req, res) => {
 
 // la familia : liste des membres visible par les membres connectés
 app.get('/api/familia', requireAuth, requireApproved, async (_req, res) => {
-  const { rows } = await pool.query(`SELECT * FROM members WHERE status = 'approved' ORDER BY array_position($1::text[], rank), display_name`, [RANKS]);
-  res.json(rows.map(m => ({ discordId: m.discord_id, displayName: m.display_name, username: m.username, rank: m.rank, rankLabel: RANK_LABEL[m.rank], avatarUrl: publicMember(m).avatarUrl })));
+  const { rows } = await pool.query(`SELECT m.* FROM members m LEFT JOIN ranks r ON r.key = m.rank
+    WHERE m.status = 'approved' ORDER BY r.position NULLS LAST, m.display_name`);
+  res.json(rows.map(m => ({ discordId: m.discord_id, displayName: m.display_name, username: m.username, ...rankInfo(m.rank), avatarUrl: publicMember(m).avatarUrl })));
 });
 
-// ---------- Admin (Jefe / Segundo) ----------
+// ---------- Admin (grades avec l'accès Gestion) ----------
+// un grade à pouvoirs complets ne s'attribue / ne se retire que par quelqu'un qui les a lui-même
+const managesRank = key => !!rankOf(key)?.can_manage;
 app.get('/api/admin/members', requireAuth, requireApproved, requireAdmin, async (_req, res) => {
   const { rows } = await pool.query(`
     SELECT m.*, a.display_name AS approved_by_name FROM members m
     LEFT JOIN members a ON a.id = m.approved_by
-    ORDER BY (m.status = 'pending') DESC, array_position($1::text[], m.rank), m.display_name`, [RANKS]);
+    LEFT JOIN ranks r ON r.key = m.rank
+    ORDER BY (m.status = 'pending') DESC, r.position NULLS LAST, m.display_name`);
   res.json(rows.map(m => ({ ...publicMember(m), approvedByName: m.approved_by_name })));
 });
 
@@ -187,10 +201,10 @@ app.patch('/api/admin/members/:id', requireAuth, requireApproved, requireAdmin, 
     add('display_name', dn);
   }
   if (req.body.rank !== undefined) {
-    if (!RANKS.includes(req.body.rank)) return res.status(400).json({ error: 'grade inconnu' });
-    // seul un Jefe peut nommer un Jefe ou toucher au grade d'un Jefe
-    if ((req.body.rank === 'jefe' || target.rank === 'jefe') && !isTop(req.member)) return res.status(403).json({ error: 'jefe-only' });
-    add('rank', req.body.rank);
+    const rank = req.body.rank || null;
+    if (rank && !rankOf(rank)) return res.status(400).json({ error: 'grade inconnu' });
+    if ((managesRank(rank) || managesRank(target.rank)) && !canManage(req.member)) return res.status(403).json({ error: 'manage-only' });
+    add('rank', rank);
   }
   if (req.body.status !== undefined) {
     if (!['pending', 'approved', 'rejected'].includes(req.body.status)) return res.status(400).json({ error: 'statut inconnu' });
@@ -209,60 +223,123 @@ app.delete('/api/admin/members/:id', requireAuth, requireApproved, requireAdmin,
   const id = Number(req.params.id);
   if (id === req.member.id) return res.status(400).json({ error: 'self' });
   const target = (await pool.query('SELECT rank FROM members WHERE id = $1', [id])).rows[0];
-  if (target?.rank === 'jefe' && !isTop(req.member)) return res.status(403).json({ error: 'jefe-only' });
+  if (managesRank(target?.rank) && !canManage(req.member)) return res.status(403).json({ error: 'manage-only' });
   await pool.query('DELETE FROM members WHERE id = $1', [id]);
   res.json({ ok: true });
 });
 
-app.get('/api/ranks', (_req, res) => res.json(RANKS.map(r => ({ value: r, label: RANK_LABEL[r] }))));
+app.get('/api/ranks', (_req, res) => res.json(ranks.map(publicRank)));
 
-// ---------- Organigramme public (lecture libre, édition Jefe / Dev Web) ----------
-const requireJefe = (req, res, next) => isTop(req.member) ? next() : res.status(403).json({ error: 'jefe-only' });
+// ---------- Grades & organigramme public (lecture libre, édition : pouvoirs complets) ----------
+const requireManage = (req, res, next) => canManage(req.member) ? next() : res.status(403).json({ error: 'manage-only' });
 const orgPayload = async () => {
-  const { rows: entries } = await pool.query('SELECT * FROM org_entries ORDER BY array_position($1::text[], rank), position, id', [RANKS]);
-  const { rows: descs } = await pool.query('SELECT * FROM org_rank_desc');
-  return { ranks: RANKS.map(r => ({ value: r, label: RANK_LABEL[r] })), entries, rankDesc: Object.fromEntries(descs.map(d => [d.rank, d.description])) };
+  const { rows: entries } = await pool.query('SELECT e.* FROM org_entries e JOIN ranks r ON r.key = e.rank ORDER BY r.position, e.position, e.id');
+  return { ranks: ranks.map(publicRank), entries };
 };
 app.get('/api/org', async (_req, res) => res.json(await orgPayload()));
+// version de gestion : + nombre de comptes par grade (un grade attribué ne peut pas être supprimé)
+app.get('/api/admin/org', requireAuth, requireApproved, requireManage, async (_req, res) => {
+  const { rows } = await pool.query('SELECT rank, count(*)::int AS n FROM members WHERE rank IS NOT NULL GROUP BY rank');
+  const counts = Object.fromEntries(rows.map(r => [r.rank, r.n]));
+  const data = await orgPayload();
+  res.json({ ...data, ranks: data.ranks.map(r => ({ ...r, memberCount: counts[r.key] || 0 })) });
+});
+
+// champs d'un grade : seuls les champs présents dans le corps sont retenus (PATCH partiel)
+const RANK_FIELDS = {
+  label: v => String(v ?? '').trim().slice(0, 40),
+  color: v => /^#[0-9a-f]{6}$/i.test(v ?? '') ? v.toLowerCase() : null,
+  description: v => String(v ?? '').trim().slice(0, 600) || null,
+  featured: v => !!v, can_admin: v => !!v, can_manage: v => !!v, is_default: v => !!v,
+  discord_role_id: v => /^\d{5,32}$/.test(String(v ?? '').trim()) ? String(v).trim() : null,
+};
+const RANK_BODY = { label: 'label', color: 'color', description: 'description', featured: 'featured', canAdmin: 'can_admin', canManage: 'can_manage', isDefault: 'is_default', discordRoleId: 'discord_role_id' };
+const rankFields = b => Object.fromEntries(Object.entries(RANK_BODY).filter(([k]) => b[k] !== undefined).map(([k, col]) => [col, RANK_FIELDS[col](b[k])]));
+const slug = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 16) || 'grade';
+const rankError = (res, e) => e.code === '23505' ? res.status(409).json({ error: 'Ce rôle Discord est déjà associé à un autre grade' }) : (console.error(e), res.status(500).json({ error: 'erreur serveur' }));
+// enregistre un grade (création ou modification) ; un seul grade par défaut à la fois
+const saveRank = async (key, f, create) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (f.is_default) await client.query('UPDATE ranks SET is_default = false WHERE key <> $1', [key]);
+    const cols = Object.keys(f), vals = Object.values(f);
+    if (create) await client.query(`INSERT INTO ranks (key, position, ${cols.join(', ')}) VALUES ($1, (SELECT COALESCE(MAX(position), -1) + 1 FROM ranks), ${cols.map((_, i) => `$${i + 2}`).join(', ')})`, [key, ...vals]);
+    else if (cols.length) await client.query(`UPDATE ranks SET ${cols.map((c, i) => `${c} = $${i + 2}`).join(', ')} WHERE key = $1`, [key, ...vals]);
+    await client.query('COMMIT');
+  } catch (e) { await client.query('ROLLBACK'); throw e; }
+  finally { client.release(); await loadRanks(); }
+};
+app.post('/api/admin/ranks', requireAuth, requireApproved, requireManage, async (req, res) => {
+  const f = rankFields(req.body);
+  if (!f.label) return res.status(400).json({ error: 'nom du grade requis' });
+  let key = slug(f.label);
+  for (let n = 2; rankOf(key); n++) key = `${slug(f.label).slice(0, 13)}-${n}`;
+  try { await saveRank(key, f, true); res.status(201).json(await orgPayload()); } catch (e) { rankError(res, e); }
+});
+app.patch('/api/admin/ranks/:key', requireAuth, requireApproved, requireManage, async (req, res) => {
+  const r = rankOf(req.params.key);
+  if (!r) return res.status(404).json({ error: 'not-found' });
+  const f = rankFields(req.body);
+  if (f.label === '') return res.status(400).json({ error: 'nom du grade requis' });
+  // garde-fou : on ne se retire pas à soi-même les pouvoirs complets (hors propriétaires)
+  if (f.can_manage === false && req.member.rank === r.key && !isOwner(req.member)) return res.status(400).json({ error: 'Tu perdrais tes propres pouvoirs complets' });
+  try { await saveRank(r.key, f, false); res.json(await orgPayload()); } catch (e) { rankError(res, e); }
+});
+// nouvel ordre complet des grades (glisser-déposer), du sommet à la base
+app.put('/api/admin/ranks/order', requireAuth, requireApproved, requireManage, async (req, res) => {
+  const order = Array.isArray(req.body.keys) ? req.body.keys.map(String) : [];
+  if (order.length !== ranks.length || !ranks.every(r => order.includes(r.key))) return res.status(400).json({ error: 'ordre incomplet, recharge la page' });
+  await pool.query('UPDATE ranks SET position = array_position($1::text[], key) - 1', [order]);
+  await loadRanks();
+  res.json(await orgPayload());
+});
+app.delete('/api/admin/ranks/:key', requireAuth, requireApproved, requireManage, async (req, res) => {
+  const r = rankOf(req.params.key);
+  if (!r) return res.status(404).json({ error: 'not-found' });
+  const { rows: [u] } = await pool.query('SELECT (SELECT count(*) FROM members WHERE rank = $1)::int AS m, (SELECT count(*) FROM org_entries WHERE rank = $1)::int AS o', [r.key]);
+  if (u.m || u.o) return res.status(409).json({ error: `Grade encore utilisé (${u.m} membre(s), ${u.o} case(s) de l'organigramme) : réattribue-les d'abord` });
+  await pool.query('DELETE FROM ranks WHERE key = $1', [r.key]);
+  await loadRanks();
+  res.json(await orgPayload());
+});
 
 const orgFields = b => ({
-  rank: RANKS.includes(b.rank) ? b.rank : null,
+  rank: rankOf(b.rank) ? b.rank : null,
   name: String(b.name ?? '').trim().slice(0, 64),
   subtitle: String(b.subtitle ?? '').trim().slice(0, 80) || null,
   description: String(b.description ?? '').trim().slice(0, 600) || null,
   is_open: !!b.isOpen,
 });
-app.post('/api/admin/org', requireAuth, requireApproved, requireJefe, async (req, res) => {
+app.post('/api/admin/org', requireAuth, requireApproved, requireManage, async (req, res) => {
   const f = orgFields(req.body);
   if (!f.rank || !f.name) return res.status(400).json({ error: 'grade et nom requis' });
   const { rows: [{ n }] } = await pool.query('SELECT COALESCE(MAX(position), -1) + 1 AS n FROM org_entries WHERE rank = $1', [f.rank]);
   await pool.query('INSERT INTO org_entries (rank, name, subtitle, description, is_open, position) VALUES ($1,$2,$3,$4,$5,$6)', [f.rank, f.name, f.subtitle, f.description, f.is_open, n]);
   res.status(201).json(await orgPayload());
 });
-app.patch('/api/admin/org/:id', requireAuth, requireApproved, requireJefe, async (req, res) => {
+app.patch('/api/admin/org/:id', requireAuth, requireApproved, requireManage, async (req, res) => {
   const f = orgFields(req.body);
   if (!f.rank || !f.name) return res.status(400).json({ error: 'grade et nom requis' });
   await pool.query('UPDATE org_entries SET rank=$1, name=$2, subtitle=$3, description=$4, is_open=$5 WHERE id=$6', [f.rank, f.name, f.subtitle, f.description, f.is_open, Number(req.params.id)]);
   res.json(await orgPayload());
 });
-app.post('/api/admin/org/:id/move', requireAuth, requireApproved, requireJefe, async (req, res) => {
-  const id = Number(req.params.id), dir = req.body.dir === 'up' ? -1 : 1;
-  const { rows: [e] } = await pool.query('SELECT * FROM org_entries WHERE id = $1', [id]);
-  if (!e) return res.status(404).json({ error: 'not-found' });
-  const { rows: sib } = await pool.query('SELECT id FROM org_entries WHERE rank = $1 ORDER BY position, id', [e.rank]);
-  const i = sib.findIndex(s => s.id === id), j = i + dir;
-  if (j >= 0 && j < sib.length) { [sib[i], sib[j]] = [sib[j], sib[i]]; }
-  for (let k = 0; k < sib.length; k++) await pool.query('UPDATE org_entries SET position = $1 WHERE id = $2', [k, sib[k].id]);
+// disposition des cases après glisser-déposer : { tiers: [{ rank, ids: [...] }] } — une case peut changer de grade
+app.put('/api/admin/org/order', requireAuth, requireApproved, requireManage, async (req, res) => {
+  const tiers = Array.isArray(req.body.tiers) ? req.body.tiers : [];
+  if (tiers.some(t => !rankOf(t.rank) || !Array.isArray(t.ids))) return res.status(400).json({ error: 'grade inconnu, recharge la page' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const t of tiers) for (const [i, id] of t.ids.entries())
+      await client.query('UPDATE org_entries SET rank = $1, position = $2 WHERE id = $3', [t.rank, i, Number(id)]);
+    await client.query('COMMIT');
+  } catch (e) { await client.query('ROLLBACK'); throw e; }
+  finally { client.release(); }
   res.json(await orgPayload());
 });
-app.delete('/api/admin/org/:id', requireAuth, requireApproved, requireJefe, async (req, res) => {
+app.delete('/api/admin/org/:id', requireAuth, requireApproved, requireManage, async (req, res) => {
   await pool.query('DELETE FROM org_entries WHERE id = $1', [Number(req.params.id)]);
-  res.json(await orgPayload());
-});
-app.put('/api/admin/org/rank-desc/:rank', requireAuth, requireApproved, requireJefe, async (req, res) => {
-  if (!RANKS.includes(req.params.rank)) return res.status(400).json({ error: 'grade inconnu' });
-  const d = String(req.body.description ?? '').trim().slice(0, 600) || null;
-  await pool.query('INSERT INTO org_rank_desc (rank, description) VALUES ($1, $2) ON CONFLICT (rank) DO UPDATE SET description = EXCLUDED.description', [req.params.rank, d]);
   res.json(await orgPayload());
 });
 
@@ -274,7 +351,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
   fileFilter: (_req, f, cb) => cb(null, /^image\/(jpeg|png|webp|gif|heic|heif)$/.test(f.mimetype)) });
 const PHOTO_SELECT = `SELECT p.*, m.display_name, m.username, m.rank FROM photos p JOIN members m ON m.id = p.member_id WHERE p.deleted_at IS NULL`;
 const photoRow = r => ({ id: r.id, url: `/uploads/${r.file}`, thumb: `/uploads/${r.thumb}`, width: r.width, height: r.height, caption: r.caption, createdAt: r.created_at,
-  author: { id: r.member_id, displayName: r.display_name, username: r.username, rank: r.rank, rankLabel: RANK_LABEL[r.rank] } });
+  author: { id: r.member_id, displayName: r.display_name, username: r.username, ...rankInfo(r.rank) } });
 
 app.get('/api/gallery', async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 60, 200);
@@ -559,7 +636,7 @@ app.post('/api/admin/paies/snapshot', requireAuth, requireApproved, requireAdmin
 
 // ---------- Chat de la familia (SSE + POST) ----------
 const chatClients = new Map();            // res -> member
-const chatMember = m => ({ id: m.id, displayName: m.display_name, username: m.username, rank: m.rank, rankLabel: RANK_LABEL[m.rank], avatarUrl: publicMember(m).avatarUrl });
+const chatMember = m => ({ id: m.id, displayName: m.display_name, username: m.username, ...rankInfo(m.rank), avatarUrl: publicMember(m).avatarUrl });
 const chatBroadcast = (event, data) => {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const res of chatClients.keys()) { try { res.write(payload); } catch { chatClients.delete(res); } }
@@ -567,9 +644,9 @@ const chatBroadcast = (event, data) => {
 const chatPresence = () => {
   const seen = new Map();
   for (const m of chatClients.values()) seen.set(m.id, chatMember(m));
-  return [...seen.values()].sort((a, b) => RANKS.indexOf(a.rank) - RANKS.indexOf(b.rank) || a.displayName.localeCompare(b.displayName));
+  return [...seen.values()].sort((a, b) => rankIndex(a.rank) - rankIndex(b.rank) || a.displayName.localeCompare(b.displayName));
 };
-const chatRow = r => ({ id: r.id, content: r.content, createdAt: r.created_at, author: { id: r.member_id, displayName: r.display_name, username: r.username, rank: r.rank, rankLabel: RANK_LABEL[r.rank], avatarUrl: publicMember({ discord_id: r.discord_id, avatar: r.avatar }).avatarUrl } });
+const chatRow = r => ({ id: r.id, content: r.content, createdAt: r.created_at, author: { id: r.member_id, displayName: r.display_name, username: r.username, ...rankInfo(r.rank), avatarUrl: publicMember({ discord_id: r.discord_id, avatar: r.avatar }).avatarUrl } });
 const CHAT_SELECT = `SELECT g.id, g.content, g.created_at, g.member_id, m.display_name, m.username, m.rank, m.discord_id, m.avatar
                      FROM messages g JOIN members m ON m.id = g.member_id WHERE g.deleted_at IS NULL`;
 
