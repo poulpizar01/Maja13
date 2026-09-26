@@ -101,9 +101,14 @@ window.casaForm = function (fields, { title = 'Saisie', text = '', ok = 'Valider
       else if (f.type === 'radio') ctrl = `<div class="choices">${opts.map(o => `<label class="choice"><input type="radio" name="${esc(f.name)}" value="${esc(o.value)}" ${o.value === f.value ? 'checked' : ''}><span><b>${esc(o.label)}</b>${o.hint ? `<small>${esc(o.hint)}</small>` : ''}</span></label>`).join('')}</div>`;
       else if (f.type === 'color') ctrl = `<input class="modal__color" type="color" name="${esc(f.name)}" value="${esc(f.value || '#c9a45c')}">`;
       else ctrl = `<input class="admin-input" type="${f.type === 'number' ? 'number' : 'text'}" name="${esc(f.name)}" value="${esc(f.value ?? '')}" ${f.required ? 'required' : ''} ${f.min != null ? `min="${f.min}"` : ''} ${f.max != null ? `max="${f.max}"` : ''} placeholder="${esc(f.placeholder || '')}" autocomplete="off" ${f.list ? `list="dl-${esc(f.name)}"` : ''}>${f.list ? `<datalist id="dl-${esc(f.name)}">${f.list.map(v => `<option value="${esc(v)}">`).join('')}</datalist>` : ''}`;
-      // div : pas de <label> imbriqués, et le sélecteur de couleur ne s'ouvre qu'au clic sur sa pastille
-      const tag = ['checkbox', 'radio', 'multiselect', 'color'].includes(f.type) ? 'div' : 'label';
-      return `<${tag} class="modal__field${f.half ? ' modal__field--half' : ''}">${f.label ? `<span>${esc(f.label)}${f.required ? ' *' : ''}</span>` : ''}${ctrl}${f.hint ? `<small>${esc(f.hint)}</small>` : ''}</${tag}>`;
+      // zones de clic : seul le contrôle (et le titre des champs de saisie, relié par for/id) réagit ;
+      // l'aide et l'espace autour ne font rien. Cases et choix portent leur propre <label>.
+      const id = `cf-${esc(f.name)}`;
+      ctrl = ctrl.replace(/^<(input|select|textarea) /, `<$1 id="${id}" `);
+      const title = !f.label ? '' : ['checkbox', 'radio', 'multiselect', 'color'].includes(f.type)
+        ? `<span class="modal__label">${esc(f.label)}${f.required ? ' *' : ''}</span>`
+        : `<label class="modal__label" for="${id}">${esc(f.label)}${f.required ? ' *' : ''}</label>`;
+      return `<div class="modal__field${f.half ? ' modal__field--half' : ''}">${title}${ctrl}${f.hint ? `<small>${esc(f.hint)}</small>` : ''}</div>`;
     }).join('');
     const err = wrap.querySelector('.modal__error');
     const close = v => { wrap.classList.remove('is-open'); setTimeout(() => wrap.remove(), 200); document.removeEventListener('keydown', onKey); resolve(v); };

@@ -376,15 +376,16 @@
 .modal--form .modal__box{width:min(560px,100%);text-align:left;padding:28px 28px 22px}
 .modal--form .eyebrow,.modal--form .modal__title{text-align:center}
 .modal--form .modal__text{text-align:center;margin-bottom:18px}
-.modal__fields{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-bottom:18px}
+.modal__fields{display:grid;grid-template-columns:1fr 1fr;align-items:start;gap:12px 16px;margin-bottom:18px}
 .modal__fields>*{grid-column:1/-1}
 .modal__fields>.modal__field--half{grid-column:auto}
 .modal__field{display:flex;flex-direction:column;gap:4px}
-.modal__field>span{font-family:var(--serif);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink2)}
+.modal__label{align-self:flex-start;font-family:var(--serif);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink2)}
+label.modal__label{cursor:pointer}
 .modal__field small{color:var(--ink2);font-style:italic;font-size:13px}
 .modal__field .admin-input,.modal__field .admin-select{margin-top:0;font-size:16px}
 .modal__checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:4px 12px;max-height:220px;overflow:auto;padding:8px 10px;border:1px solid var(--line);background:rgba(0,0,0,.25)}
-.check{display:flex;align-items:center;gap:8px;font-size:15px;cursor:pointer;color:var(--ink)}
+.check{display:inline-flex;align-self:flex-start;align-items:center;gap:8px;font-size:15px;cursor:pointer;color:var(--ink)}
 .modal__error{color:#e0a29e;font-size:14px;margin:-8px 0 14px;text-align:center}
 .toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);z-index:120;opacity:0;pointer-events:none;transition:.25s;max-width:min(92vw,560px);padding:12px 20px;border:1px solid var(--gold2);background:rgba(10,8,6,.96);color:var(--gold3);font-size:15px;text-align:center;box-shadow:0 20px 40px rgba(0,0,0,.6)}
 .toast.is-on{opacity:1;transform:translate(-50%,0)}
