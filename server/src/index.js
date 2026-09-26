@@ -1,6 +1,5 @@
 /* La Maja 13 — serveur : site vitrine + La Casa (espace membre)
    Express + PostgreSQL + Discord OAuth2 */
-import 'dotenv/config';
 import express from 'express';
 import session from 'express-session';
 import connectPg from 'connect-pg-simple';

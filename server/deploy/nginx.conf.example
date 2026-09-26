@@ -1,5 +1,6 @@
-# La Maja 13 — site nginx (généré par vps-setup.sh depuis ce modèle : __DOMAIN__, __PORT__).
-# HTTPS : lancer ensuite `certbot --nginx -d __DOMAIN__`, qui ajoute le certificat et la redirection.
+# La Maja 13 — site nginx. Copier dans /etc/nginx/sites-available/maja13, remplacer __DOMAIN__
+# (domaine) et __PORT__ (HOST_PORT du .env), activer (lien dans sites-enabled), nginx -t, recharger.
+# HTTPS : ensuite `certbot --nginx -d __DOMAIN__`, qui ajoute le certificat et la redirection.
 server {
     listen 80;
     listen [::]:80;

@@ -1,6 +1,7 @@
 # La Maja 13 — site + base, le même fichier en dev et en prod.
-#   dev  : docker compose up            (compose.override.yaml est ajouté automatiquement)
-#   prod : server/deploy/vps-setup.sh   (docker compose -f compose.yaml, variables de server/.env)
+#   dev  : docker compose up   (compose.override.yaml est ajouté automatiquement, aucun .env)
+#   prod : docker compose up -d --build   avec un .env à la racine (voir .env.example), dont
+#          COMPOSE_FILE=compose.yaml écarte les réglages de dev
 # Le site n'écoute que sur 127.0.0.1 : en prod, c'est nginx sur la machine qui l'expose en HTTPS.
 name: maja13
 services:
@@ -11,7 +12,7 @@ services:
       dockerfile: server/Dockerfile
     restart: unless-stopped
     env_file:
-      - path: server/.env      # DATABASE_URL est déduite de POSTGRES_PASSWORD par l'app
+      - path: .env             # DATABASE_URL est déduite de POSTGRES_PASSWORD par l'app
         required: false        # absent en dev : compose.override.yaml fournit les valeurs
     environment:
       PORT: 3000               # port interne au conteneur ; celui de la machine est HOST_PORT
@@ -30,7 +31,7 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     env_file:
-      - path: server/.env      # fournit POSTGRES_PASSWORD
+      - path: .env             # fournit POSTGRES_PASSWORD
         required: false
     environment:
       POSTGRES_DB: maja13
