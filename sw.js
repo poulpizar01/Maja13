@@ -39,8 +39,8 @@ self.addEventListener('fetch', e => {
   // casse la lecture et le déplacement dans la piste sur Safari.
   if (/\.(m4a|mp3|mp4|webm|ogg|wav)$/i.test(url.pathname)) return;
 
-  // config.js contient la liste des membres : il doit TOUJOURS être frais,
-  // sinon les visiteurs habituels gardent l'ancienne liste après une mise à jour.
+  // config.js porte les liens et la marque : il doit TOUJOURS être frais,
+  // sinon les visiteurs habituels gardent l'ancienne version après une mise à jour.
   const toujoursFrais = req.mode === 'navigate'
     || url.pathname.endsWith('.html')
     || url.pathname.endsWith('config.js');
