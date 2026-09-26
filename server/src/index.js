@@ -17,7 +17,6 @@ const ROOT = join(here, '..', '..');            // racine du dépôt (index.html
 const {
   PORT = 3000, BASE_URL, SESSION_SECRET, POSTGRES_PASSWORD,
   DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_GUILD_ID,
-  ADMIN_DISCORD_IDS = '',
 } = process.env;
 // en Docker, la base s'appelle "maja13-db" et seul POSTGRES_PASSWORD est fourni
 const DATABASE_URL = process.env.DATABASE_URL || (POSTGRES_PASSWORD && `postgres://maja13:${POSTGRES_PASSWORD}@maja13-db:5432/maja13`);
@@ -27,9 +26,6 @@ const DEV_LOGIN = process.env.DEV_LOGIN === '1' && /^http:\/\/(localhost|127\.0\
 if (process.env.DEV_LOGIN === '1' && !DEV_LOGIN) { console.error('DEV_LOGIN=1 refusé : BASE_URL doit être http://localhost'); process.exit(1); }
 for (const k of ['BASE_URL', 'SESSION_SECRET', ...(DEV_LOGIN ? [] : ['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET', 'DISCORD_GUILD_ID'])])
   if (!process.env[k]) { console.error(`Variable manquante dans .env : ${k}`); process.exit(1); }
-
-// propriétaires du site : pouvoirs complets quel que soit leur grade (amorçage d'une installation neuve)
-const adminIds = new Set(ADMIN_DISCORD_IDS.split(',').map(s => s.trim()).filter(Boolean));
 
 const pool = new pg.Pool({ connectionString: DATABASE_URL });
 // applique le schéma au démarrage (idempotent)
@@ -45,11 +41,12 @@ const publicRank = r => ({ key: r.key, label: r.label, position: r.position, col
   canAdmin: r.can_admin, canManage: r.can_manage, isDefault: r.is_default, discordRoleId: r.discord_role_id });
 // grade d'un membre tel qu'exposé aux pages (null = sans grade)
 const rankInfo = key => { const r = rankOf(key); return { rank: r ? r.key : null, rankLabel: r ? r.label : null, rankColor: r?.color || null, rankFeatured: !!r?.featured }; };
-const isOwner = m => adminIds.has(m.discord_id) || (DEV_LOGIN && m.discord_id === 'dev-local');
+// propriétaire du site = propriétaire du serveur Discord (vérifié à chaque connexion) : pouvoirs complets quel que soit le grade
+const isOwner = m => m.is_owner;
 const canManage = m => isOwner(m) || !!rankOf(m.rank)?.can_manage;
-const canAdmin = m => m.is_admin || canManage(m) || !!rankOf(m.rank)?.can_admin;
+const canAdmin = m => canManage(m) || !!rankOf(m.rank)?.can_admin;
 const app = express();
-app.set('trust proxy', 1);                     // derrière Caddy / Nginx
+app.set('trust proxy', 1);                     // derrière nginx
 app.use(express.json({ limit: '32kb' }));
 app.use(session({
   store: new (connectPg(session))({ pool, tableName: 'session' }),
@@ -63,14 +60,14 @@ app.use(session({
 // ---------- Discord OAuth ----------
 const DISCORD_API = 'https://discord.com/api/v10';
 const REDIRECT_URI = `${BASE_URL}/auth/discord/callback`;
-const SCOPES = 'identify guilds.members.read';
+const SCOPES = 'identify guilds guilds.members.read';   // guilds : savoir si l'utilisateur est propriétaire du serveur
 
 app.get('/auth/discord', async (req, res) => {
   if (DEV_LOGIN) {
     const { rows: [row] } = await pool.query(`
-      INSERT INTO members (discord_id, username, display_name, is_admin, status, approved_at, last_login)
+      INSERT INTO members (discord_id, username, display_name, is_owner, status, approved_at, last_login)
       VALUES ('dev-local', 'dev', 'Dev local', true, 'approved', now(), now())
-      ON CONFLICT (discord_id) DO UPDATE SET last_login = now()
+      ON CONFLICT (discord_id) DO UPDATE SET is_owner = true, last_login = now()
       RETURNING id`);
     req.session.memberId = row.id;
     return res.redirect('/casa/perfil.html');
@@ -107,18 +104,21 @@ app.get('/auth/discord/callback', async (req, res) => {
     const member = await memberRes.json();
     const rankFromRole = ranks.find(r => r.discord_role_id && member.roles.includes(r.discord_role_id))?.key ?? null;   // le grade le plus élevé trouvé
 
+    // propriétaire du serveur Discord = propriétaire du site
+    const guilds = await (await fetch(`${DISCORD_API}/users/@me/guilds`, auth)).json();
+    const owner = Array.isArray(guilds) && guilds.some(g => g.id === DISCORD_GUILD_ID && g.owner === true);
+
     // 4. upsert membre — nouveau compte = grade par défaut, en attente de validation ;
-    //    les IDs de ADMIN_DISCORD_IDS sont validés d'office et reçoivent le premier grade à pouvoirs complets (amorçage)
-    const owner = adminIds.has(user.id);
+    //    le propriétaire est validé d'office et reçoit le premier grade à pouvoirs complets s'il n'en a pas
     const startRank = owner ? ranks.find(r => r.can_manage)?.key : ranks.find(r => r.is_default)?.key;
     const { rows: [row] } = await pool.query(`
-      INSERT INTO members (discord_id, username, avatar, display_name, rank, is_admin, status, approved_at, last_login)
+      INSERT INTO members (discord_id, username, avatar, display_name, rank, is_owner, status, approved_at, last_login)
       VALUES ($1, $2, $3, $4, COALESCE($5::text, $7::text), $6::boolean, $8::text, CASE WHEN $8::text = 'approved' THEN now() END, now())
       ON CONFLICT (discord_id) DO UPDATE SET
         username = EXCLUDED.username,
         avatar = EXCLUDED.avatar,
         rank = COALESCE($5::text, members.rank, CASE WHEN $6::boolean THEN $7::text END),
-        is_admin = members.is_admin OR EXCLUDED.is_admin,
+        is_owner = EXCLUDED.is_owner,
         status = CASE WHEN $6::boolean THEN 'approved' ELSE members.status END,
         last_login = now()
       RETURNING id, status`,

@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS members (
   rank          VARCHAR(20),                   -- grade (table ranks) ; NULL = sans grade
   bio           TEXT,
   phone_rp      VARCHAR(32),
-  is_admin      BOOLEAN NOT NULL DEFAULT FALSE,
   joined_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_login    TIMESTAMPTZ
 );
@@ -131,3 +130,8 @@ ALTER TABLE photos ADD COLUMN IF NOT EXISTS url TEXT;
 ALTER TABLE photos ADD COLUMN IF NOT EXISTS thumb_url TEXT;
 UPDATE photos SET url = '/uploads/' || file, thumb_url = '/uploads/' || thumb WHERE url IS NULL;
 ALTER TABLE photos ALTER COLUMN file TYPE VARCHAR(200), ALTER COLUMN thumb TYPE VARCHAR(200);
+
+-- v10 : propriétaire du site = propriétaire du serveur Discord (mis à jour à chaque connexion) ;
+--       les droits de Gestion viennent du grade : l'ancien drapeau is_admin disparaît
+ALTER TABLE members ADD COLUMN IF NOT EXISTS is_owner BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE members DROP COLUMN IF EXISTS is_admin;

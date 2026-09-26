@@ -29,8 +29,9 @@ Géré à part. La Casa n'a besoin que de trois valeurs fournies par son équipe
 1. https://discord.com/developers/applications → New Application « La Maja 13 »
 2. OAuth2 → Client ID / Client Secret → `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` dans `.env`
 3. OAuth2 → Redirects → ajouter `https://<domaine>/auth/discord/callback`
-4. `DISCORD_GUILD_ID` = ID du serveur (mode développeur → clic droit sur le serveur → Copier l'identifiant)
-5. Grades : ils se créent et se règlent dans La Casa → Gestion → Hiérarchie (nom, ordre, couleur, droits, grade par défaut). Pour que le grade suive un rôle Discord, renseigner l'ID du rôle sur le grade concerné. `ADMIN_DISCORD_IDS` = propriétaires du site (pouvoirs complets quel que soit leur grade, indispensable pour créer les premiers grades).
+4. `DISCORD_GUILD_ID` = ID du serveur (mode développeur → clic droit sur le serveur → Copier l'identifiant). Seuls ses membres peuvent entrer.
+5. Le **propriétaire du serveur Discord** est propriétaire du site : validé d'office, tous les droits quel que soit son grade (vérifié à chaque connexion). C'est lui qui crée les premiers grades.
+6. Grades : ils se créent et se règlent dans La Casa → Gestion → Hiérarchie (nom, ordre, couleur, droits, grade par défaut). Pour que le grade suive un rôle Discord, renseigner l'ID du rôle sur le grade concerné.
 
 ## Images (galerie)
 - **Dev** : les photos sont écrites dans `uploads/` à la racine du dépôt, sur le poste.
