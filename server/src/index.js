@@ -23,7 +23,10 @@ const {
 // en Docker, la base s'appelle "maja13-db" et seul POSTGRES_PASSWORD est fourni
 const DATABASE_URL = process.env.DATABASE_URL || (POSTGRES_PASSWORD && `postgres://maja13:${POSTGRES_PASSWORD}@maja13-db:5432/maja13`);
 if (!DATABASE_URL) { console.error('Variable manquante dans .env : DATABASE_URL (ou POSTGRES_PASSWORD)'); process.exit(1); }
-for (const k of ['BASE_URL', 'SESSION_SECRET', 'DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET', 'DISCORD_GUILD_ID'])
+// connexion de dev sans Discord : uniquement en local (DEV_LOGIN=1 + BASE_URL sur localhost)
+const DEV_LOGIN = process.env.DEV_LOGIN === '1' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(BASE_URL || '');
+if (process.env.DEV_LOGIN === '1' && !DEV_LOGIN) { console.error('DEV_LOGIN=1 refusé : BASE_URL doit être http://localhost'); process.exit(1); }
+for (const k of ['BASE_URL', 'SESSION_SECRET', ...(DEV_LOGIN ? [] : ['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET', 'DISCORD_GUILD_ID'])])
   if (!process.env[k]) { console.error(`Variable manquante dans .env : ${k}`); process.exit(1); }
 
 const RANKS = ['jefe', 'segundo', 'devweb', 'palabrero', 'commandante', 'sicario', 'soldado', 'recluta'];
@@ -51,7 +54,16 @@ const DISCORD_API = 'https://discord.com/api/v10';
 const REDIRECT_URI = `${BASE_URL}/auth/discord/callback`;
 const SCOPES = 'identify guilds.members.read';
 
-app.get('/auth/discord', (req, res) => {
+app.get('/auth/discord', async (req, res) => {
+  if (DEV_LOGIN) {
+    const { rows: [row] } = await pool.query(`
+      INSERT INTO members (discord_id, username, display_name, rank, is_admin, status, approved_at, last_login)
+      VALUES ('dev-local', 'dev', 'Dev local', 'jefe', true, 'approved', now(), now())
+      ON CONFLICT (discord_id) DO UPDATE SET last_login = now()
+      RETURNING id`);
+    req.session.memberId = row.id;
+    return res.redirect('/casa/perfil.html');
+  }
   const state = crypto.randomBytes(16).toString('hex');
   req.session.oauthState = state;
   const url = new URL(`${DISCORD_API}/oauth2/authorize`);
