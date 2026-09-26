@@ -1,0 +1,50 @@
+# La Maja 13 — site + base, le même fichier en dev et en prod.
+#   dev  : docker compose up            (compose.override.yaml est ajouté automatiquement)
+#   prod : server/deploy/vps-setup.sh   (docker compose -f compose.yaml, variables de server/.env)
+# Le site n'écoute que sur 127.0.0.1 : en prod, c'est nginx sur la machine qui l'expose en HTTPS.
+name: maja13
+services:
+  maja13-app:
+    container_name: maja13-app-1
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - path: server/.env      # DATABASE_URL est déduite de POSTGRES_PASSWORD par l'app
+        required: false        # absent en dev : compose.override.yaml fournit les valeurs
+    environment:
+      PORT: 3000               # port interne au conteneur ; celui de la machine est HOST_PORT
+    ports:
+      - "127.0.0.1:${HOST_PORT:-3000}:3000"
+    volumes:
+      - maja13-uploads:/app/uploads   # photos de la galerie quand le stockage distant n'est pas configuré
+    depends_on:
+      maja13-db:
+        condition: service_healthy
+    networks:
+      - default
+      - maja13-net             # à rejoindre par le bot Discord (géré à part) s'il tourne en Docker sur la même machine
+  maja13-db:
+    container_name: maja13-db-1
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file:
+      - path: server/.env      # fournit POSTGRES_PASSWORD
+        required: false
+    environment:
+      POSTGRES_DB: maja13
+      POSTGRES_USER: maja13
+    volumes:
+      - maja13-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maja13 -d maja13"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  maja13-db:
+  maja13-uploads:
+networks:
+  maja13-net:
+    name: maja13-net

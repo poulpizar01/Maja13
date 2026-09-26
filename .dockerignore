@@ -1,0 +1,5 @@
+# Image de production (server/Dockerfile, contexte = racine du dépôt) : ni secrets ni fichiers locaux
+.git
+**/node_modules
+server/.env*
+uploads

@@ -1,0 +1,22 @@
+# Ajustements de DEV, chargés automatiquement par `docker compose up` (jamais en prod : les scripts
+# passent -f compose.yaml). Aucun .env à écrire.
+# - code monté depuis le poste : pages, CSS et JS servis tels quels (rafraîchir le navigateur) ;
+#   après une modification de server/src :  docker compose restart maja13-app
+# - connexion sans Discord (DEV_LOGIN) ; photos de la galerie dans ./uploads sur le poste
+services:
+  maja13-app:
+    command: sh -c "npm ci --no-audit --no-fund && node src/index.js"
+    environment:
+      BASE_URL: http://localhost:3000
+      SESSION_SECRET: dev-local
+      POSTGRES_PASSWORD: maja13
+      DEV_LOGIN: "1"
+    volumes:
+      - .:/app
+      - ./uploads:/app/uploads
+      - server-modules:/app/server/node_modules   # dépendances Linux, séparées de celles du poste
+  maja13-db:
+    environment:
+      POSTGRES_PASSWORD: maja13
+volumes:
+  server-modules:
