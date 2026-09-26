@@ -147,18 +147,13 @@ p{margin:0 0 1em}
 .rank--open .rank__name{color:var(--gold2);font-size:22px;letter-spacing:.1em}
 
 /* ---------- FLOTA ---------- */
-.flota{display:grid;grid-template-columns:1fr 1.3fr;gap:50px;align-items:start}
+.flota{max-width:760px;margin:0 auto}
 .flota__colors{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 .flota__colors p{grid-column:1/-1;color:var(--ink2);font-size:16px;margin-top:10px;font-style:italic}
 .swatch{text-align:center;font-family:var(--serif)}
 .swatch span{display:block;aspect-ratio:1;border:1px solid var(--line);margin-bottom:10px;box-shadow:inset 0 0 30px rgba(0,0,0,.4)}
 .swatch b{display:block;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink)}
 .swatch i{display:block;font-family:var(--body);font-style:italic;font-size:13px;color:var(--ink2)}
-.flota__list{list-style:none;margin:0;padding:0;columns:2;column-gap:40px}
-.flota__list li{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:10px 0;border-bottom:1px dotted var(--line);break-inside:avoid;font-size:17px}
-.flota__list li b{font-weight:500;color:var(--ink)}
-.flota__list li span{font-family:var(--serif);font-size:11px;letter-spacing:.2em;color:var(--gold)}
-.flota__list li:first-child b{color:var(--gold3)}
 
 /* ---------- EVENTOS ---------- */
 .eventos{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
@@ -208,13 +203,11 @@ p{margin:0 0 1em}
 @media (max-width:1000px){
   .historia,.eventos,.vocab{grid-template-columns:1fr}
   .codigo{grid-template-columns:1fr 1fr}
-  .flota{grid-template-columns:1fr}
 }
 @media (max-width:720px){
   body{font-size:17px}
   .section{padding:80px 0}
   .codigo{grid-template-columns:1fr}
-  .flota__list{columns:1}
   .nav__burger{display:flex}
   .nav__links{position:fixed;inset:0;top:0;flex-direction:column;justify-content:center;gap:28px;background:rgba(8,7,10,.97);font-size:14px;transform:translateY(-100%);transition:transform .4s;z-index:-1}
   .nav.is-open .nav__links{transform:none}
