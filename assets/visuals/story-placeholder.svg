@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title">
-  <title id="title">Emplacement temporaire pour l’histoire de MAJA 13</title>
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1e1519"/><stop offset="1" stop-color="#09090b"/></linearGradient></defs>
-  <rect width="1200" height="800" fill="url(#g)"/>
-  <path d="M0 640L220 500l190 84 210-220 180 170 180-90 220 122v234H0z" fill="#111116"/>
-  <circle cx="880" cy="220" r="120" fill="#9f2635" opacity=".17"/>
-  <text x="70" y="710" fill="#e7e0d3" fill-opacity=".5" font-family="Arial,sans-serif" font-size="24" font-weight="700" letter-spacing="6">IMAGE D’HISTOIRE À FOURNIR</text>
-</svg>

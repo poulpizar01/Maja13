@@ -1,6 +1,5 @@
 User-agent: *
 Allow: /
-Disallow: /os.html
 Disallow: /casa/
 
 Sitemap: https://maja13.example/sitemap.xml

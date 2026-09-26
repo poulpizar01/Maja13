@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title">
-  <title id="title">Carte sociale temporaire MAJA 13</title>
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#211116"/><stop offset=".55" stop-color="#0d0d10"/><stop offset="1" stop-color="#050506"/></linearGradient></defs>
-  <rect width="1200" height="630" fill="url(#g)"/><rect x="36" y="36" width="1128" height="558" rx="24" fill="none" stroke="#e7e0d3" stroke-opacity=".12"/>
-  <text x="76" y="322" fill="#e7e0d3" font-family="Arial,sans-serif" font-size="132" font-weight="900" letter-spacing="-5">MAJA 13</text>
-  <text x="82" y="382" fill="#d34b5e" font-family="Arial,sans-serif" font-size="24" font-weight="700" letter-spacing="9">PRIVATE NETWORK · LOS SANTOS</text>
-  <text x="82" y="542" fill="#e7e0d3" fill-opacity=".4" font-family="Arial,sans-serif" font-size="17" letter-spacing="4">VISUEL TEMPORAIRE — À REMPLACER</text>
-</svg>
