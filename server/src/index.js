@@ -535,7 +535,7 @@ app.get('/api/bot/armurerie', requireAuth, requireApproved, requireAdmin, async 
   } catch (e) { console.error(e); res.status(502).json({ error: 'bot-unreachable' }); }
 });
 
-// ---------- Actions vers le bot (API interne du bot, voir server/deploy/bot-api-setup.sh) ----------
+// ---------- Actions vers le bot (API interne du bot : BOT_API_URL + BOT_API_TOKEN) ----------
 // Le site ne modifie jamais la base du bot lui-même : chaque action passe par
 // le bot, qui applique sa propre logique et rafraîchit ses messages Discord.
 const BOT_API_URL = (process.env.BOT_API_URL || '').replace(/\/+$/, '');
