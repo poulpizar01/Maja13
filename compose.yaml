@@ -14,7 +14,7 @@ services:
   maja13-app:
     container_name: maja13-app-1
     # plafonds de ressources (réglables dans .env) : un site ne peut pas accaparer le VPS
-    mem_limit: ${APP_MEMORY:-768m}
+    mem_limit: ${APP_MEMORY:-512m}
     cpus: ${APP_CPUS:-1}
     pids_limit: 256
     logging: *logs
@@ -28,7 +28,7 @@ services:
     environment:
       PORT: 3000               # port interne au conteneur ; celui de la machine est HOST_PORT
       # mémoire JavaScript de Node, sous le plafond du conteneur (le reste sert au traitement des photos)
-      NODE_OPTIONS: --max-old-space-size=${APP_NODE_HEAP:-448}
+      NODE_OPTIONS: --max-old-space-size=${APP_NODE_HEAP:-320}
     ports:
       - "127.0.0.1:${HOST_PORT:-3000}:3000"
     volumes:
@@ -38,7 +38,7 @@ services:
         condition: service_healthy
   maja13-db:
     container_name: maja13-db-1
-    mem_limit: ${DB_MEMORY:-512m}
+    mem_limit: ${DB_MEMORY:-256m}
     cpus: ${DB_CPUS:-1}
     pids_limit: 256
     logging: *logs
@@ -62,7 +62,7 @@ services:
   # Restauration : voir server/README.md. Désactivé en dev (compose.override.yaml).
   maja13-backup:
     container_name: maja13-backup-1
-    mem_limit: 256m
+    mem_limit: 128m
     cpus: 0.5
     pids_limit: 64
     logging: *logs

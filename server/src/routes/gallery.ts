@@ -20,7 +20,7 @@ gallery.use('/uploads', express.static(storage.dir, { maxAge: '30d', immutable: 
 // 1. type annoncé par le navigateur (tri rapide, falsifiable) ; 2. format réel lu dans le contenu du fichier.
 // Ce qui part ensuite au stockage est toujours un WebP réencodé ici, jamais le fichier reçu.
 const FORMATS_ACCEPTES = ['jpeg', 'png', 'webp', 'heif'];   // heif = photos HEIC des téléphones
-const MAX_PIXELS = 50_000_000;                               // garde-fou contre les images piégées (décompression géante)
+const MAX_PIXELS = 25_000_000;                               // garde-fou contre les images piégées (décompression géante)
 const upload = multer({
   storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 1 },
   fileFilter: (_req, f, cb) => cb(null, /^image\/(jpeg|png|webp|heic|heif)$/.test(f.mimetype)),
@@ -36,7 +36,7 @@ async function refusImage(buffer: Buffer): Promise<string | null> {
   try { meta = await sharp(buffer, { limitInputPixels: MAX_PIXELS }).metadata(); } catch { return 'Image illisible'; }
   if (!meta.format || !FORMATS_ACCEPTES.includes(meta.format)) return 'Format refusé : jpg, png, webp ou heic uniquement (pas de gif)';
   if ((meta.pages ?? 1) > 1) return 'Les images animées ne sont pas acceptées';
-  if ((meta.width ?? 0) * (meta.height ?? 0) > MAX_PIXELS) return 'Image trop grande (50 mégapixels max)';
+  if ((meta.width ?? 0) * (meta.height ?? 0) > MAX_PIXELS) return 'Image trop grande (25 mégapixels max)';
   return null;
 }
 
