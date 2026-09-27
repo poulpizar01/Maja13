@@ -4,9 +4,16 @@
 #          COMPOSE_FILE=compose.yaml écarte les réglages de dev
 # Le site n'écoute que sur 127.0.0.1 : en prod, c'est nginx sur la machine qui l'expose en HTTPS.
 name: maja13
+# logs Docker limités à 3 fichiers de 10 Mo par service (sans ça, ils grossissent sans fin sur le disque)
+x-logs: &logs
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
 services:
   maja13-app:
     container_name: maja13-app-1
+    logging: *logs
     build:
       context: .
       dockerfile: server/Dockerfile
@@ -25,6 +32,7 @@ services:
         condition: service_healthy
   maja13-db:
     container_name: maja13-db-1
+    logging: *logs
     image: postgres:17-alpine
     restart: unless-stopped
     env_file:
@@ -45,6 +53,7 @@ services:
   # Restauration : voir server/README.md. Désactivé en dev (compose.override.yaml).
   maja13-backup:
     container_name: maja13-backup-1
+    logging: *logs
     image: postgres:17-alpine
     restart: unless-stopped
     env_file:

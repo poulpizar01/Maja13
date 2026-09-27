@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /casa/
 
-Sitemap: https://maja13.example/sitemap.xml
+Sitemap: https://lamaja13.fbfa.fr/sitemap.xml
