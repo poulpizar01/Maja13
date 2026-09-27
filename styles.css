@@ -21,6 +21,17 @@
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:18px;line-height:1.65;overflow-x:hidden}
+/* barres de défilement aux couleurs de la DA (tout le site) : fines, curseur doré sur le noir du site ; standard + WebKit (Safari) */
+html{color-scheme:dark;background:var(--bg);scrollbar-color:var(--gold2) var(--bg)}
+html:hover{scrollbar-color:var(--gold) var(--bg)}
+html,body *{scrollbar-width:thin}
+body *{scrollbar-color:var(--gold2) transparent}
+body *:hover{scrollbar-color:var(--gold) transparent}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+html::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:linear-gradient(180deg,var(--gold3),var(--gold2));border:2px solid transparent;border-radius:8px;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:var(--gold);background-clip:padding-box}
 img{max-width:100%;display:block}
 a{color:var(--gold);text-decoration:none}
 h1,h2,h3,h4{margin:0;font-weight:400}
