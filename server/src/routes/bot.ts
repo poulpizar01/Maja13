@@ -3,7 +3,7 @@
 //   /auth/bot → <bot>/auth/login?guild=… → Discord → <bot>/auth/callback
 //   → site externe configuré dans Discord (/config site-externe set …/casa/bot-callback.html) avec #token=…
 //   → POST /api/bot/link : jeton vérifié puis gardé dans la session (jamais exposé au navigateur ensuite).
-// Les droits (admin, taxes) sont décidés par le bot à chaque requête, d'après les rôles Discord.
+// Les droits (admin) sont décidés par le bot à chaque requête, d'après les rôles Discord.
 import { Router, type Request } from 'express';
 import { config } from '../config.js';
 import { body, member } from '../http.js';
@@ -11,7 +11,7 @@ import { byMember, limiter } from '../security.js';
 
 export const bot = Router();
 
-type BotMe = { id: string; username: string; isAdmin: boolean; isTaxes: boolean; guildId: string };
+type BotMe = { id: string; username: string; isAdmin: boolean; guildId: string };
 
 // ---------- cache en mémoire vive des lectures réussies ----------
 // L'API du bot limite tout le site à 300 requêtes / 15 min : une réponse déjà lue est resservie quelques minutes.
@@ -93,7 +93,7 @@ bot.get('/api/bot/status', ...member, async (req, res) => {
     const { status, data } = await botRead(req, 'me');
     if (status !== 200) { res.json({ configured: true, linked: false }); return; }
     const me = data as BotMe;
-    res.json({ configured: true, linked: true, isAdmin: me.isAdmin, isTaxes: me.isTaxes });
+    res.json({ configured: true, linked: true, isAdmin: me.isAdmin });
   } catch { res.json({ configured: true, linked: false, error: 'unreachable' }); }
 });
 
