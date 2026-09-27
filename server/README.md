@@ -57,6 +57,7 @@ Le domaine est écrit en dur dans les fichiers statiques (référencement et ape
 - Mise à jour après un push sur `main` : `git pull && docker compose up -d --build` (les nouvelles migrations sont appliquées au démarrage), puis `docker image prune -f` pour effacer les anciennes images.
 - Changer la configuration : modifier `.env`, puis `docker compose up -d`
 - Logs : `docker logs -f maja13-app-1` (limités à 3 × 10 Mo par service, voir `compose.yaml`)
+- Mémoire et processeur : chaque conteneur a un plafond (site 768 Mo et 1 processeur, base 512 Mo et 1 processeur). `docker stats` montre la consommation réelle ; pour les ajuster, décommenter `APP_MEMORY`, `DB_MEMORY`… dans `.env`, puis `docker compose up -d`.
 - État : `docker compose ps`
 
 Le `.env` contient `COMPOSE_FILE=compose.yaml` : les commandes ci-dessus ignorent ainsi les réglages de dev (`compose.override.yaml`).
