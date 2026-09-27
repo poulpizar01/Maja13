@@ -27,10 +27,12 @@ export const securityHeaders = helmet({
 });
 
 // Clé des limites : le membre connecté si possible (une adresse peut être partagée), sinon l'adresse IP.
-const byMember = (req: Request) => (req.session?.memberId ? `m${req.session.memberId}` : ipKeyGenerator(req.ip ?? ''));
-const limiter = (windowMin: number, limit: number, error: string, key?: (req: Request) => string) => rateLimit({
+export const byMember = (req: Request) => (req.session?.memberId ? `m${req.session.memberId}` : ipKeyGenerator(req.ip ?? ''));
+// skip : requêtes non comptées (ex. lecture du bot servie par le cache)
+export const limiter = (windowMin: number, limit: number, error: string, key?: (req: Request) => string, skip?: (req: Request) => boolean) => rateLimit({
   windowMs: windowMin * 60_000, limit, standardHeaders: 'draft-8', legacyHeaders: false,
   ...(key && { keyGenerator: key }),
+  ...(skip && { skip }),
   message: { error },
 });
 
@@ -43,6 +45,5 @@ export const limits = {
   upload: limiter(10, 10, 'Trop de photos envoyées d’un coup, réessaie dans quelques minutes.', byMember),
   // messages du Salon
   chat: limiter(1, 20, 'Tu envoies trop de messages, ralentis un peu.', byMember),
-  // lectures relayées au bot : son API limite tout le site à 300 requêtes / 15 min, chaque membre en a une part
-  bot: limiter(15, 150, 'Trop de lectures vers le bot, réessaie dans quelques minutes.', byMember),
+  // (lectures relayées au bot : limite définie dans routes/bot.ts, qui ne compte que les vrais appels au bot)
 };
