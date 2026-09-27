@@ -40,6 +40,38 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  # Sauvegarde de la base : au démarrage puis toutes les 24 h, dans ./backups sur la machine
+  # (un dossier, pas un volume Docker : il survit à un `docker compose down -v`), 7 jours conservés.
+  # Restauration : voir server/README.md. Désactivé en dev (compose.override.yaml).
+  maja13-backup:
+    container_name: maja13-backup-1
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file:
+      - path: .env             # fournit POSTGRES_PASSWORD
+        required: false
+    environment:
+      PGHOST: maja13-db
+      PGUSER: maja13
+      PGDATABASE: maja13
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_INTERVAL: 86400   # secondes
+      TZ: Europe/Paris         # heure des noms de fichiers
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      maja13-db:
+        condition: service_healthy
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        export PGPASSWORD="$$POSTGRES_PASSWORD"
+        while true; do
+          f="/backups/maja13-$$(date +%Y-%m-%d_%Hh%M).sql.gz"
+          if pg_dump --clean --if-exists --no-owner | gzip > "$$f.tmp"; then mv "$$f.tmp" "$$f"; echo "sauvegarde : $$f"; else rm -f "$$f.tmp"; echo "ÉCHEC de la sauvegarde" >&2; fi
+          find /backups -name 'maja13-*.sql.gz' -mtime +$$BACKUP_KEEP_DAYS -delete
+          sleep "$$BACKUP_INTERVAL"
+        done
 volumes:
   maja13-db:
   maja13-uploads:

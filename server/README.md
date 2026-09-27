@@ -22,6 +22,17 @@ Puis nginx : copier [`deploy/nginx.conf.example`](deploy/nginx.conf.example) dan
 
 Le `.env` contient `COMPOSE_FILE=compose.yaml` : les commandes ci-dessus ignorent ainsi les réglages de dev (`compose.override.yaml`).
 
+### Sauvegardes de la base
+Le service `maja13-backup` (dans `compose.yaml`) sauvegarde la base au démarrage puis toutes les 24 h, dans le dossier `backups/` du dépôt sur la machine (7 jours conservés). C'est un dossier et non un volume Docker : il survit à un `docker compose down -v`. Les photos de la galerie n'y sont pas (elles sont sur le stockage d'images).
+- Sauvegarde immédiate : `docker compose restart maja13-backup`
+- Restaurer (remplace le contenu actuel de la base) :
+  ```bash
+  docker compose stop maja13-app
+  gunzip -c backups/maja13-AAAA-MM-JJ_HHhMM.sql.gz | docker exec -i maja13-db-1 psql -U maja13 -d maja13
+  docker compose start maja13-app
+  ```
+- Ces copies restent sur la même machine : elles protègent des erreurs de manipulation, pas de la perte du serveur (pour ça : les sauvegardes de l'hébergeur).
+
 ### Bot Discord
 Géré à part. La Casa lit ses données via son **API REST, en lecture seule** : rien n'est écrit dans le bot ni stocké côté La Casa.
 - `.env` : `BOT_API_URL` = URL publique de l'API du bot (vide = pages liées au bot désactivées).

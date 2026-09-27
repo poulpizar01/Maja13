@@ -22,5 +22,10 @@ services:
   maja13-db:
     environment:
       POSTGRES_PASSWORD: maja13
+  # pas de sauvegarde automatique de la base de dev (à la main si besoin : docker compose run --rm maja13-backup)
+  maja13-backup:
+    profiles: ["sauvegarde"]
+    environment:
+      POSTGRES_PASSWORD: maja13
 volumes:
   server-modules:
