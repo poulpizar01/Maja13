@@ -39,6 +39,7 @@ model Member {
   photos     Photo[]
   chatRead   ChatRead?
 
+  @@index([rankKey])
   @@map("members")
 }
 
@@ -73,6 +74,7 @@ model OrgEntry {
 
   rank Rank @relation(fields: [rankKey], references: [key], onDelete: Restrict)
 
+  @@index([rankKey, position])
   @@map("org_entries")
 }
 
@@ -87,6 +89,7 @@ model Message {
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@index([createdAt(sort: Desc)])
+  @@index([memberId])
   @@map("messages")
 }
 
@@ -118,6 +121,7 @@ model Photo {
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@index([createdAt(sort: Desc)])
+  @@index([memberId])
   @@map("photos")
 }
 
