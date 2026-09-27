@@ -62,9 +62,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Formulaire dans une modale (même style que casaConfirm). Résout avec les
-// valeurs saisies, ou null si annulé. fields : [{ name, label, type, options, value, placeholder, required, min, hint }]
-// half : true = demi-largeur (deux champs côte à côte)
-// type : text | number | select | multiselect | textarea | checkbox (value booléen, text = libellé de la case)
+// valeurs saisies, ou null si annulé. fields : [{ name, label, type, options, value, placeholder, required, hint }]
+// half : true = demi-largeur (deux champs côte à côte) ; rows : hauteur d'une zone de texte
+// type : text (défaut) | textarea | checkbox (value booléen, text = libellé de la case)
 //        | radio (options [{ value, label, hint }]) | color
 // del : libellé d'un bouton de suppression ; s'il est cliqué, résout avec { _delete: true }
 window.casaForm = function (fields, { title = 'Saisie', text = '', ok = 'Valider', cancel = 'Annuler', danger = false, del = '' } = {}) {
@@ -92,20 +92,17 @@ window.casaForm = function (fields, { title = 'Saisie', text = '', ok = 'Valider
     if (del) wrap.querySelector('[data-del]').textContent = del;
     const box = wrap.querySelector('.modal__fields');
     box.innerHTML = fields.map(f => {
-      const opts = (f.options || []).map(o => typeof o === 'string' ? { value: o, label: o } : o);
       let ctrl;
-      if (f.type === 'select') ctrl = `<select class="admin-select" name="${esc(f.name)}" ${f.required ? 'required' : ''}>${f.placeholder ? `<option value="">${esc(f.placeholder)}</option>` : ''}${opts.map(o => `<option value="${esc(o.value)}" ${o.value === f.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`;
-      else if (f.type === 'multiselect') ctrl = `<div class="modal__checks">${opts.length ? opts.map(o => `<label class="check"><input type="checkbox" name="${esc(f.name)}" value="${esc(o.value)}"><span>${esc(o.label)}</span></label>`).join('') : '<span class="muted">Personne à sélectionner</span>'}</div>`;
-      else if (f.type === 'textarea') ctrl = `<textarea class="admin-input" name="${esc(f.name)}" rows="${f.rows || 3}" ${f.required ? 'required' : ''} placeholder="${esc(f.placeholder || '')}">${esc(f.value || '')}</textarea>`;
+      if (f.type === 'textarea') ctrl = `<textarea class="admin-input" name="${esc(f.name)}" rows="${f.rows || 3}" ${f.required ? 'required' : ''} placeholder="${esc(f.placeholder || '')}">${esc(f.value || '')}</textarea>`;
       else if (f.type === 'checkbox') ctrl = `<label class="check"><input type="checkbox" name="${esc(f.name)}" ${f.value ? 'checked' : ''}><span>${esc(f.text)}</span></label>`;
-      else if (f.type === 'radio') ctrl = `<div class="choices">${opts.map(o => `<label class="choice"><input type="radio" name="${esc(f.name)}" value="${esc(o.value)}" ${o.value === f.value ? 'checked' : ''}><span><b>${esc(o.label)}</b>${o.hint ? `<small>${esc(o.hint)}</small>` : ''}</span></label>`).join('')}</div>`;
+      else if (f.type === 'radio') ctrl = `<div class="choices">${f.options.map(o => `<label class="choice"><input type="radio" name="${esc(f.name)}" value="${esc(o.value)}" ${o.value === f.value ? 'checked' : ''}><span><b>${esc(o.label)}</b>${o.hint ? `<small>${esc(o.hint)}</small>` : ''}</span></label>`).join('')}</div>`;
       else if (f.type === 'color') ctrl = `<input class="modal__color" type="color" name="${esc(f.name)}" value="${esc(f.value || '#c9a45c')}">`;
-      else ctrl = `<input class="admin-input" type="${f.type === 'number' ? 'number' : 'text'}" name="${esc(f.name)}" value="${esc(f.value ?? '')}" ${f.required ? 'required' : ''} ${f.min != null ? `min="${f.min}"` : ''} ${f.max != null ? `max="${f.max}"` : ''} placeholder="${esc(f.placeholder || '')}" autocomplete="off" ${f.list ? `list="dl-${esc(f.name)}"` : ''}>${f.list ? `<datalist id="dl-${esc(f.name)}">${f.list.map(v => `<option value="${esc(v)}">`).join('')}</datalist>` : ''}`;
+      else ctrl = `<input class="admin-input" type="text" name="${esc(f.name)}" value="${esc(f.value ?? '')}" ${f.required ? 'required' : ''} placeholder="${esc(f.placeholder || '')}" autocomplete="off">`;
       // zones de clic : seul le contrôle (et le titre des champs de saisie, relié par for/id) réagit ;
       // l'aide et l'espace autour ne font rien. Cases et choix portent leur propre <label>.
       const id = `cf-${esc(f.name)}`;
-      ctrl = ctrl.replace(/^<(input|select|textarea) /, `<$1 id="${id}" `);
-      const title = !f.label ? '' : ['checkbox', 'radio', 'multiselect', 'color'].includes(f.type)
+      ctrl = ctrl.replace(/^<(input|textarea) /, `<$1 id="${id}" `);
+      const title = !f.label ? '' : ['checkbox', 'radio', 'color'].includes(f.type)
         ? `<span class="modal__label">${esc(f.label)}${f.required ? ' *' : ''}</span>`
         : `<label class="modal__label" for="${id}">${esc(f.label)}${f.required ? ' *' : ''}</label>`;
       return `<div class="modal__field${f.half ? ' modal__field--half' : ''}">${title}${ctrl}${f.hint ? `<small>${esc(f.hint)}</small>` : ''}</div>`;
@@ -120,12 +117,10 @@ window.casaForm = function (fields, { title = 'Saisie', text = '', ok = 'Valider
       e.preventDefault();
       const out = {};
       for (const f of fields) {
-        if (f.type === 'multiselect') out[f.name] = [...box.querySelectorAll(`input[name="${f.name}"]:checked`)].map(i => i.value);
-        else if (f.type === 'checkbox') out[f.name] = box.querySelector(`[name="${f.name}"]`).checked;
+        if (f.type === 'checkbox') out[f.name] = box.querySelector(`[name="${f.name}"]`).checked;
         else if (f.type === 'radio') out[f.name] = box.querySelector(`[name="${f.name}"]:checked`)?.value ?? '';
-        else { const el = box.querySelector(`[name="${f.name}"]`); out[f.name] = f.type === 'number' ? (el.value === '' ? null : Number(el.value)) : el.value.trim(); }
-        if (f.required && (out[f.name] === '' || out[f.name] == null || (Array.isArray(out[f.name]) && !out[f.name].length))) { err.textContent = `« ${f.label} » est obligatoire.`; err.hidden = false; return; }
-        if (f.type === 'number' && out[f.name] != null && f.min != null && out[f.name] < f.min) { err.textContent = `« ${f.label} » doit être au moins ${f.min}.`; err.hidden = false; return; }
+        else out[f.name] = box.querySelector(`[name="${f.name}"]`).value.trim();
+        if (f.required && !out[f.name]) { err.textContent = `« ${f.label} » est obligatoire.`; err.hidden = false; return; }
       }
       close(out);
     };

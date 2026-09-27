@@ -22,7 +22,7 @@ export const requireAuth: RequestHandler = (req, res, next) => {
 };
 
 // charge le membre courant et exige un compte validé
-export const requireApproved: RequestHandler = async (req, res, next) => {
+const requireApproved: RequestHandler = async (req, res, next) => {
   const m = await prisma.member.findUnique({ where: { id: req.session.memberId } });
   if (!m) { req.session.destroy(() => res.status(401).json({ error: 'unauthenticated' })); return; }
   if (m.status !== 'approved') { res.status(403).json({ error: 'pending', status: m.status }); return; }
@@ -31,13 +31,13 @@ export const requireApproved: RequestHandler = async (req, res, next) => {
 };
 
 // accès à la Gestion (membres, tableau de bord, taxes, armurerie)
-export const requireAdmin: RequestHandler = (req, res, next) => {
+const requireAdmin: RequestHandler = (req, res, next) => {
   if (canAdmin(req.member)) next();
   else res.status(403).json({ error: 'forbidden' });
 };
 
 // pouvoirs complets (grades, hiérarchie)
-export const requireManage: RequestHandler = (req, res, next) => {
+const requireManage: RequestHandler = (req, res, next) => {
   if (canManage(req.member)) next();
   else res.status(403).json({ error: 'manage-only' });
 };

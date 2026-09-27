@@ -237,7 +237,6 @@
 .semaine__reset{margin:0;font-size:14px;color:var(--ink2);font-style:italic}
 .semaine__reset b{color:var(--ink);font-weight:500}
 .semaine__grid{display:grid;grid-template-columns:1.4fr 1fr;gap:22px;margin-bottom:22px}
-.semaine__grid--3{grid-template-columns:repeat(3,1fr)}
 .semaine__quotas{display:grid;gap:14px}
 .semaine__side{display:grid;gap:14px;align-content:start}
 .semaine__hint{margin:0;font-size:13px;color:var(--ink2);font-style:italic}
@@ -259,7 +258,7 @@
 .stat__list b{font-weight:500;color:var(--gold3);white-space:nowrap}
 .stat__list .muted,.muted{color:var(--ink2);font-style:italic}
 .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;letter-spacing:.04em}
-@media (max-width:820px){.semaine__grid,.semaine__grid--3{grid-template-columns:1fr}}
+@media (max-width:820px){.semaine__grid{grid-template-columns:1fr}}
 
 /* tableau de bord */
 .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:34px}
@@ -269,10 +268,8 @@
 .tile b{display:block;font-family:var(--display);font-size:40px;line-height:1.1;letter-spacing:.03em;margin:6px 0 2px;background:linear-gradient(180deg,#f7e6b6,#c9a45c 55%,#8a6a34);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .tile small{font-size:13px;color:var(--ink2);font-style:italic}
 .dash-cols{display:grid;grid-template-columns:1fr 1fr;gap:22px}
-.dash-cols--3{grid-template-columns:repeat(3,1fr)}
 .dash-table{min-width:0}
 .dash-table td.is-done{color:var(--gold3)}
-.dash-table tr.is-warn td{color:#e0a29e}
 .mini{display:block;height:3px;background:rgba(201,164,92,.12);margin-top:4px;max-width:90px}
 .mini b{display:block;height:100%;background:var(--gold)}
 /* Tableau de bord : le coffre (onglets par coffre, cartes d'objets) */
@@ -303,7 +300,7 @@
 .feed li{display:grid;grid-template-columns:auto 1fr;gap:12px;padding:7px 0;border-bottom:1px dotted var(--line);font-size:14px}
 .feed time{color:var(--ink2);font-size:12px;white-space:nowrap;padding-top:2px}
 .feed .pos{color:var(--gold3)}.feed .neg{color:#e0a29e}
-@media (max-width:1000px){.tiles{grid-template-columns:1fr 1fr}.dash-cols,.dash-cols--3{grid-template-columns:1fr}}
+@media (max-width:1000px){.tiles{grid-template-columns:1fr 1fr}.dash-cols{grid-template-columns:1fr}}
 /* menu de La Casa : beaucoup d'entrées, on serre */
 .casa-nav{gap:22px;font-size:11px;letter-spacing:.2em}
 .casa-nav a,.casa-nav button{white-space:nowrap}
@@ -403,7 +400,6 @@
 label.modal__label{cursor:pointer}
 .modal__field small{color:var(--ink2);font-style:italic;font-size:13px}
 .modal__field .admin-input,.modal__field .admin-select{margin-top:0;font-size:16px}
-.modal__checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:4px 12px;max-height:220px;overflow:auto;padding:8px 10px;border:1px solid var(--line);background:rgba(0,0,0,.25)}
 .check{display:inline-flex;align-self:flex-start;align-items:center;gap:8px;font-size:15px;cursor:pointer;color:var(--ink)}
 .modal__error{color:#e0a29e;font-size:14px;margin:-8px 0 14px;text-align:center}
 .toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);z-index:120;opacity:0;pointer-events:none;transition:.25s;max-width:min(92vw,560px);padding:12px 20px;border:1px solid var(--gold2);background:rgba(10,8,6,.96);color:var(--gold3);font-size:15px;text-align:center;box-shadow:0 20px 40px rgba(0,0,0,.6)}
