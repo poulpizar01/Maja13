@@ -288,7 +288,12 @@
       <h2>Galería</h2>
       <p class="sub">La familia en images</p>
     </div>
-    <div class="galeria" id="galeriaGrid"></div>
+    <div class="galeria">
+      <button class="galeria__nav galeria__nav--prev" id="galeriaPrev" type="button" aria-label="Photos précédentes">‹</button>
+      <div class="galeria__track" id="galeriaGrid" tabindex="0" aria-label="Photos de la familia"></div>
+      <button class="galeria__nav galeria__nav--next" id="galeriaNext" type="button" aria-label="Photos suivantes">›</button>
+      <div class="galeria__progress" aria-hidden="true"><i class="galeria__bar"><b id="galeriaBar"></b></i></div>
+    </div>
   </div>
 </section>
 <div class="lightbox" id="lightbox" hidden>
@@ -313,10 +318,20 @@
 
 <footer class="footer">
   <div class="wrap">
-    <span>© La Maja 13 — Roleplay sur Flashback FA. Organisation fictive dans un univers de jeu.</span>
     <span>Lealtad · Respeto · La familia es sagrada</span>
   </div>
 </footer>
+<div class="signature">
+  <div class="sig-pastille">
+    <img src="assets/roxwood.png" alt="" width="20" height="20" loading="lazy" onerror="this.remove()">
+    <span class="sig-txt">Développé par <b>Roxwood Network</b></span>
+    <span class="sig-trait" aria-hidden="true"></span>
+    <span class="sig-actions">
+      <a href="https://roxwood-network.fbfa.fr/" target="_blank" rel="noopener">Site</a>
+      <a href="https://discord.gg/dDAFWxeU8" target="_blank" rel="noopener">Discord</a>
+    </span>
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="hero3d.js"></script>

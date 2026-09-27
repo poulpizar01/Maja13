@@ -56,8 +56,7 @@
 .miembro__name{display:block;font-family:var(--display);font-size:24px;letter-spacing:.04em;color:var(--ink);margin-top:4px}
 .miembro__user{display:block;font-size:13px;color:var(--ink2)}
 
-@media (max-width:800px){.perfil{grid-template-columns:1fr}.casa-page{padding-top:100px}.casa-nav{gap:14px;font-size:11px}}
-@media (max-width:720px){.casa-nav{position:static;transform:none;flex-direction:row;background:none;z-index:auto;inset:auto;justify-content:flex-end}}
+@media (max-width:800px){.perfil{grid-template-columns:1fr}.casa-page{padding-top:100px}}
 
 /* admin */
 .casa-page--wide{max-width:1180px}
@@ -95,7 +94,7 @@
 .btn--danger{border-color:rgba(201,96,90,.6);color:#e0a29e}
 .btn--danger:hover{background:rgba(122,31,31,.2)}
 .pending-card__actions .btn{cursor:pointer;font-family:var(--serif)}
-.status{font-family:var(--serif);font-size:10px;letter-spacing:.2em;text-transform:uppercase;padding:4px 8px;border:1px solid var(--line)}
+.status{display:inline-block;white-space:nowrap;font-family:var(--serif);font-size:10px;letter-spacing:.2em;text-transform:uppercase;padding:4px 8px;border:1px solid var(--line)}
 .status--approved{color:var(--gold3);border-color:var(--gold2)}
 .status--rejected{color:#e0a29e;border-color:rgba(201,96,90,.6)}
 .status--pending{color:var(--ink2)}
@@ -291,7 +290,10 @@
 .vcard__qty{font-family:var(--display);font-size:30px;line-height:1;color:var(--gold3);font-weight:400}
 .vcard__bar{display:block;height:3px;background:rgba(201,164,92,.15)}
 .vcard__bar b{display:block;height:100%;background:var(--gold)}
-.vcard__where{color:var(--ink2);font-size:12px;font-style:italic;line-height:1.35}
+.vcard__where{list-style:none;margin:4px 0 0;padding:6px 0 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:3px;font-size:12.5px;line-height:1.3}
+.vcard__where li{display:flex;justify-content:space-between;gap:10px;min-width:0}
+.vcard__where span{color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vcard__where b{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums;flex:none}
 .vcard.is-empty{opacity:.45}
 .vault__empty{grid-column:1/-1}
 @media (max-width:560px){.vault__search{width:100%}}
@@ -305,7 +307,6 @@
 .casa-nav{gap:22px;font-size:11px;letter-spacing:.2em}
 .casa-nav a,.casa-nav button{white-space:nowrap}
 .casa-body .nav__brand{white-space:nowrap}
-@media (max-width:1100px){.casa-nav{gap:11px;font-size:9px;letter-spacing:.14em}.casa-nav .nav__cta{padding:6px 10px!important}}
 
 /* taxes & racket */
 .tax-pick{border:1px solid var(--line);padding:22px 24px;margin-bottom:34px;background:linear-gradient(180deg,rgba(201,164,92,.05),rgba(0,0,0,.25));position:relative}
@@ -359,7 +360,17 @@
 .nav__menu a::after{display:none}
 .nav__menu a:hover{background:rgba(201,164,92,.08);color:var(--gold3)}
 .nav__menu a.is-active{color:var(--gold3);background:rgba(201,164,92,.06)}
-@media (max-width:720px){.nav__menu{position:fixed;left:12px;right:12px;top:auto;transform:none;min-width:0}.nav__menu::before{display:none}.nav__group.is-open .nav__menu{transform:none}}
+/* en panneau (burger, voir styles.css) : le menu Gestion est déplié en liste, sans bulle */
+@media (max-width:1180px){
+  .casa-nav{font-size:14px;letter-spacing:.22em}
+  .nav__group{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .nav__group-btn{pointer-events:none;color:var(--gold2);font-size:11px;letter-spacing:.3em}
+  .nav__group-btn i,.nav__group-btn.is-active::after{display:none}
+  .nav__menu,.nav__group.is-open .nav__menu{position:static;transform:none;opacity:1;visibility:visible;min-width:0;background:none;border:0;box-shadow:none;padding:0;align-items:center;gap:4px}
+  .nav__menu::before{display:none}
+  .nav__menu a{padding:6px 0!important}
+  .nav__menu a:hover,.nav__menu a.is-active{background:none}
+}
 
 /* classement */
 .tiles--3{grid-template-columns:repeat(3,1fr)}
@@ -485,3 +496,20 @@ textarea.admin-input{resize:vertical;max-width:100%;min-height:60px}
 .stats-member{display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:240px;padding:6px 14px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(201,164,92,.06),rgba(0,0,0,.25))}
 .stats-member small{font-family:var(--serif);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--gold2)}
 .stats-member .admin-select{margin:0;padding:2px 0;border:0;background:transparent;font-family:var(--serif);font-size:15px;letter-spacing:.06em;color:var(--gold3);cursor:pointer}
+
+/* membres (Administration) sur téléphone : une fiche par membre au lieu d'un tableau à faire défiler */
+@media (max-width:760px){
+  .members-table{min-width:0}
+  .members-table thead{display:none}
+  .members-table tr{display:grid;grid-template-columns:auto 1fr auto;gap:10px 12px;align-items:center;padding:16px 14px;border-bottom:1px solid var(--line)}
+  .members-table td{padding:0;border:0;min-width:0!important}
+  .members-table td:nth-child(1){grid-row:1}
+  .members-table td:nth-child(2){grid-row:1;overflow:hidden;text-overflow:ellipsis}
+  .members-table td:nth-child(5){grid-row:1;grid-column:3}
+  .members-table td:nth-child(3),.members-table td:nth-child(4){grid-column:1/-1}
+  .members-table td:nth-child(3)::before{content:"Nom RP"}
+  .members-table td:nth-child(4)::before{content:"Grade"}
+  .members-table td:nth-child(3)::before,.members-table td:nth-child(4)::before{display:block;font-family:var(--serif);font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--gold2)}
+  .members-table td:nth-child(6){grid-column:1/3}
+  .members-table td.admin-actions{grid-column:1/-1;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+}

@@ -36,6 +36,21 @@ window.casaNav = function (me) {
   const org = document.getElementById('orgLink');
   if (org && me && me.canManage) org.hidden = false;
 };
+// Menu mobile (burger, affiché par styles.css quand les liens ne tiennent plus) : ajouté ici pour toutes les pages de La Casa
+document.addEventListener('DOMContentLoaded', () => {
+  const nav = document.querySelector('.nav'), links = nav && nav.querySelector('.nav__links');
+  if (!links || nav.querySelector('.nav__burger')) return;
+  const burger = document.createElement('button');
+  burger.className = 'nav__burger'; burger.type = 'button'; burger.setAttribute('aria-label', 'Menu'); burger.setAttribute('aria-expanded', 'false');
+  burger.innerHTML = '<span></span><span></span><span></span>';
+  links.before(burger);
+  const toggle = open => { nav.classList.toggle('is-open', open); document.body.classList.toggle('nav-lock', open); burger.setAttribute('aria-expanded', open); };
+  burger.addEventListener('click', () => toggle(!nav.classList.contains('is-open')));
+  links.addEventListener('click', e => { if (e.target.closest('a')) toggle(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') toggle(false); });
+  matchMedia('(min-width:1181px)').addEventListener('change', e => { if (e.matches) toggle(false); });
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   const g = document.getElementById('gestion'); if (!g) return;
   const btn = g.querySelector('.nav__group-btn');

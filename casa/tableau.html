@@ -71,7 +71,7 @@
           <input class="admin-input vault__search" id="vaultSearch" type="search" placeholder="Rechercher un objet…" aria-label="Rechercher un objet">
           <select class="admin-select vault__sort" id="vaultSort" aria-label="Trier">
             <option value="qty">Quantité décroissante</option>
-            <option value="name">Nom (A → Z)</option>
+            <option value="name">Nom croissant</option>
           </select>
           <label class="check"><input type="checkbox" id="vaultEmpty"><span>Objets à 0</span></label>
         </div>
@@ -120,14 +120,15 @@
     let list = current.filter(i => ($('vaultEmpty').checked || i.quantite) && (!q || i.item.toLowerCase().includes(q)));
     list = [...list].sort($('vaultSort').value === 'name' ? (a, b) => a.item.localeCompare(b.item) : (a, b) => b.quantite - a.quantite || a.item.localeCompare(b.item));
     const max = Math.max(1, ...current.map(i => i.quantite));
-    // répartition entre coffres, affichée dans la vue d'ensemble
+    // répartition entre coffres, affichée dans la vue d'ensemble : un coffre par ligne, du plus rempli au moins rempli
     const where = item => vaultView === 'all' && coffres.length > 1
-      ? coffres.map(c => [coffreName(c), c.items.find(i => i.item === item)?.quantite || 0]).filter(([, n]) => n).map(([n, v]) => `${esc(n)} ${units(v)}`).join(' · ') : '';
+      ? coffres.map(c => [coffreName(c), c.items.find(i => i.item === item)?.quantite || 0]).filter(([, n]) => n).sort((a, b) => b[1] - a[1])
+        .map(([n, v]) => `<li><span>${esc(n)}</span><b>${units(v)}</b></li>`).join('') : '';
     $('vaultGrid').innerHTML = list.length ? list.map(i => `<div class="vcard ${i.quantite ? '' : 'is-empty'}">
       <span class="vcard__name" title="${esc(itemName(i.item))}">${esc(itemName(i.item))}</span>
       <b class="vcard__qty">${units(i.quantite)}</b>
       <i class="vcard__bar"><b style="width:${Math.round(i.quantite / max * 100)}%"></b></i>
-      ${where(i.item) ? `<small class="vcard__where">${where(i.item)}</small>` : ''}</div>`).join('')
+      ${where(i.item) ? `<ul class="vcard__where">${where(i.item)}</ul>` : ''}</div>`).join('')
       : `<p class="admin-empty vault__empty">${q ? 'Aucun objet ne correspond à la recherche.' : 'Ce coffre est vide.'}</p>`;
   }
   $('vaultTabs').addEventListener('click', e => { const b = e.target.closest('[data-vault]'); if (b) { vaultView = b.dataset.vault; renderVault(); } });

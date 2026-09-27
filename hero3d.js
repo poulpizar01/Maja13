@@ -98,7 +98,8 @@
     const w = hero.clientWidth, h = hero.clientHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / h; camera.updateProjectionMatrix();
-    if (w > 720) { coinX = Math.min(1.8, w / 760); coinY = 0; coinScale = Math.min(0.88, w / 1500); }
+    // sous 1000 px (tablette, téléphone) : blason au-dessus du texte, comme .hero__content dans styles.css
+    if (w > 1000) { coinX = Math.min(1.8, w / 760); coinY = 0; coinScale = Math.min(0.88, w / 1500); }
     else { coinX = 0; coinY = 0.85; coinScale = Math.min(0.45, w / 1000); }
     coin.scale.setScalar(coinScale);
   }

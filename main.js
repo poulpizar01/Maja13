@@ -9,11 +9,11 @@
   addEventListener('scroll', onScroll, { passive: true }); onScroll();
 
   // menu mobile
-  burger.addEventListener('click', () => {
-    const open = nav.classList.toggle('is-open');
-    burger.setAttribute('aria-expanded', open);
-  });
-  links.querySelectorAll('a').forEach(a => a.addEventListener('click', () => nav.classList.remove('is-open')));
+  const toggle = open => { nav.classList.toggle('is-open', open); document.body.classList.toggle('nav-lock', open); burger.setAttribute('aria-expanded', open); };
+  burger.addEventListener('click', () => toggle(!nav.classList.contains('is-open')));
+  links.querySelectorAll('a').forEach(a => a.addEventListener('click', () => toggle(false)));
+  addEventListener('keydown', e => { if (e.key === 'Escape') toggle(false); });
+  matchMedia('(min-width:1181px)').addEventListener('change', e => { if (e.matches) toggle(false); });
 
   // apparition au scroll
   const els = document.querySelectorAll('.reveal');
