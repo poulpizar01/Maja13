@@ -8,6 +8,7 @@
 # - connexion sans Discord (DEV_LOGIN) ; photos de la galerie dans ./uploads sur le poste
 services:
   maja13-app:
+    user: root                 # l'image tourne en « node » ; en dev, npm ci écrit dans le volume des dépendances
     command: sh -c "npm ci --no-audit --no-fund && npm run dev"
     environment:
       NODE_ENV: development    # l'image est en production : sans ça, npm ci n'installe pas tsx

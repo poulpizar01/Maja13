@@ -9,6 +9,7 @@ import { body, intParam, member, text } from '../http.js';
 import { author } from '../members.js';
 import { canAdmin } from '../ranks.js';
 import { storage } from '../storage.js';
+import { limits } from '../security.js';
 
 export const gallery = Router();
 
@@ -50,7 +51,7 @@ gallery.get('/api/gallery', async (req, res) => {
   res.json(photos.map(photoView));
 });
 
-gallery.post('/api/gallery', ...member, receivePhoto, async (req, res) => {
+gallery.post('/api/gallery', ...member, limits.upload, receivePhoto, async (req, res) => {
   if (!req.file) { res.status(400).json({ error: 'Aucune image (jpg, png, webp, heic — pas de gif)' }); return; }
   const refus = await refusImage(req.file.buffer);
   if (refus) { res.status(400).json({ error: refus }); return; }

@@ -8,6 +8,7 @@ import { config } from './config.js';
 import { pool } from './db.js';
 import { loadRanks } from './ranks.js';
 import { storage } from './storage.js';
+import { limits, securityHeaders } from './security.js';
 import { auth } from './routes/auth.js';
 import { members } from './routes/members.js';
 import { hierarchy } from './routes/hierarchy.js';
@@ -18,7 +19,8 @@ import { bot } from './routes/bot.js';
 await loadRanks();
 
 const app = express();
-app.set('trust proxy', 1);                     // derrière nginx
+app.set('trust proxy', 1);                     // derrière nginx (adresse IP réelle pour les limites de requêtes)
+app.use(securityHeaders);
 app.use(express.json({ limit: '32kb' }));
 app.use(session({
   store: new (connectPg(session))({ pool, tableName: 'session' }),
@@ -29,11 +31,18 @@ app.use(session({
   cookie: { httpOnly: true, sameSite: 'lax', secure: config.baseUrl.startsWith('https'), maxAge: 30 * 24 * 3600 * 1000 },
 }));
 
+app.use('/auth', limits.auth);
+app.use('/api', limits.api);
 app.use(auth, members, hierarchy, gallery, chat, bot);
 
-// ---------- site statique (racine du dépôt) ----------
-app.use((req, res, next) => { if (req.path.startsWith('/server/')) res.status(404).end(); else next(); });
-app.use(express.static(config.root, { extensions: ['html'], index: 'index.html', dotfiles: 'ignore' }));
+// ---------- site statique : uniquement ce qui est public ----------
+// casa/ et assets/, plus les fichiers de la racine du site (pages, css, js, robots.txt, sitemap.xml) ;
+// jamais le reste du dépôt (code du serveur, compose.yaml, README…), quelle que soit l'écriture de l'adresse.
+const pages: Parameters<typeof express.static>[1] = { extensions: ['html'], index: 'index.html', dotfiles: 'ignore' };
+app.use('/casa', express.static(join(config.root, 'casa'), pages));
+app.use('/assets', express.static(join(config.root, 'assets'), { dotfiles: 'ignore', maxAge: '7d' }));
+const rootFiles = express.static(config.root, pages);
+app.use((req, res, next) => { if (/^\/([\w-]+\.(html|css|js|txt|xml))?$/.test(req.path)) rootFiles(req, res, next); else next(); });
 app.use((_req, res) => { res.status(404).sendFile(join(config.root, '404.html'), err => { if (err) res.send('404'); }); });
 
 // erreur imprévue dans une route : journalisée, réponse générique

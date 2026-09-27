@@ -5,6 +5,7 @@ import type { Member, Message } from '../generated/prisma/client.js';
 import { body, intParam, member, text } from '../http.js';
 import { author, byRankThenName } from '../members.js';
 import { canAdmin } from '../ranks.js';
+import { limits } from '../security.js';
 
 export const chat = Router();
 
@@ -26,7 +27,7 @@ chat.get('/api/chat/messages', ...member, async (req, res) => {
   res.json(list.reverse().map(messageView));
 });
 
-chat.post('/api/chat/messages', ...member, async (req, res) => {
+chat.post('/api/chat/messages', ...member, limits.chat, async (req, res) => {
   const content = text(body(req).content, 1000);
   if (!content) { res.status(400).json({ error: 'vide' }); return; }
   const msg = messageView(await prisma.message.create({ data: { memberId: req.member.id, content }, include: withAuthor }));

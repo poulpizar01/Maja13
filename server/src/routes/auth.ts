@@ -1,6 +1,6 @@
 // Connexion Discord (OAuth2), connexion de dev locale et déconnexion.
 import crypto from 'node:crypto';
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { config } from '../config.js';
 import { prisma } from '../db.js';
 import { allRanks } from '../ranks.js';
@@ -15,6 +15,10 @@ type UserGuild = { id: string; owner: boolean };
 
 export const auth = Router();
 
+// nouvelle session à chaque connexion (évite la fixation de session), puis rattachement du membre
+const openSession = (req: Request, memberId: number) => new Promise<void>((ok, ko) =>
+  req.session.regenerate(err => { if (err) ko(err); else { req.session.memberId = memberId; ok(); } }));
+
 auth.get('/auth/discord', async (req, res) => {
   if (config.devLogin) {
     const m = await prisma.member.upsert({
@@ -22,7 +26,7 @@ auth.get('/auth/discord', async (req, res) => {
       create: { discordId: config.devDiscordId, username: 'dev', displayName: 'Dev local', isOwner: true, status: 'approved', approvedAt: new Date(), lastLogin: new Date() },
       update: { isOwner: true, lastLogin: new Date() },
     });
-    req.session.memberId = m.id;
+    await openSession(req, m.id);
     res.redirect('/casa/perfil.html');
     return;
   }
@@ -79,7 +83,7 @@ auth.get('/auth/discord/callback', async (req, res) => {
       },
     });
 
-    req.session.memberId = m.id;
+    await openSession(req, m.id);
     res.redirect(m.status === 'approved' ? '/casa/perfil.html' : '/casa/espera.html');
   } catch (e) {
     console.error(e);

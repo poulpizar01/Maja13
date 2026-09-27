@@ -16,6 +16,9 @@ COPY server/package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY . /app
 COPY --from=build /app/server/dist ./dist
+# utilisateur sans privilèges ; seul le dossier des photos (volume maja13-uploads) lui est inscriptible
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
+USER node
 EXPOSE 3000
 # applique les migrations en attente, puis démarre (exec : le serveur reçoit directement les signaux d'arrêt)
 CMD ["sh", "-c", "npx prisma migrate deploy && exec node dist/index.js"]

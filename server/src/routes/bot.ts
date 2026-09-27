@@ -7,6 +7,7 @@
 import { Router, type Request } from 'express';
 import { config } from '../config.js';
 import { body, member } from '../http.js';
+import { limits } from '../security.js';
 
 export const bot = Router();
 
@@ -67,10 +68,11 @@ bot.get('/api/bot/status', ...member, async (req, res) => {
 
 // lecture relayée : GET /api/bot/data/<rubrique>/… → <bot>/api/<rubrique>/… (mêmes paramètres ?week=, ?status=…)
 const SECTIONS = ['me', 'users', 'stocks', 'quotas', 'taxes', 'armurerie', 'ventes'];
-bot.get('/api/bot/data/*path', ...member, async (req, res) => {
+bot.get('/api/bot/data/*path', ...member, limits.bot, async (req, res) => {
   const segments = (req.params as { path: string[] }).path;
   if (!config.botApiUrl) { res.status(503).json({ error: 'bot-off' }); return; }
-  if (!SECTIONS.includes(segments[0])) { res.status(404).json({ error: 'not-found' }); return; }
+  // rubrique autorisée, et pas de segment qui ferait remonter l'adresse hors de /api/<rubrique>
+  if (!SECTIONS.includes(segments[0]) || segments.some(s => !s || s === '.' || s.includes('..') || s.includes('/'))) { res.status(404).json({ error: 'not-found' }); return; }
   if (!req.session.botToken) { res.status(401).json({ error: 'bot-unlinked' }); return; }
   const query = new URL(req.originalUrl, 'http://casa').search;
   try {
