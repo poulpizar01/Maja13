@@ -47,7 +47,7 @@
     <p class="sub">Les armes de la familia et qui les tient</p>
   </div>
   <div class="casa-loading" id="loading">Chargement…</div>
-  <p class="admin-empty" id="off" hidden>Le bot Discord n'est pas encore relié à La Casa (ou sa base est injoignable).</p>
+  <div id="botGate" hidden></div>
 
   <div id="page" hidden>
     <div class="arm-counts">
@@ -60,26 +60,30 @@
     <section class="admin-block">
       <div class="tax-head">
         <h3 class="admin-block__title" id="listTitle">Armes prêtées</h3>
-        <span class="row-actions"><button class="btn btn--gold btn--sm" id="addArme" hidden>+ Ajouter une arme</button><select class="admin-select arm-type" id="typeSel"><option value="">Tous les types</option></select></span>
+        <span class="arm-tools"><input class="admin-input tax-search" id="search" type="search" placeholder="Arme, référence, membre…" aria-label="Rechercher une arme"><select class="admin-select arm-type" id="typeSel"><option value="">Tous les types</option></select></span>
       </div>
       <div class="table-wrap">
         <table class="admin-table dash-table">
-          <thead><tr><th>Arme</th><th>Type</th><th>Référence</th><th>Statut</th><th>À</th><th id="actionsHead" hidden></th></tr></thead>
+          <thead><tr><th>Arme</th><th>Type</th><th>Référence</th><th>Statut</th><th>À</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
     </section>
 
     <section class="admin-block">
-      <div class="tax-head"><h3 class="admin-block__title">Munitions · ventes des 7 derniers jours <span class="badge badge--gold" id="munCount">0</span></h3>
-      <span class="row-actions" id="munActions" hidden><button class="btn btn--ghost btn--sm" id="munFab">Déclarer une fabrication</button><button class="btn btn--gold btn--sm" id="munVente">Déclarer une vente</button></span></div>
+      <h3 class="admin-block__title">Munitions</h3>
+      <div class="tiles tiles--3">
+        <div class="tile"><span>Stock pistolet</span><b id="munStock">—</b><small id="munSmg"></small></div>
+        <div class="tile"><span>Fabriquées cette semaine</span><b id="munFab">—</b><small id="munQuota"></small></div>
+        <div class="tile"><span>Vendues cette semaine</span><b id="munVendues">—</b><small id="munCount"></small></div>
+      </div>
       <div class="table-wrap">
         <table class="admin-table dash-table">
-          <thead><tr><th>Quand</th><th>Vendeur</th><th>Acheteur</th><th>Quantité</th><th>Prix</th></tr></thead>
+          <thead><tr><th>Quand</th><th>Acheteur</th><th>Quantité</th><th>Prix</th></tr></thead>
           <tbody id="mun"></tbody>
         </table>
       </div>
-      <p class="admin-block__hint" id="hint">Prêts, retours et déclarations de pertes se font depuis le panneau armurerie du bot dans Discord ; cette page reflète l'état en direct.</p>
+      <p class="admin-block__hint">Prêts, retours, pertes et déclarations de munitions se font depuis le panneau armurerie du bot dans Discord ; cette page reflète l'état en direct.</p>
     </section>
   </div>
 </main>
@@ -87,84 +91,54 @@
 <script>
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const when = d => new Date(d).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const when = ms => new Date(ms).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   const money = n => Math.round(n).toLocaleString('fr-FR') + ' $';
   const STATUT = { en_stock: ['En stock', 'status--approved'], pretee: ['Prêtée', 'status--pending'], perdue: ['Perdue', 'status--rejected'] };
   const TITLE = { en_stock: 'Armes en stock', pretee: 'Armes prêtées', perdue: 'Armes perdues', all: 'Toutes les armes' };
   const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('perfil.html'); throw 0; } return r.json(); });
-  let data, filter = 'pretee', type = '', ACTIONS = false;
+  let armes = [], filter = 'pretee', type = '';
 
   function render() {
-    $('cStock').textContent = data.counts.en_stock || 0; $('cPret').textContent = data.counts.pretee || 0; $('cLost').textContent = data.counts.perdue || 0; $('cAll').textContent = data.total;
+    const count = s => armes.filter(a => a.statut === s).length;
+    $('cStock').textContent = count('en_stock'); $('cPret').textContent = count('pretee'); $('cLost').textContent = count('perdue'); $('cAll').textContent = armes.length;
     document.querySelectorAll('.arm-count').forEach(b => b.classList.toggle('is-on', b.dataset.f === filter));
-    const types = [...new Set(data.armes.map(a => a.type).filter(Boolean))].sort();
-    const cur = $('typeSel').value;
-    $('typeSel').innerHTML = '<option value="">Tous les types</option>' + types.map(t => `<option value="${esc(t)}" ${t === cur ? 'selected' : ''}>${esc(t)}</option>`).join('');
+    const types = [...new Set(armes.map(a => a.type).filter(Boolean))].sort();
+    $('typeSel').innerHTML = '<option value="">Tous les types</option>' + types.map(t => `<option value="${esc(t)}" ${t === type ? 'selected' : ''}>${esc(t)}</option>`).join('');
     $('listTitle').textContent = TITLE[filter];
-    let list = data.armes.filter(a => filter === 'all' || a.statut === filter);
-    if (type) list = list.filter(a => a.type === type);
+    const q = $('search').value.trim().toLowerCase();
+    const list = armes.filter(a => (filter === 'all' || a.statut === filter) && (!type || a.type === type)
+      && (!q || [a.nom, a.reference, a.type, a.preteeA].some(v => v && v.toLowerCase().includes(q))));
     $('rows').innerHTML = list.length ? list.map(a => { const [lbl, cls] = STATUT[a.statut] || [a.statut, 'status--pending']; return `<tr>
       <td><b>${esc(a.nom)}</b></td><td class="muted">${esc(a.type || '—')}</td><td class="mono">${esc(a.reference)}</td>
-      <td><span class="status ${cls}">${lbl}</span></td><td>${a.statut === 'pretee' ? `<b>${esc(a.pretee_a || '?')}</b>` : '<span class="muted">—</span>'}</td>
-      ${ACTIONS ? `<td><span class="row-actions">${a.statut === 'en_stock' ? `<button class="btn btn--gold btn--sm" data-id="${a.id}" data-act="preter" data-nom="${esc(a.nom)}">Prêter</button>` : ''}${a.statut === 'pretee' ? `<button class="btn btn--gold btn--sm" data-id="${a.id}" data-act="rendre" data-nom="${esc(a.nom)}">Rendue</button>` : ''}${a.statut !== 'perdue' ? `<button class="btn btn--ghost btn--danger btn--sm" data-id="${a.id}" data-act="perdue" data-nom="${esc(a.nom)}">Perdue</button>` : `<button class="btn btn--ghost btn--sm" data-id="${a.id}" data-act="rendre" data-nom="${esc(a.nom)}">Retrouvée</button>`}</span></td>` : ''}</tr>`; }).join('')
-      : `<tr><td colspan="${ACTIONS ? 6 : 5}" class="muted">Rien ici.</td></tr>`;
-    $('munCount').textContent = data.munitions.length;
-    $('mun').innerHTML = data.munitions.length ? data.munitions.map(m => `<tr><td class="muted">${when(m.timestamp)}</td><td>${esc(m.vendeur)}</td><td>${esc(m.acheteur)}</td><td>${m.quantite}</td><td><b>${money(m.prix)}</b></td></tr>`).join('') : '<tr><td colspan="5" class="muted">Aucune vente déclarée cette semaine.</td></tr>';
+      <td><span class="status ${cls}">${lbl}</span></td><td>${a.statut === 'pretee' ? `<b>${esc(a.preteeA || '?')}</b>` : '<span class="muted">—</span>'}</td></tr>`; }).join('')
+      : `<tr><td colspan="5" class="muted">${q ? 'Aucune arme ne correspond à la recherche.' : 'Rien ici.'}</td></tr>`;
   }
   async function load() {
+    const [enCours, perdues, ammo, ventes] = await Promise.all([casaBot.get('armurerie'), casaBot.get('armurerie?status=lost'), casaBot.get('armurerie/ammo'), casaBot.get('armurerie/ammo/history')]);
+    armes = [...enCours, ...perdues];
+    render();
+    $('munStock').textContent = ammo.stock; $('munSmg').textContent = `SMG : ${ammo.stockSmg}`;
+    $('munFab').textContent = ammo.fabriqueesCetteSemaine; $('munQuota').textContent = ammo.fabricationQuotaHebdo ? `objectif ${ammo.fabricationQuotaHebdo}` : '';
+    $('munVendues').textContent = ammo.vendusCetteSemaine; $('munCount').textContent = `${ventes.length} vente${ventes.length > 1 ? 's' : ''}`;
+    $('mun').innerHTML = ventes.length ? ventes.map(m => `<tr><td class="muted">${when(m.timestamp)}</td><td>${esc(m.acheteur_id)}</td><td>${m.quantite}</td><td><b>${money(m.prix)}</b></td></tr>`).join('') : '<tr><td colspan="4" class="muted">Aucune vente déclarée cette semaine.</td></tr>';
+    $('page').hidden = false;
+  }
+  async function start() {
     const me = await api('../api/me');
     if (me.status !== 'approved') { location.replace('espera.html'); return; }
     if (!me.isAdmin) { location.replace('perfil.html'); return; }
     casaNav(me);
-    const [d, st] = await Promise.all([api('../api/bot/armurerie'), api('../api/bot/status').catch(() => null)]);
-    data = d;
+    const st = await casaBot.gate($('botGate'));
     $('loading').hidden = true;
-    if (!data || !data.configured) { $('off').hidden = false; return; }
-    ACTIONS = !!(st && st.actions);
-    if (ACTIONS) { $('addArme').hidden = false; $('actionsHead').hidden = false; $('munActions').hidden = false; $('hint').textContent = 'Les actions passent par le bot : le panneau armurerie de Discord est mis à jour dans la foulée.'; }
-    render(); $('page').hidden = false;
+    if (!st.linked) return;
+    try { await load(); setInterval(() => load().catch(() => {}), 5 * 60000); }   // 5 min : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(casaBot.error(e))}</p>`; }
   }
-  async function refresh() { const d = await api('../api/bot/armurerie').catch(() => null); if (d && d.configured) { data = d; render(); } }
-  $('addArme').addEventListener('click', async () => {
-    const t = await api('../api/bot/armurerie/types').catch(() => null);
-    if (!t) { casaToast("Types d'armes indisponibles.", false); return; }
-    const f = await casaForm([
-      { name: 'type', label: "Modèle", type: 'select', options: t.types.map(x => ({ value: x.key, label: x.label })), required: true, placeholder: 'Choisir…' },
-      { name: 'nom', label: "Nom de l'arme", type: 'text', required: true, placeholder: 'ex. Glock de Mac' },
-      { name: 'reference', label: 'Référence (unique)', type: 'text', required: true, placeholder: 'numéro de série' },
-    ], { title: 'Ajouter une arme', ok: 'Ajouter' });
-    if (f && await casaAction('POST', '../api/bot/armurerie/armes', f)) refresh();
-  });
-  $('rows').addEventListener('click', async e => {
-    const b = e.target.closest('[data-act]'); if (!b) return;
-    const id = b.dataset.id, nom = b.dataset.nom;
-    if (b.dataset.act === 'preter') {
-      const f = await casaForm([{ name: 'preteeA', label: 'Prêtée à', type: 'text', required: true, placeholder: 'Nom du membre' }], { title: `Prêter ${nom}`, ok: 'Prêter' });
-      if (f && await casaAction('POST', `../api/bot/armurerie/armes/${id}/preter`, f)) refresh(); return;
-    }
-    if (b.dataset.act === 'rendre') { if (await casaAction('POST', `../api/bot/armurerie/armes/${id}/rendre`, {})) refresh(); return; }
-    if (b.dataset.act === 'perdue') {
-      if (!(await casaConfirm(`Déclarer « ${nom} » perdue ?`, { title: 'Arme perdue', ok: 'Déclarer perdue', danger: true }))) return;
-      if (await casaAction('POST', `../api/bot/armurerie/armes/${id}/perdue`, {})) refresh();
-    }
-  });
-  $('munFab').addEventListener('click', async () => {
-    const f = await casaForm([{ name: 'quantite', label: 'Munitions fabriquées', type: 'number', required: true, min: 1 }], { title: 'Fabrication', ok: 'Déclarer' });
-    if (f && await casaAction('POST', '../api/bot/armurerie/munitions/fabrication', f)) refresh();
-  });
-  $('munVente').addEventListener('click', async () => {
-    const f = await casaForm([
-      { name: 'quantite', label: 'Munitions vendues', type: 'number', required: true, min: 1 },
-      { name: 'acheteurId', label: "ID unique de l'acheteur", type: 'text', required: true },
-      { name: 'prix', label: 'Prix total ($)', type: 'number', required: true, min: 0 },
-    ], { title: 'Vente de munitions', ok: 'Déclarer' });
-    if (f && await casaAction('POST', '../api/bot/armurerie/munitions/vente', f)) refresh();
-  });
   document.querySelector('.arm-counts').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (!b) return; filter = b.dataset.f; render(); });
   $('typeSel').addEventListener('change', e => { type = e.target.value; render(); });
+  $('search').addEventListener('input', render);
   $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
-  load().catch(() => { $('loading').hidden = true; $('off').hidden = false; });
-  setInterval(() => api('../api/bot/armurerie').then(d => { if (d && d.configured) { data = d; render(); } }).catch(() => {}), 60000);
+  start().catch(() => {});
 </script>
 </body>
 </html>

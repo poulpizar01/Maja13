@@ -47,7 +47,7 @@
     <p class="sub">Ce que la ville doit à la familia</p>
   </div>
   <div class="casa-loading" id="loading">Chargement…</div>
-  <p class="admin-empty" id="off" hidden>Le bot Discord n'est pas encore relié à La Casa (ou sa base est injoignable).</p>
+  <div id="botGate" hidden></div>
 
   <div id="page" hidden>
     <section class="tax-pick">
@@ -58,22 +58,22 @@
     <section class="admin-block">
       <div class="tax-head">
         <h3 class="admin-block__title" id="listTitle">Toutes les taxes</h3>
-        <button class="btn btn--gold btn--sm" id="newTax" hidden>+ Nouvelle taxe</button>
+        <input class="admin-input tax-search" id="search" type="search" placeholder="Rechercher un groupe…" aria-label="Rechercher une taxe">
         <div class="tax-filters">
-          <button class="chip is-on" data-f="all">Toutes</button>
+          <button class="chip is-on" data-f="all">En cours</button>
           <button class="chip" data-f="due">À encaisser</button>
           <button class="chip" data-f="late">En retard</button>
           <button class="chip" data-f="paid">Payées</button>
+          <button class="chip" data-f="expired">Expirées</button>
         </div>
       </div>
       <div class="table-wrap">
         <table class="admin-table dash-table tax-table">
-          <thead><tr><th>Commerce / cible</th><th>Type</th><th>Téléphone</th><th>Échéance</th><th>Statut</th><th id="actionsHead" hidden></th></tr></thead>
+          <thead><tr><th>Groupe</th><th>Type</th><th>Échéance</th><th>Statut</th><th></th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
-      <p class="admin-block__hint" id="archived"></p>
-      <p class="admin-block__hint" id="hint">L'encaissement et la création de taxes se font depuis le panneau du bot dans Discord (salon taxes) ; cette page reflète l'état en direct.</p>
+      <p class="admin-block__hint">L'encaissement et la création de taxes se font depuis le panneau du bot dans Discord (salon taxes) ; cette page reflète l'état en direct.</p>
     </section>
   </div>
 </main>
@@ -81,79 +81,66 @@
 <script>
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const date = d => new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  const rel = iso => { const ms = new Date(iso) - Date.now(); const a = Math.abs(ms); const h = Math.floor(a / 3.6e6), d = Math.floor(h / 24); const s = d >= 1 ? `${d} j` : h >= 1 ? `${h} h` : `${Math.floor(a / 6e4)} min`; return ms < 0 ? `il y a ${s}` : `dans ${s}`; };
+  const date = ms => new Date(ms).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const rel = ms => { const d = ms - Date.now(), a = Math.abs(d), h = Math.floor(a / 3.6e6), j = Math.floor(h / 24); const s = j >= 1 ? `${j} j` : h >= 1 ? `${h} h` : `${Math.floor(a / 6e4)} min`; return d < 0 ? `il y a ${s}` : `dans ${s}`; };
   const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('perfil.html'); throw 0; } return r.json(); });
-  let data, cat = 'all', filter = 'all', ACTIONS = false;
+  const late = t => !t.paye && t.echeance < Date.now();
+  const soon = t => !t.paye && t.echeance >= Date.now() && t.echeance - Date.now() < 48 * 3600e3;
+  let active = [], expired = [], cat = 'all', filter = 'all';
 
-  const sub = c => c.total === 0 ? 'aucune taxe' : `${c.total} taxe${c.total > 1 ? 's' : ''} · ` + (c.toCollect ? `${c.toCollect} à encaisser` : 'tout est payé') + (c.late ? ` · <em>${c.late} en retard</em>` : '');
   function renderCards() {
-    $('cards').innerHTML = data.categories.map(c => `<button class="tax-card ${c.key === cat ? 'is-on' : ''} ${c.key === 'all' ? 'tax-card--all' : ''} ${c.late ? 'has-late' : ''}" data-cat="${esc(c.key)}"><b>${esc(c.label)}</b><small>${sub(c)}</small></button>`).join('');
+    const types = [...new Set(active.map(t => t.type))].sort();
+    const card = (key, label, list) => {
+      const due = list.filter(t => !t.paye).length, lateN = list.filter(late).length;
+      const sub = list.length ? `${list.length} taxe${list.length > 1 ? 's' : ''} · ${due ? `${due} à encaisser` : 'tout est payé'}${lateN ? ` · <em>${lateN} en retard</em>` : ''}` : 'aucune taxe';
+      return `<button class="tax-card ${key === cat ? 'is-on' : ''} ${key === 'all' ? 'tax-card--all' : ''} ${lateN ? 'has-late' : ''}" data-cat="${esc(key)}"><b>${esc(label)}</b><small>${sub}</small></button>`;
+    };
+    $('cards').innerHTML = types.map(k => card(k, casaBot.label(k), active.filter(t => t.type === k))).join('') + card('all', 'Toutes les taxes', active);
   }
   function renderRows() {
-    const c = data.categories.find(x => x.key === cat) || data.categories.at(-1);
-    $('listTitle').textContent = c.label;
-    let list = data.taxes.filter(t => cat === 'all' || (cat.startsWith('zone:') ? t.type === cat.slice(5) : t.type === cat));
+    $('listTitle').textContent = cat === 'all' ? 'Toutes les taxes' : casaBot.label(cat);
+    const q = $('search').value.trim().toLowerCase();
+    let list = (filter === 'expired' ? expired : active).filter(t => (cat === 'all' || t.type === cat)
+      && (!q || t.nom.toLowerCase().includes(q) || casaBot.label(t.type).toLowerCase().includes(q)));
     if (filter === 'due') list = list.filter(t => !t.paye);
-    if (filter === 'late') list = list.filter(t => t.late);
+    if (filter === 'late') list = list.filter(late);
     if (filter === 'paid') list = list.filter(t => t.paye);
-    list.sort((a, b) => (b.late - a.late) || (a.paye - b.paye) || (new Date(a.echeance) - new Date(b.echeance)));
-    $('rows').innerHTML = list.length ? list.map(t => `<tr class="${t.late ? 'is-late' : t.dueSoon ? 'is-soon' : ''}">
-      <td><b>${esc(t.nom)}</b></td>
-      <td>${t.isZone ? `<span class="tag">zone</span> ${esc(t.typeLabel)}` : esc(t.typeLabel)}</td>
-      <td class="mono">${esc(t.telephone || '—')}</td>
+    list.sort((a, b) => (late(b) - late(a)) || (a.paye - b.paye) || (a.echeance - b.echeance));
+    $('rows').innerHTML = list.length ? list.map(t => `<tr class="${late(t) ? 'is-late' : soon(t) ? 'is-soon' : ''}">
+      <td><b>${esc(t.nom)}</b></td><td>${esc(casaBot.label(t.type))}</td>
       <td>${date(t.echeance)}<br><small class="muted">${rel(t.echeance)}</small></td>
-      <td><span class="status ${t.paye ? 'status--approved' : t.late ? 'status--rejected' : 'status--pending'}">${t.paye ? 'Payée' : t.late ? 'En retard' : t.dueSoon ? 'Bientôt due' : 'À encaisser'}</span></td>
-      ${ACTIONS ? `<td><span class="row-actions"><button class="btn ${t.paye ? 'btn--ghost' : 'btn--gold'} btn--sm" data-id="${t.id}" data-act="paye" data-paye="${t.paye ? 0 : 1}">${t.paye ? 'Non payée' : 'Payée'}</button><button class="btn btn--ghost btn--sm" data-id="${t.id}" data-act="renouveler">Renouveler</button><button class="btn btn--ghost btn--danger btn--sm" data-id="${t.id}" data-act="supprimer" data-nom="${esc(t.nom)}">Supprimer</button></span></td>` : ''}
-    </tr>`).join('') : `<tr><td colspan="${ACTIONS ? 6 : 5}" class="muted">Rien ici.</td></tr>`;
-    $('archived').textContent = data.archived ? `${data.archived} taxe${data.archived > 1 ? 's' : ''} archivée${data.archived > 1 ? 's' : ''} (inactives) non affichée${data.archived > 1 ? 's' : ''}.` : '';
+      <td><span class="status ${t.paye ? 'status--approved' : late(t) ? 'status--rejected' : 'status--pending'}">${t.paye ? 'Payée' : late(t) ? 'En retard' : soon(t) ? 'Bientôt due' : 'À encaisser'}</span></td>
+      <td><button class="btn btn--ghost btn--sm" data-detail="${t.id}">Détails</button></td>
+    </tr>`).join('') : `<tr><td colspan="5" class="muted">${q ? 'Aucune taxe ne correspond à la recherche.' : 'Rien ici.'}</td></tr>`;
   }
   async function load() {
+    [active, expired] = await Promise.all([casaBot.get('taxes?status=active'), casaBot.get('taxes?status=expired')]);
+    renderCards(); renderRows(); $('page').hidden = false;
+  }
+  async function start() {
     const me = await api('../api/me');
     if (me.status !== 'approved') { location.replace('espera.html'); return; }
     if (!me.isAdmin) { location.replace('perfil.html'); return; }
     casaNav(me);
-    const [d, st] = await Promise.all([api('../api/bot/taxes'), api('../api/bot/status').catch(() => null)]);
-    data = d;
+    const st = await casaBot.gate($('botGate'));
     $('loading').hidden = true;
-    if (!data || !data.configured) { $('off').hidden = false; return; }
-    ACTIONS = !!(st && st.actions);
-    if (ACTIONS) { $('newTax').hidden = false; $('actionsHead').hidden = false; $('hint').textContent = 'Les actions ci-dessus passent par le bot : Discord et cette page restent alignés.'; }
-    renderCards(); renderRows(); $('page').hidden = false;
+    if (!st.linked) return;
+    try { await load(); setInterval(() => load().catch(() => {}), 5 * 60000); }   // 5 min : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(casaBot.error(e))}</p>`; }
   }
-  async function refresh() { const d = await api('../api/bot/taxes').catch(() => null); if (d && d.configured) { data = d; renderCards(); renderRows(); } }
-  $('newTax').addEventListener('click', async () => {
-    const t = await api('../api/bot/taxes/types').catch(() => null);
-    if (!t) { casaToast('Types de taxe indisponibles.', false); return; }
-    const options = [...t.fixes.map(x => ({ value: x.key, label: x.label })), ...t.zones.map(x => ({ value: x.key, label: 'Zone · ' + x.label }))];
-    const f = await casaForm([
-      { name: 'type', label: 'Type de taxe', type: 'select', options, required: true, placeholder: 'Choisir…' },
-      { name: 'nom', label: 'Commerce / cible', type: 'text', required: true, placeholder: 'ex. Épicerie de Roxwood' },
-      { name: 'jours', label: 'Échéance (jours)', type: 'number', required: true, min: 1, value: 7 },
-      { name: 'telephone', label: 'Téléphone (zones)', type: 'text', placeholder: '555-…' },
-      { name: 'motDePasse', label: 'Mot de passe (optionnel)', type: 'text' },
-    ], { title: 'Nouvelle taxe', text: 'Une seule taxe active par type ou par zone, comme dans le bot.', ok: 'Créer' });
-    if (!f) return;
-    if (await casaAction('POST', '../api/bot/taxes', f)) refresh();
-  });
+  // téléphone et mot de passe : seulement dans la fiche détaillée d'une taxe, demandée au bot à l'ouverture (rien n'est gardé)
   $('rows').addEventListener('click', async e => {
-    const b = e.target.closest('[data-act]'); if (!b) return;
-    const id = b.dataset.id;
-    if (b.dataset.act === 'paye') { if (await casaAction('POST', `../api/bot/taxes/${id}/paye`, { paye: b.dataset.paye === '1' })) refresh(); return; }
-    if (b.dataset.act === 'renouveler') {
-      const f = await casaForm([{ name: 'jours', label: 'Ajouter combien de jours ?', type: 'number', required: true, min: 1, value: 7 }], { title: 'Renouveler', ok: 'Renouveler' });
-      if (f && await casaAction('POST', `../api/bot/taxes/${id}/renouveler`, f)) refresh(); return;
-    }
-    if (b.dataset.act === 'supprimer') {
-      if (!(await casaConfirm(`Supprimer la taxe « ${b.dataset.nom} » ? Cette action est définitive.`, { title: 'Supprimer', ok: 'Supprimer', danger: true }))) return;
-      if (await casaAction('DELETE', `../api/bot/taxes/${id}`)) refresh();
-    }
+    const b = e.target.closest('[data-detail]'); if (!b) return;
+    try {
+      const t = await casaBot.get('taxes/' + b.dataset.detail);
+      casaInfo(t.nom, [{ label: 'Type', value: casaBot.label(t.type) }, { label: 'Téléphone', value: t.telephone }, { label: 'Mot de passe', value: t.motDePasse }]);
+    } catch (err) { casaToast(casaBot.error(err), false); }
   });
+  $('search').addEventListener('input', renderRows);
   $('cards').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (!b) return; cat = b.dataset.cat; renderCards(); renderRows(); });
   document.querySelector('.tax-filters').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (!b) return; filter = b.dataset.f; document.querySelectorAll('.chip').forEach(c => c.classList.toggle('is-on', c === b)); renderRows(); });
   $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
-  load().catch(() => { $('loading').hidden = true; $('off').hidden = false; });
-  setInterval(() => api('../api/bot/taxes').then(d => { if (d && d.configured) { data = d; renderCards(); renderRows(); } }).catch(() => {}), 60000);
+  start().catch(() => {});
 </script>
 </body>
 </html>

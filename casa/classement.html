@@ -47,7 +47,7 @@
     <p class="sub" id="period">La semaine de la familia</p>
   </div>
   <div class="casa-loading" id="loading">Chargement…</div>
-  <p class="admin-empty" id="off" hidden>Le bot Discord n'est pas encore relié à La Casa (ou sa base est injoignable).</p>
+  <div id="botGate" hidden></div>
 
   <div id="page" hidden>
     <div class="tiles tiles--3">
@@ -63,7 +63,7 @@
           <tbody id="rows"></tbody>
         </table>
       </div>
-      <p class="admin-block__hint">Paie estimée = unités déclarées × taux du bot, hors primes. Le classement repart de zéro le dimanche à 19 h, après le bilan du bot.</p>
+      <p class="admin-block__hint">Classement par points du bot (voir /config classement sur Discord) ; paie estimée selon ses taux, hors primes.</p>
     </section>
   </div>
 </main>
@@ -72,8 +72,7 @@
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const money = n => Math.round(n).toLocaleString('fr-FR') + ' $';
-  const dlong = d => new Date(d).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-  const QT = [['vente', 'Ventes'], ['recolte', 'Récolte'], ['actions', 'Actions'], ['labos', 'Labos']];
+  const dlong = ms => new Date(ms).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const MEDAL = ['🥇', '🥈', '🥉'];
   const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('espera.html'); throw 0; } return r.json(); });
   let me;
@@ -83,30 +82,39 @@
     const pct = Math.min(100, Math.round(v / t * 100));
     return `<div class="rbar ${v >= t ? 'is-done' : ''}"><i><b style="width:${pct}%"></b></i><small>${v} <span>(${pct} %)</span></small></div>`;
   }
-  function render(d) {
-    $('period').textContent = `Du ${dlong(d.weekStart)} au ${dlong(d.nextReset)} · remise à zéro dimanche 19 h`;
-    $('tVente').textContent = d.totals.vente; $('tVenteNote').textContent = d.targets.vente ? `objectif ${d.targets.vente} par membre` : '';
-    $('tQuota').textContent = `${d.quotasOk} / ${d.members}`;
-    $('tActifs').textContent = d.members;
-    $('head').innerHTML = `<tr><th>#</th><th>Membre</th>${QT.map(([q, l]) => `<th>${l}${d.targets[q] ? ` <small>/ ${d.targets[q]}</small>` : ''}</th>`).join('')}<th>Paie estimée</th></tr>`;
-    $('rows').innerHTML = d.rows.length ? d.rows.map((r, i) => `<tr class="${r.userId === me.discordId ? 'is-me' : ''}">
-      <td class="muted">${i + 1}</td><td><b>${esc(r.name)}</b>${r.userId === me.discordId ? ' <span class="tag">toi</span>' : ''}</td>
-      ${QT.map(([q]) => `<td>${bar(r[q] || 0, d.targets[q])}</td>`).join('')}
-      <td><b class="pay">${money(r.salaire)}</b> ${i < 3 && r.salaire > 0 ? MEDAL[i] : ''}</td></tr>`).join('')
-      : '<tr><td colspan="7" class="muted">Personne n\'a encore déclaré d\'activité cette semaine.</td></tr>';
-  }
   async function load() {
+    const [cfg, pay, ranking, ventes, users] = await Promise.all([casaBot.get('quotas/config'), casaBot.get('quotas/pay'), casaBot.get('quotas/ranking'), casaBot.get('ventes'), casaBot.get('users')]);
+    const name = await casaBot.names(users);
+    const points = Object.fromEntries(ranking.map(r => [r.userId, r.points]));
+    const cats = [...new Set([...Object.keys(cfg.targets), ...Object.keys(cfg.salaryRates), ...pay.flatMap(p => Object.keys(p.byQuotaType))])];
+    const targets = cfg.targets, withTargets = cats.filter(k => targets[k]);
+    const rows = pay.filter(p => p.salaire > 0 || points[p.userId] || Object.values(p.byQuotaType).some(Boolean))
+      .map(p => ({ ...p, points: points[p.userId] || 0 }))
+      .sort((a, b) => b.points - a.points || b.salaire - a.salaire);
+    $('period').textContent = cfg.range.since ? `Depuis ${dlong(cfg.range.since)} · remise à zéro chaque dimanche` : 'La semaine de la familia';
+    $('tVente').textContent = ventes.groupTotal; $('tVenteNote').textContent = targets.vente ? `objectif ${targets.vente} par membre` : '';
+    $('tQuota').textContent = `${rows.filter(r => withTargets.length && withTargets.every(k => (r.byQuotaType[k] || 0) >= targets[k])).length} / ${rows.length}`;
+    $('tActifs').textContent = rows.length;
+    $('head').innerHTML = `<tr><th>#</th><th>Membre</th>${cats.map(k => `<th>${esc(casaBot.label(k))}${targets[k] ? ` <small>/ ${targets[k]}</small>` : ''}</th>`).join('')}<th>Points</th><th>Paie estimée</th></tr>`;
+    $('rows').innerHTML = rows.length ? rows.map((r, i) => `<tr class="${r.userId === me.discordId ? 'is-me' : ''}">
+      <td class="muted">${i + 1}</td><td><b>${esc(name(r.userId))}</b>${r.userId === me.discordId ? ' <span class="tag">toi</span>' : ''}</td>
+      ${cats.map(k => `<td>${bar(r.byQuotaType[k] || 0, targets[k])}</td>`).join('')}
+      <td><b>${r.points}</b> ${i < 3 && r.points > 0 ? MEDAL[i] : ''}</td><td><b class="pay">${money(r.salaire)}</b></td></tr>`).join('')
+      : `<tr><td colspan="${cats.length + 4}" class="muted">Personne n'a encore déclaré d'activité cette semaine.</td></tr>`;
+    $('page').hidden = false;
+  }
+  async function start() {
     me = await api('../api/me');
     if (me.status !== 'approved') { location.replace('espera.html'); return; }
     casaNav(me);
-    const d = await api('../api/bot/classement');
+    const st = await casaBot.gate($('botGate'));
     $('loading').hidden = true;
-    if (!d || !d.configured) { $('off').hidden = false; return; }
-    render(d); $('page').hidden = false;
+    if (!st.linked) return;
+    try { await load(); setInterval(() => load().catch(() => {}), 5 * 60000); }   // 5 min : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(casaBot.error(e))}</p>`; }
   }
   $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
-  load().catch(() => { $('loading').hidden = true; $('off').hidden = false; });
-  setInterval(() => api('../api/bot/classement').then(d => d && d.configured && render(d)).catch(() => {}), 60000);
+  start().catch(() => {});
 </script>
 </body>
 </html>

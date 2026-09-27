@@ -44,17 +44,17 @@
   <div class="section__head">
     <span class="numeral">✦</span>
     <h2>Tableau de bord</h2>
-    <p class="sub">La semaine de la familia, vue du bot</p>
+    <p class="sub" id="period">La semaine de la familia, vue du bot</p>
   </div>
   <div class="casa-loading" id="loading">Chargement…</div>
-  <p class="admin-empty" id="off" hidden>Le bot Discord n'est pas encore relié à La Casa (ou sa base est injoignable).</p>
+  <div id="botGate" hidden></div>
 
   <div id="dash" hidden>
     <div class="tiles">
       <div class="tile"><span>Masse salariale estimée</span><b id="masse">—</b><small>cette semaine, selon les taux du bot</small></div>
       <div class="tile"><span>Membres actifs</span><b id="actifs">—</b><small id="inactifsNote"></small></div>
-      <div class="tile"><span>Braquages · 7 jours</span><b id="braq">—</b><small id="braqDetail"></small></div>
-      <div class="tile"><span>Remise à zéro</span><b id="resetIn">—</b><small>dimanche 19 h</small></div>
+      <div class="tile"><span>Ventes familia</span><b id="ventes">—</b><small>unités vendues cette semaine</small></div>
+      <div class="tile"><span>Activités déclarées</span><b id="totalActs">—</b><small id="topAct"></small></div>
     </div>
 
     <section class="admin-block">
@@ -63,34 +63,32 @@
       <p class="admin-block__hint" id="inactifs"></p>
     </section>
 
+    <section class="admin-block vault">
+      <div class="vault__head">
+        <h3 class="admin-block__title">Stock</h3>
+        <div class="vault__tools">
+          <input class="admin-input vault__search" id="vaultSearch" type="search" placeholder="Rechercher un objet…" aria-label="Rechercher un objet">
+          <select class="admin-select vault__sort" id="vaultSort" aria-label="Trier">
+            <option value="qty">Quantité décroissante</option>
+            <option value="name">Nom (A → Z)</option>
+          </select>
+          <label class="check"><input type="checkbox" id="vaultEmpty"><span>Objets à 0</span></label>
+        </div>
+      </div>
+      <div class="vault__tabs" id="vaultTabs" role="tablist" aria-label="Coffres"></div>
+      <div class="vault__grid" id="vaultGrid"></div>
+    </section>
+
     <div class="dash-cols">
-      <section class="admin-block">
-        <h3 class="admin-block__title">Le coffre</h3>
-        <div id="coffre"></div>
-      </section>
       <section class="admin-block">
         <h3 class="admin-block__title">Derniers mouvements</h3>
         <ul class="feed" id="history"></ul>
       </section>
-    </div>
-
-    <div class="dash-cols dash-cols--3">
-      <section class="admin-block"><h3 class="admin-block__title">Cooldowns en cours</h3><ul class="stat__list" id="cooldowns"></ul></section>
-      <section class="admin-block"><h3 class="admin-block__title">Ventes en attente</h3><ul class="stat__list" id="pending"></ul></section>
-      <section class="admin-block"><h3 class="admin-block__title">Fourrières · 7 jours</h3><ul class="stat__list" id="fourr"></ul></section>
-    </div>
-
-    <div class="dash-cols">
       <section class="admin-block">
-        <h3 class="admin-block__title">Taxes &amp; racket</h3>
-        <div class="table-wrap"><table class="admin-table dash-table"><thead><tr><th>Commerce</th><th>Type</th><th>Échéance</th><th>Statut</th></tr></thead><tbody id="taxes"></tbody></table></div>
-      </section>
-      <section class="admin-block">
-        <h3 class="admin-block__title">Armurerie</h3>
-        <div class="table-wrap"><table class="admin-table dash-table"><thead><tr><th>Arme</th><th>Référence</th><th>Statut</th><th>Prêtée à</th></tr></thead><tbody id="armes"></tbody></table></div>
+        <h3 class="admin-block__title">Bilan de la semaine</h3>
+        <ul class="stat__list" id="summary"></ul>
       </section>
     </div>
-
   </div>
 </main>
 
@@ -98,70 +96,87 @@
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const money = n => Math.round(n).toLocaleString('fr-FR') + ' $';
-  const when = d => new Date(d).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  const date = d => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-  const countdown = iso => { const ms = new Date(iso) - Date.now(); if (ms <= 0) return 'maintenant'; const h = Math.floor(ms / 3.6e6), m = Math.floor(ms % 3.6e6 / 6e4); return h >= 24 ? `${Math.floor(h / 24)} j ${h % 24} h` : h ? `${h} h ${m} min` : `${m} min`; };
-  const empty = (el, txt) => { el.innerHTML = `<li class="muted">${txt}</li>`; };
-  const TAXE = { sporex: 'Sporex', heroine: 'Héroïne', vente: 'Vente', fertilisant: 'Fertilisant' };
+  const when = ms => new Date(ms).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const dlong = ms => new Date(ms).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('perfil.html'); throw 0; } return r.json(); });
-  let ACTIONS = false;
-  const refresh = () => api('../api/bot/dashboard').then(d => d && d.configured && render(d)).catch(() => {});
-  $('coffre').addEventListener('click', async e => {
-    const b = e.target.closest('.stock-edit'); if (!b) return;
-    const f = await casaForm([{ name: 'quantite', label: `Nouveau stock de ${b.dataset.item}`, type: 'number', required: true, min: 0, value: Number(b.dataset.q) }], { title: 'Corriger le coffre', text: 'Même effet que /set-stock : le message Stock Général est mis à jour.', ok: 'Corriger' });
-    if (f && await casaAction('POST', '../api/bot/stocks/set', { item: b.dataset.item, quantite: f.quantite })) refresh();
-  });
-  $('pending').addEventListener('click', async e => {
-    const b = e.target.closest('[data-vente]'); if (!b) return;
-    if (!(await casaConfirm(b.dataset.act === 'declarer' ? 'Marquer cette vente comme déclarée (en attente du dépôt d’argent) ?' : 'Marquer la drogue comme reposée dans le coffre ?', { title: 'Vente en attente', ok: 'Confirmer' }))) return;
-    if (await casaAction('POST', `../api/bot/ventes/${b.dataset.vente}/${b.dataset.act}`, {})) refresh();
-  });
+  const units = n => n.toLocaleString('fr-FR');
 
-  function render(d) {
-    $('masse').textContent = money(d.masseSalariale);
-    $('actifs').textContent = d.classement.length;
-    $('inactifsNote').textContent = d.inactifs.length ? `${d.inactifs.length} sans déclaration` : 'tout le monde a déclaré';
-    const nb = d.braquages7j.reduce((s, b) => s + b.n, 0);
-    $('braq').textContent = nb; $('braqDetail').textContent = d.braquages7j.map(b => `${b.label} ×${b.n}`).join(' · ') || 'aucun';
-    $('resetIn').textContent = countdown(d.nextReset);
+  // ---- le coffre : total ou un coffre à la fois, en cartes, avec recherche, tri et objets vides masqués
+  let vault = { total: [], coffres: [] }, vaultView = 'all';
+  const itemName = s => s.charAt(0).toUpperCase() + s.slice(1);
+  const coffreName = c => c.label || `Coffre ${String(c.channelId).slice(-4)}`;
+  function renderVault() {
+    const { total, coffres } = vault;
+    if (!coffres.some(c => c.channelId === vaultView)) vaultView = 'all';
+    const sum = list => list.reduce((s, i) => s + i.quantite, 0);
+    const tab = (key, label, list, admin) => `<button class="vtab ${key === vaultView ? 'is-on' : ''}" role="tab" aria-selected="${key === vaultView}" data-vault="${esc(key)}">
+      <b>${esc(label)}${admin ? ' <i class="tag">admin</i>' : ''}</b><small>${list.filter(i => i.quantite).length} objets · ${units(sum(list))} unités</small></button>`;
+    $('vaultTabs').hidden = coffres.length < 2;
+    $('vaultTabs').innerHTML = tab('all', 'Tous les coffres', total) + coffres.map(c => tab(c.channelId, coffreName(c), c.items, c.role === 'logs_coffres_admin')).join('');
 
-    $('rankHead').innerHTML = `<tr><th>#</th><th>Membre</th>${d.quotaTypes.map(q => `<th>${q.label}${d.targets[q.type] ? ` <small>/ ${d.targets[q.type]}</small>` : ''}</th>`).join('')}<th>Paie</th></tr>`;
-    $('rankBody').innerHTML = d.classement.length ? d.classement.map((c, i) => `<tr>
-      <td class="muted">${i + 1}</td><td><b>${esc(c.name)}</b></td>
-      ${d.quotaTypes.map(q => { const t = d.targets[q.type]; const v = c[q.type] || 0; return `<td class="${t && v >= t ? 'is-done' : ''}">${v}${t ? `<i class="mini"><b style="width:${Math.min(100, v / t * 100)}%"></b></i>` : ''}</td>`; }).join('')}
-      <td><b>${money(c.salaire)}</b></td></tr>`).join('') : '<tr><td colspan="7" class="muted">Aucune déclaration cette semaine.</td></tr>';
-    $('inactifs').textContent = d.inactifs.length ? `Sans déclaration cette semaine : ${d.inactifs.join(', ')}.` : '';
-
-    const groups = {}; d.coffre.forEach(c => (groups[c.group || 'Autres'] = groups[c.group || 'Autres'] || []).push(c));
-    $('coffre').innerHTML = Object.entries(groups).map(([g, list]) => `<div class="coffre-group"><h4>${esc(g)}</h4><ul class="stat__list">${list.map(c => `<li class="${c.visible ? '' : 'muted'}"><span>${esc(c.item)}${c.vente ? ' <i class="tag">vente</i>' : ''}</span><b>${ACTIONS ? `<button class="stock-edit" data-item="${esc(c.item)}" data-q="${c.quantite}" title="Corriger le stock">${c.quantite} ✎</button>` : c.quantite}</b></li>`).join('')}</ul></div>`).join('') || '<p class="muted">Aucun item configuré (/config item).</p>';
-    // détail par coffre (plusieurs salons de logs) — seulement s'il y a quelque chose à distinguer
-    const coffres = (d.coffres || []).filter(c => c.items.length);
-    if (coffres.length > 1) $('coffre').insertAdjacentHTML('beforeend', `<details class="coffre-detail"><summary>Détail par coffre (${coffres.length})</summary>${coffres.map(c => `<div class="coffre-group"><h4>${esc(c.name)}</h4><ul class="stat__list">${c.items.map(i => `<li><span>${esc(i.item)}</span><b>${i.quantite}</b></li>`).join('')}</ul></div>`).join('')}</details>`);
-
-    $('history').innerHTML = d.history.length ? d.history.map(h => `<li><time>${when(h.timestamp)}</time><span><b>${esc(h.joueur)}</b> ${esc(h.action)} <b class="${h.quantite < 0 ? 'neg' : 'pos'}">${h.quantite > 0 ? '+' : ''}${h.quantite}</b> ${esc(h.item)} <i class="muted">(${h.stock_avant} → ${h.stock_apres})</i></span></li>`).join('') : '<li class="muted">Aucun mouvement enregistré.</li>';
-
-    d.cooldowns.length ? $('cooldowns').innerHTML = d.cooldowns.map(c => `<li><span>${esc(c.name)} · ${esc(c.label)}</span><b>${countdown(c.expiresAt)}</b></li>`).join('') : empty($('cooldowns'), 'Aucun');
-    d.ventesEnAttente.length ? $('pending').innerHTML = d.ventesEnAttente.map(v => `<li><span>${esc(v.joueur)} · ${v.quantite} × ${esc(v.item)}</span>${ACTIONS ? `<span class="row-actions"><button class="btn btn--gold btn--sm" data-vente="${v.id}" data-act="declarer">Vendue</button><button class="btn btn--ghost btn--sm" data-vente="${v.id}" data-act="reposer">Reposée</button></span>` : `<b>${v.montant ? money(v.montant) : '—'}</b>`}</li>`).join('') : empty($('pending'), 'Aucune');
-    d.fourrieres7j.length ? $('fourr').innerHTML = d.fourrieres7j.map(f => `<li><span>${esc(f.joueur)} · ${esc(f.plaque)}${f.modele ? ` (${esc(f.modele)})` : ''}</span><b>${date(f.timestamp)}</b></li>`).join('') : empty($('fourr'), 'Aucune');
-
-    $('taxes').innerHTML = d.taxes.length ? d.taxes.map(t => { const late = new Date(t.echeance) < Date.now(); return `<tr class="${!t.paye || late ? 'is-warn' : ''}"><td><b>${esc(t.nom)}</b>${t.telephone ? `<br><small class="muted">${esc(t.telephone)}</small>` : ''}</td><td>${esc(TAXE[t.type] || t.type)}</td><td>${date(t.echeance)}</td><td><span class="status ${t.paye ? 'status--approved' : 'status--rejected'}">${t.paye ? 'Payée' : 'Impayée'}${late && !t.paye ? ' · en retard' : ''}</span></td></tr>`; }).join('') : '<tr><td colspan="4" class="muted">Aucune taxe active.</td></tr>';
-    $('armes').innerHTML = d.armes.length ? d.armes.map(a => `<tr><td><b>${esc(a.nom)}</b>${a.type ? ` <small class="muted">${esc(a.type)}</small>` : ''}</td><td class="mono">${esc(a.reference)}</td><td><span class="status ${a.statut === 'en_stock' ? 'status--approved' : 'status--pending'}">${esc(a.statut.replace('_', ' '))}</span></td><td>${esc(a.pretee_a || '—')}</td></tr>`).join('') : '<tr><td colspan="4" class="muted">Armurerie vide.</td></tr>';
+    const current = vaultView === 'all' ? total : coffres.find(c => c.channelId === vaultView).items;
+    const q = $('vaultSearch').value.trim().toLowerCase();
+    let list = current.filter(i => ($('vaultEmpty').checked || i.quantite) && (!q || i.item.toLowerCase().includes(q)));
+    list = [...list].sort($('vaultSort').value === 'name' ? (a, b) => a.item.localeCompare(b.item) : (a, b) => b.quantite - a.quantite || a.item.localeCompare(b.item));
+    const max = Math.max(1, ...current.map(i => i.quantite));
+    // répartition entre coffres, affichée dans la vue d'ensemble
+    const where = item => vaultView === 'all' && coffres.length > 1
+      ? coffres.map(c => [coffreName(c), c.items.find(i => i.item === item)?.quantite || 0]).filter(([, n]) => n).map(([n, v]) => `${esc(n)} ${units(v)}`).join(' · ') : '';
+    $('vaultGrid').innerHTML = list.length ? list.map(i => `<div class="vcard ${i.quantite ? '' : 'is-empty'}">
+      <span class="vcard__name" title="${esc(itemName(i.item))}">${esc(itemName(i.item))}</span>
+      <b class="vcard__qty">${units(i.quantite)}</b>
+      <i class="vcard__bar"><b style="width:${Math.round(i.quantite / max * 100)}%"></b></i>
+      ${where(i.item) ? `<small class="vcard__where">${where(i.item)}</small>` : ''}</div>`).join('')
+      : `<p class="admin-empty vault__empty">${q ? 'Aucun objet ne correspond à la recherche.' : 'Ce coffre est vide.'}</p>`;
   }
+  $('vaultTabs').addEventListener('click', e => { const b = e.target.closest('[data-vault]'); if (b) { vaultView = b.dataset.vault; renderVault(); } });
+  ['vaultSearch', 'vaultSort', 'vaultEmpty'].forEach(id => $(id).addEventListener('input', renderVault));
+  const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`;
 
   async function load() {
+    const [cfg, pay, summary, ventes, users, stocks, channels, history, familia] = await Promise.all([
+      casaBot.get('quotas/config'), casaBot.get('quotas/pay'), casaBot.get('quotas/summary'), casaBot.get('ventes'), casaBot.get('users'),
+      casaBot.get('stocks'), casaBot.get('stocks/channels'), casaBot.get('stocks/history?limit=40'), api('../api/familia')]);
+    const name = await casaBot.names(users);
+    const coffres = await Promise.all(channels.map(c => casaBot.get('stocks/' + c.channelId).then(items => ({ ...c, items })).catch(() => ({ ...c, items: [] }))));
+    const cats = [...new Set([...Object.keys(cfg.targets), ...Object.keys(cfg.salaryRates), ...pay.flatMap(p => Object.keys(p.byQuotaType))])];
+    const actifs = pay.filter(p => p.salaire > 0 || Object.values(p.byQuotaType).some(Boolean)).sort((a, b) => b.salaire - a.salaire);
+    const inactifs = familia.filter(m => !actifs.some(p => p.userId === m.discordId)).map(m => m.displayName);
+
+    $('period').textContent = cfg.range.since ? `Depuis ${dlong(cfg.range.since)} · vue du bot` : 'La semaine de la familia, vue du bot';
+    $('masse').textContent = money(pay.reduce((s, p) => s + p.salaire, 0));
+    $('actifs').textContent = actifs.length;
+    $('inactifsNote').textContent = inactifs.length ? `${plural(inactifs.length, 'membre')} de La Casa sans déclaration` : 'tout le monde a déclaré';
+    $('ventes').textContent = ventes.groupTotal;
+    const top = [...summary].sort((a, b) => b.total - a.total)[0];
+    $('totalActs').textContent = summary.reduce((s, a) => s + a.total, 0);
+    $('topAct').textContent = top && top.total ? `surtout : ${top.label}` : '';
+
+    $('rankHead').innerHTML = `<tr><th>#</th><th>Membre</th>${cats.map(k => `<th>${esc(casaBot.label(k))}${cfg.targets[k] ? ` <small>/ ${cfg.targets[k]}</small>` : ''}</th>`).join('')}<th>Paie</th></tr>`;
+    $('rankBody').innerHTML = actifs.length ? actifs.map((p, i) => `<tr><td class="muted">${i + 1}</td><td><b>${esc(name(p.userId))}</b></td>
+      ${cats.map(k => { const t = cfg.targets[k], v = p.byQuotaType[k] || 0; return `<td class="${t && v >= t ? 'is-done' : ''}">${v}${t ? `<i class="mini"><b style="width:${Math.min(100, v / t * 100)}%"></b></i>` : ''}</td>`; }).join('')}
+      <td><b>${money(p.salaire)}</b></td></tr>`).join('') : `<tr><td colspan="${cats.length + 3}" class="muted">Aucune déclaration cette semaine.</td></tr>`;
+    $('inactifs').textContent = inactifs.length ? `Sans déclaration cette semaine : ${inactifs.join(', ')}.` : '';
+
+    vault = { total: stocks, coffres: coffres.filter(c => c.items.length) };
+    renderVault();
+    $('history').innerHTML = history.length ? history.map(h => `<li><time>${when(h.timestamp)}</time><span><b>${esc(h.joueur)}</b> ${esc(h.action)} <b class="${h.quantite < 0 ? 'neg' : 'pos'}">${h.quantite > 0 ? '+' : ''}${h.quantite}</b> ${esc(h.item)} <i class="muted">(${h.stockAvant} → ${h.stockApres})</i></span></li>`).join('') : '<li class="muted">Aucun mouvement enregistré.</li>';
+    $('summary').innerHTML = summary.filter(a => a.total).map(a => `<li><span>${esc(a.label)}</span><b>${a.total}</b></li>`).join('') || '<li class="muted">Rien de déclaré cette semaine.</li>';
+    $('dash').hidden = false;
+  }
+  async function start() {
     const me = await api('../api/me');
     if (me.status !== 'approved') { location.replace('espera.html'); return; }
     if (!me.isAdmin) { location.replace('perfil.html'); return; }
     casaNav(me);
-    const st = await api('../api/bot/status').catch(() => null); ACTIONS = !!(st && st.actions);
-    const d = await api('../api/bot/dashboard');
+    const st = await casaBot.gate($('botGate'));
     $('loading').hidden = true;
-    if (!d || !d.configured) { $('off').hidden = false; return; }
-    render(d); $('dash').hidden = false;
+    if (!st.linked) return;
+    try { await load(); setInterval(() => load().catch(() => {}), 5 * 60000); }   // 5 min : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(casaBot.error(e))}</p>`; }
   }
   $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
-  load().catch(() => { $('loading').hidden = true; $('off').hidden = false; });
-  setInterval(() => api('../api/bot/dashboard').then(d => d && d.configured && render(d)).catch(() => {}), 60000);
+  start().catch(() => {});
 </script>
 </body>
 </html>

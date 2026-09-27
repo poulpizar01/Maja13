@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connexion au bot — La Casa · La Maja 13</title>
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" type="image/png" href="../assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="casa.css">
+</head>
+<body class="casa-body">
+<div class="grain" aria-hidden="true"></div>
+
+<!-- Retour de la connexion au bot Discord : son API renvoie ici (site externe du serveur Discord,
+     /config site-externe set …/casa/bot-callback.html) avec le jeton en #token=… -->
+<main class="casa-login">
+  <img class="casa-login__logo" src="../assets/logo.png" alt="La Maja 13" width="200" height="200">
+  <p class="eyebrow">Bot Discord de la familia</p>
+  <h1>Connexion</h1>
+  <p class="casa-login__lead" id="lead">Connexion au bot en cours…</p>
+  <a class="btn btn--gold casa-login__btn" id="back" href="perfil.html" hidden>Retour à La Casa</a>
+</main>
+
+<script>
+  const token = new URLSearchParams(location.hash.slice(1)).get('token');
+  history.replaceState(null, '', location.pathname);   // le jeton ne reste ni dans l'adresse ni dans l'historique
+  const fail = msg => { document.getElementById('lead').textContent = msg; document.getElementById('back').hidden = false; };
+  if (!token) fail('Aucun jeton reçu du bot. Relance la connexion depuis La Casa.');
+  else fetch('../api/bot/link', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) })
+    .then(async r => {
+      if (r.status === 401) { location.replace('./'); return; }
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) location.replace(d.next); else fail(d.error || 'Le bot a refusé la connexion.');
+    })
+    .catch(() => fail('La Casa ne répond pas. Réessaie dans un instant.'));
+</script>
+</body>
+</html>

@@ -72,37 +72,23 @@
     </form>
   </section>
 
-  <section class="semaine declarer" id="declarer" hidden>
-    <div class="semaine__head">
-      <div><p class="eyebrow">Le panneau</p><h2 class="semaine__title">Déclarer une activité</h2></div>
-      <p class="semaine__reset" id="declarerTier"></p>
-    </div>
-    <div id="declarerGroups"></div>
-    <div class="declarer__hist stat">
-      <span class="stat__label">Mes dernières déclarations</span>
-      <ul class="stat__list" id="histRows"><li class="muted">Aucune déclaration récente</li></ul>
-    </div>
-    <p class="semaine__hint">Même effet qu'un clic sur le panneau Discord : le bot enregistre, applique les cooldowns et met à jour ses messages.</p>
-  </section>
-
   <section class="semaine" id="semaine" hidden>
     <div class="semaine__head">
       <div><p class="eyebrow">Ma semaine</p><h2 class="semaine__title">Quotas &amp; paie</h2></div>
-      <p class="semaine__reset">Remise à zéro <b id="resetIn">—</b></p>
+      <p class="semaine__reset" id="since"></p>
     </div>
-    <div class="semaine__grid">
-      <div class="semaine__quotas" id="quotas"></div>
-      <div class="semaine__side">
-        <div class="stat"><span class="stat__label">Paie estimée</span><b class="stat__value" id="salaire">0 $</b><small id="salaireNote"></small></div>
-        <div class="stat"><span class="stat__label">Déclarations</span><ul class="stat__list" id="activities"><li class="muted">Rien de déclaré cette semaine</li></ul></div>
+    <div id="botGate" hidden></div>
+    <div id="semaineBody" hidden>
+      <div class="semaine__grid">
+        <div class="semaine__quotas" id="quotas"></div>
+        <div class="semaine__side">
+          <div class="stat"><span class="stat__label">Paie estimée</span><b class="stat__value" id="salaire">0 $</b><small id="salaireNote"></small></div>
+          <div class="stat"><span class="stat__label">Activités</span><ul class="stat__list" id="activities"><li class="muted">Rien de déclaré cette semaine</li></ul></div>
+          <div class="stat"><span class="stat__label">Ventes par produit</span><ul class="stat__list" id="ventes"><li class="muted">Aucune vente cette semaine</li></ul></div>
+        </div>
       </div>
+      <p class="semaine__hint">Ces chiffres viennent du bot Discord de la familia : les déclarations se font sur Discord, elles apparaissent ici aussitôt.</p>
     </div>
-    <div class="semaine__grid semaine__grid--3">
-      <div class="stat"><span class="stat__label">Cooldowns</span><ul class="stat__list" id="cooldowns"><li class="muted">Aucun cooldown en cours</li></ul></div>
-      <div class="stat"><span class="stat__label">Armes en ma possession</span><ul class="stat__list" id="armes"><li class="muted">Aucune arme prêtée</li></ul></div>
-      <div class="stat"><span class="stat__label">Ventes en attente</span><ul class="stat__list" id="ventes"><li class="muted">Aucune</li></ul></div>
-    </div>
-    <p class="semaine__hint">Ces chiffres viennent du bot Discord de la familia : déclare tes activités ici ou dans le salon quotas, elles apparaissent aussitôt.</p>
   </section>
 
   <section class="semaine paies" id="paies" hidden>
@@ -110,8 +96,8 @@
       <div><p class="eyebrow">Historique</p><h2 class="semaine__title">Mes paies</h2></div>
       <p class="semaine__reset" id="paiesTotal"></p>
     </div>
-    <div class="table-wrap"><table class="admin-table dash-table"><thead><tr><th>Semaine</th><th>Ventes</th><th>Récolte</th><th>Actions</th><th>Labos</th><th>Paie</th></tr></thead><tbody id="paiesRows"></tbody></table></div>
-    <p class="semaine__hint">Photo prise chaque dimanche à 18 h 55, juste avant la remise à zéro du bot.</p>
+    <div class="table-wrap"><table class="admin-table dash-table"><thead id="paiesHead"></thead><tbody id="paiesRows"></tbody></table></div>
+    <p class="semaine__hint">Calculé par le bot pour chaque semaine (lundi → dimanche), avec les taux de paie actuels.</p>
   </section>
 </main>
 
@@ -137,113 +123,49 @@
     .then(m => { if (m.status !== 'approved') { location.replace('espera.html'); return; } ME = m; casaNav(m); render(m); $('loading').hidden = true; $('perfil').hidden = false; loadSemaine(); })
     .catch(() => {});
 
-  // ---- Ma semaine (données du bot Discord)
+  // ---- Ma semaine & mes paies (données du bot Discord, en lecture seule)
   const money = n => Math.round(n).toLocaleString('fr-FR') + ' $';
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const countdown = iso => { const ms = new Date(iso) - Date.now(); if (ms <= 0) return 'maintenant'; const h = Math.floor(ms / 3.6e6), m = Math.floor(ms % 3.6e6 / 6e4); return h >= 24 ? `dans ${Math.floor(h / 24)} j ${h % 24} h` : h ? `dans ${h} h ${m} min` : `dans ${m} min`; };
-  const dshort = d => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-  async function loadPaies() {
-    let list; try { list = await (await fetch('../api/bot/paies', { credentials: 'same-origin' })).json(); } catch { return; }
-    if (!Array.isArray(list) || !list.length) return;
-    $('paies').hidden = false;
-    const total = list.reduce((s, p) => s + p.salaire, 0);
-    $('paiesTotal').innerHTML = `${list.length} semaine${list.length > 1 ? 's' : ''} · <b>${money(total)}</b> cumulés`;
-    const best = Math.max(...list.map(p => p.salaire));
-    $('paiesRows').innerHTML = list.map(p => `<tr><td><b>${dshort(p.weekStart)} → ${dshort(p.weekEnd)}</b></td><td>${p.byType.vente || 0}</td><td>${p.byType.recolte || 0}</td><td>${p.byType.actions || 0}</td><td>${p.byType.labos || 0}</td><td><b class="pay">${money(p.salaire)}</b>${p.salaire === best && best > 0 ? ' ✦' : ''}</td></tr>`).join('');
-  }
+  const dlong = ms => new Date(ms).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  let ME = null;
   async function loadSemaine() {
-    let d; try { d = await (await fetch('../api/bot/me', { credentials: 'same-origin' })).json(); } catch { return; }
-    if (!d || !d.configured) return;
+    const st = await casaBot.gate($('botGate'));
+    if (!st.configured) return;
     $('semaine').hidden = false;
-    $('resetIn').textContent = countdown(d.nextReset) + ' (dimanche 19 h)';
-    $('quotas').innerHTML = d.quotas.map(q => {
-      const pct = q.target ? Math.min(100, Math.round(q.count / q.target * 100)) : 0;
-      return `<div class="quota ${q.target && q.count >= q.target ? 'is-done' : ''}">
-        <div class="quota__head"><span>${q.label}</span><b>${q.count}${q.target ? ` / ${q.target}` : ''}</b></div>
-        <div class="quota__bar"><i style="width:${q.target ? pct : (q.count ? 100 : 0)}%"></i></div>
-        <small>${q.target ? (q.count >= q.target ? 'Objectif atteint ✦' : `${q.target - q.count} restant${q.target - q.count > 1 ? 's' : ''}`) : 'Pas d’objectif fixé'}${q.rate ? ` · ${q.rate} $ / unité` : ''}</small>
-      </div>`; }).join('');
-    $('salaire').textContent = money(d.salaire);
-    $('salaireNote').textContent = d.salaire ? 'selon les taux du bot, hors primes' : 'déclare tes activités pour la faire monter';
-    if (d.activities.length) $('activities').innerHTML = d.activities.map(a => `<li><span>${esc(a.label)}</span><b>${a.count}</b></li>`).join('');
-    if (d.cooldowns.length) $('cooldowns').innerHTML = d.cooldowns.map(c => `<li><span>${esc(c.label)}</span><b>${countdown(c.expiresAt)}</b></li>`).join('');
-    if (d.armes.length) $('armes').innerHTML = d.armes.map(a => `<li><span>${esc(a.nom)}${a.type ? ` · ${esc(a.type)}` : ''}</span><b class="mono">${esc(a.reference)}</b></li>`).join('');
-    loadPaies();
-    if (d.ventesEnAttente.length) $('ventes').innerHTML = d.ventesEnAttente.map(v => `<li><span>${v.quantite} × ${esc(v.item)}</span><span class="row-actions"><button class="btn btn--gold btn--sm" data-vente="${v.id}" data-act="declarer">Vendue</button><button class="btn btn--ghost btn--sm" data-vente="${v.id}" data-act="reposer">Reposée</button></span></li>`).join('');
-    else $('ventes').innerHTML = '<li class="muted">Aucune</li>';
-    loadDeclarer();
+    if (!st.linked) return;
+    let cfg, q, pay, ventes;
+    try {
+      [cfg, q, pay, ventes] = await Promise.all([casaBot.get('quotas/config'), casaBot.get('quotas/' + ME.discordId), casaBot.get('quotas/pay/' + ME.discordId), casaBot.get('ventes/' + ME.discordId)]);
+    } catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(casaBot.error(e))}</p>`; return; }
+    $('semaineBody').hidden = false;
+    $('since').textContent = cfg.range.since ? `Depuis ${dlong(cfg.range.since)}` : '';
+    const cats = [...new Set([...Object.keys(cfg.targets), ...Object.keys(cfg.salaryRates), ...Object.keys(q.byQuotaType)])];
+    $('quotas').innerHTML = cats.map(k => {
+      const count = q.byQuotaType[k] || 0, target = cfg.targets[k], rate = cfg.salaryRates[k];
+      const pct = target ? Math.min(100, Math.round(count / target * 100)) : 0;
+      return `<div class="quota ${target && count >= target ? 'is-done' : ''}">
+        <div class="quota__head"><span>${esc(casaBot.label(k))}</span><b>${count}${target ? ` / ${target}` : ''}</b></div>
+        <div class="quota__bar"><i style="width:${target ? pct : (count ? 100 : 0)}%"></i></div>
+        <small>${target ? (count >= target ? 'Objectif atteint ✦' : `${target - count} restant${target - count > 1 ? 's' : ''}`) : 'Pas d’objectif fixé'}${rate ? ` · ${rate} $ / unité` : ''}</small>
+      </div>`; }).join('') || '<p class="muted">Aucune catégorie de quota configurée dans le bot.</p>';
+    $('salaire').textContent = money(pay.salaire);
+    $('salaireNote').textContent = pay.salaire ? 'selon les taux du bot, hors primes' : 'déclare tes activités sur Discord pour la faire monter';
+    const acts = Object.entries(q.map).filter(([, v]) => v.count);
+    if (acts.length) $('activities').innerHTML = acts.map(([key, v]) => `<li><span>${esc(cfg.activities[key]?.label || key)}</span><b>${v.count}</b></li>`).join('');
+    if (ventes.detail.length) $('ventes').innerHTML = ventes.detail.map(v => `<li><span>${esc(v.item)}</span><b>${v.quantite}</b></li>`).join('');
+    loadPaies(cats);
   }
-  $('ventes').addEventListener('click', async e => {
-    const b = e.target.closest('[data-vente]'); if (!b) return;
-    const ok = await casaConfirm(b.dataset.act === 'declarer' ? 'Confirmer que cette drogue a été vendue ? Pense à déposer l’argent dans le coffre.' : 'Confirmer que la drogue a été reposée dans le coffre ?', { title: b.dataset.act === 'declarer' ? 'Vente' : 'Reposée', ok: 'Confirmer' });
-    if (!ok) return;
-    if (await casaAction('POST', `../api/bot/ventes/${b.dataset.vente}/${b.dataset.act}`, {})) loadSemaine();
-  });
-
-  // ---- Déclarer une activité (via l'API du bot)
-  let FAMILIA = null, ME = null;
-  const QUOTA_NAMES = { actions: 'Actions', vente: 'Vente', recolte: 'Récolte', labos: 'Labos' };
-  const KIND = { simple: 'Action', quantite: 'Quantité', braquage: 'Braquage', labo: 'Labo' };
-  const minutes = iso => Math.max(1, Math.ceil((new Date(iso) - Date.now()) / 60000));
-  const dur = iso => { const m = minutes(iso); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60 ? (m % 60) + ' min' : ''}`.trim() : `${m} min`; };
-  async function partenairesOptions() {
-    if (!FAMILIA) { try { FAMILIA = await (await fetch('../api/familia', { credentials: 'same-origin' })).json(); } catch { FAMILIA = []; } }
-    return FAMILIA.filter(m => m.discordId && m.discordId !== (ME && ME.discordId)).map(m => ({ value: m.discordId, label: m.rankLabel ? `${m.displayName} · ${m.rankLabel}` : m.displayName }));
+  // les 8 dernières semaines (lundi → dimanche), calculées par le bot
+  async function loadPaies(cats) {
+    const weeks = Array.from({ length: 8 }, (_, i) => casaBot.isoWeek(i + 1));
+    const list = (await Promise.all(weeks.map(w => casaBot.get(`quotas/pay/${ME.discordId}?week=${w}`).then(p => ({ week: w, ...p })).catch(() => null)))).filter(p => p && (p.salaire || Object.values(p.byQuotaType).some(Boolean)));
+    if (!list.length) return;
+    $('paies').hidden = false;
+    const total = list.reduce((s, p) => s + p.salaire, 0), best = Math.max(...list.map(p => p.salaire));
+    $('paiesTotal').innerHTML = `${list.length} semaine${list.length > 1 ? 's' : ''} · <b>${money(total)}</b> cumulés`;
+    $('paiesHead').innerHTML = `<tr><th>Semaine</th>${cats.map(k => `<th>${esc(casaBot.label(k))}</th>`).join('')}<th>Paie</th></tr>`;
+    $('paiesRows').innerHTML = list.map(p => `<tr><td><b>${p.week.replace('-W', ' · semaine ')}</b></td>${cats.map(k => `<td>${p.byQuotaType[k] || 0}</td>`).join('')}<td><b class="pay">${money(p.salaire)}</b>${p.salaire === best && best > 0 ? ' ✦' : ''}</td></tr>`).join('');
   }
-  function actCard(a) {
-    let note = '', blocked = false;
-    if (a.kind === 'braquage') { note = `${a.braquage.limit - a.braquage.used} slot${a.braquage.limit - a.braquage.used > 1 ? 's' : ''} sur ${a.braquage.limit} cette semaine`; blocked = a.braquage.used >= a.braquage.limit; if (blocked) note = 'Limite hebdomadaire atteinte'; }
-    else if (a.kind === 'labo') { note = a.labo.available ? 'Labo disponible' : `Occupé, libre ${dur(a.labo.endsAt)}`; blocked = !a.labo.available; }
-    else if (a.cooldownUntil) { note = `Cooldown : encore ${dur(a.cooldownUntil)}`; blocked = true; }
-    else if (a.cooldownMs) note = `Cooldown de ${Math.round(a.cooldownMs / 60000)} min après`;
-    else if (a.kind === 'quantite') note = 'Type et quantité à préciser';
-    else note = 'Déclaration simple';
-    return `<button class="act ${blocked ? 'is-blocked' : ''}" data-key="${esc(a.key)}" ${blocked ? 'disabled' : ''}><span class="act__kind">${KIND[a.kind]}</span><b>${esc(a.display)}</b><small>${esc(note)}</small></button>`;
-  }
-  let ACTS = {};
-  async function loadDeclarer() {
-    let d; try { d = await (await fetch('../api/bot/activites', { credentials: 'same-origin' })).json(); } catch { return; }
-    if (!d || !d.configured || !d.activites) return;
-    ACTS = Object.fromEntries(d.activites.map(a => [a.key, a])); window.__venteItems = d.venteItems || [];
-    $('declarer').hidden = false;
-    $('declarerTier').textContent = d.tier ? `Type d’organisation : ${{ independant: 'Indépendant', petite_frappe: 'Petite Frappe', gang: 'Gang', organisation: 'Organisation' }[d.tier] || d.tier}` : '';
-    const groups = {}; d.activites.forEach(a => (groups[a.quotaType || 'autre'] = groups[a.quotaType || 'autre'] || []).push(a));
-    $('declarerGroups').innerHTML = Object.entries(groups).map(([q, list]) => `<div class="declarer__group"><h4>${esc(QUOTA_NAMES[q] || q)}</h4><div class="declarer__grid">${list.map(actCard).join('')}</div></div>`).join('') || '<p class="muted">Aucune activité configurée dans le bot.</p>';
-    loadHist();
-  }
-  async function loadHist() {
-    let d; try { d = await (await fetch('../api/bot/activites/transactions', { credentials: 'same-origin' })).json(); } catch { return; }
-    if (!d || !d.transactions) return;
-    const when = iso => new Date(iso).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-    $('histRows').innerHTML = d.transactions.length ? d.transactions.slice(0, 12).map(t => `<li><span>${esc(t.label)}${t.quantite && t.type ? ` · ${t.quantite} × ${esc(t.type)}` : ''}${t.partenaires.length ? ` · ${t.partenaires.length + 1} participants` : ''}${t.userId !== ME.discordId ? ` <i class="muted">(avec ${esc(t.username)})</i>` : ''}</span><time>${when(t.timestamp)}</time></li>`).join('') : '<li class="muted">Aucune déclaration récente</li>';
-  }
-  $('declarerGroups').addEventListener('click', async e => {
-    const b = e.target.closest('.act'); if (!b || b.disabled) return;
-    const a = ACTS[b.dataset.key]; if (!a) return;
-    let body = { key: a.key };
-    if (a.kind === 'simple') {
-      if (!(await casaConfirm(`Déclarer « ${a.display} » maintenant ?${a.cooldownMs ? ` Un cooldown de ${Math.round(a.cooldownMs / 60000)} min s’appliquera ensuite.` : ''}`, { title: a.label, ok: 'Déclarer' }))) return;
-    } else if (a.kind === 'quantite') {
-      const items = window.__venteItems || [];
-      const f = await casaForm([
-        items.length ? { name: 'type', label: 'Type de produit', type: 'select', options: items, required: true, placeholder: 'Choisir…' } : { name: 'type', label: 'Type de produit', type: 'text', required: true, placeholder: 'ex. Cannabis' },
-        { name: 'quantite', label: 'Quantité', type: 'number', required: true, min: 1 },
-      ], { title: a.label, ok: 'Déclarer' });
-      if (!f) return; body = { ...body, ...f };
-    } else if (a.kind === 'braquage') {
-      const f = await casaForm([{ name: 'partenaires', label: 'Partenaires (optionnel)', type: 'multiselect', options: await partenairesOptions() }], { title: a.label, text: 'Chaque partenaire sélectionné est crédité de l’action lui aussi.', ok: 'Déclarer le braquage' });
-      if (!f) return; body = { ...body, ...f };
-    } else if (a.kind === 'labo') {
-      const f = await casaForm([
-        { name: 'partenaires', label: 'Participants (optionnel)', type: 'multiselect', options: await partenairesOptions() },
-        { name: 'tempsRestant', label: 'Temps restant (minutes)', type: 'number', required: true, min: 1, hint: 'Le salon du labo passe au rouge et revient au vert à la fin.' },
-      ], { title: a.label, ok: 'Lancer le labo' });
-      if (!f) return; body = { ...body, ...f };
-    }
-    b.disabled = true;
-    const r = await casaAction('POST', '../api/bot/activites/declarer', body);
-    if (r) loadSemaine(); else b.disabled = false;
-  });
 
   $('form').addEventListener('submit', async e => {
     e.preventDefault();

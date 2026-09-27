@@ -135,6 +135,33 @@ window.casaForm = function (fields, { title = 'Saisie', text = '', ok = 'Valider
   });
 };
 
+// Fenêtre de consultation (lecture seule), même style que casaConfirm. rows : [{ label, value }] ;
+// chaque valeur renseignée a un bouton pour la copier.
+window.casaInfo = function (title, rows) {
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const wrap = document.createElement('div');
+  wrap.className = 'modal modal--form';
+  wrap.innerHTML = `
+    <div class="modal__box" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+      <p class="eyebrow">La Maja 13</p>
+      <h3 class="modal__title" id="infoTitle">${esc(title)}</h3>
+      <dl class="info">${rows.map((r, i) => `<div class="info__row"><dt>${esc(r.label)}</dt>
+        <dd>${r.value ? `<span class="mono">${esc(r.value)}</span><button class="btn btn--ghost btn--sm" type="button" data-copy="${i}">Copier</button>` : '<span class="muted">—</span>'}</dd></div>`).join('')}</dl>
+      <div class="modal__actions"><button class="btn btn--gold" type="button" data-close>Fermer</button></div>
+    </div>`;
+  const close = () => { wrap.classList.remove('is-open'); setTimeout(() => wrap.remove(), 200); document.removeEventListener('keydown', onKey); };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  wrap.onclick = async e => {
+    if (e.target === wrap || e.target.closest('[data-close]')) return close();
+    const b = e.target.closest('[data-copy]'); if (!b) return;
+    try { await navigator.clipboard.writeText(rows[b.dataset.copy].value); b.textContent = 'Copié ✓'; setTimeout(() => b.textContent = 'Copier', 1500); }
+    catch { casaToast('Copie impossible : sélectionne le texte à la main.', false); }
+  };
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(wrap);
+  requestAnimationFrame(() => { wrap.classList.add('is-open'); wrap.querySelector('[data-close]').focus(); });
+};
+
 // Petit message furtif en bas de page (succès ou erreur)
 window.casaToast = function (message, ok = true) {
   let t = document.getElementById('casaToast');
@@ -143,13 +170,42 @@ window.casaToast = function (message, ok = true) {
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('is-on'), ok ? 3200 : 5200);
 };
 
-// Appel d'une action du bot via La Casa : renvoie la réponse, ou affiche l'erreur et renvoie null
-window.casaAction = async function (method, url, body) {
-  try {
-    const r = await fetch(url, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+// Données du bot Discord (géré à part), lues via La Casa — voir server/src/routes/bot.ts
+window.casaBot = {
+  status: () => fetch('../api/bot/status', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { configured: false }).catch(() => ({ configured: false })),
+  // lecture d'une rubrique de l'API du bot (ex. 'quotas/config', 'taxes?status=expired') ; lève une erreur { status, message }
+  async get(path) {
+    const r = await fetch('../api/bot/data/' + path, { credentials: 'same-origin' });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) { casaToast(d.error || 'Action refusée.', false); return null; }
-    if (d.message) casaToast(d.message, true);
+    if (!r.ok) throw Object.assign(new Error(d.error || `Le bot a répondu ${r.status}`), { status: r.status });
     return d;
-  } catch { casaToast('Le site ne répond pas.', false); return null; }
+  },
+  // affiche dans `el` ce qui empêche d'afficher les données (bot non relié au site, compte à connecter) ; renvoie le statut
+  async gate(el) {
+    const st = await casaBot.status();
+    el.hidden = st.linked;
+    if (!st.configured) el.innerHTML = '<p class="admin-empty">Le bot Discord n\'est pas relié à La Casa.</p>';
+    else if (!st.linked) el.innerHTML = `<div class="admin-empty bot-gate"><p>Pour voir les données du bot Discord, connecte ton compte au bot (une fois par semaine environ).</p>
+      <a class="btn btn--gold btn--sm" href="../auth/bot?next=${encodeURIComponent(location.pathname)}">Connecter mon compte au bot</a></div>`;
+    return st;
+  },
+  // message d'erreur lisible pour une lecture refusée
+  error: e => e.status === 403 ? 'Réservé aux rôles concernés dans le bot Discord.' : e.status === 401 ? 'Connexion au bot expirée : recharge la page.' : e.message,
+  // noms RP des membres de La Casa par ID Discord (repli : pseudo connu du bot, puis identifiant tronqué)
+  async names(botUsers = []) {
+    const familia = await fetch('../api/familia', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []).catch(() => []);
+    const map = Object.fromEntries(botUsers.map(u => [u.userId, u.username]));
+    for (const m of familia) map[m.discordId] = m.displayName;
+    return id => map[id] || `Membre #${String(id).slice(-4)}`;
+  },
+  // catégorie de quota du bot (clé) → libellé affichable
+  label: k => (k.charAt(0).toUpperCase() + k.slice(1)).replace(/_/g, ' '),
+  // semaine ISO (AAAA-Www) d'une date, pour ?week= ; `back` semaines avant la semaine en cours
+  isoWeek(back = 0) {
+    const d = new Date(Date.now() - back * 7 * 86400e3);
+    const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+    const week = Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 86400e3 + 1) / 7);
+    return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+  },
 };
