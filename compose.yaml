@@ -23,9 +23,6 @@ services:
     depends_on:
       maja13-db:
         condition: service_healthy
-    networks:
-      - default
-      - maja13-net             # à rejoindre par le bot Discord (géré à part) s'il tourne en Docker sur la même machine
   maja13-db:
     container_name: maja13-db-1
     image: postgres:17-alpine
@@ -46,6 +43,3 @@ services:
 volumes:
   maja13-db:
   maja13-uploads:
-networks:
-  maja13-net:
-    name: maja13-net

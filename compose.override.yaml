@@ -1,12 +1,16 @@
-# Ajustements de DEV, chargés automatiquement par `docker compose up` (jamais en prod : les scripts
-# passent -f compose.yaml). Aucun .env à écrire.
+# Ajustements de DEV, chargés automatiquement par `docker compose up` (jamais en prod : le .env de prod
+# contient COMPOSE_FILE=compose.yaml). Aucun .env à écrire.
 # - code monté depuis le poste : pages, CSS et JS servis tels quels (rafraîchir le navigateur) ;
-#   après une modification de server/src :  docker compose restart maja13-app
+#   serveur lancé depuis les sources TypeScript (tsx) ; après une modification de server/src :
+#   docker compose restart maja13-app
+# - migrations Prisma appliquées au démarrage ; nouvelle migration après une modification de schema.prisma :
+#   docker compose exec maja13-app npx prisma migrate dev --name <description>
 # - connexion sans Discord (DEV_LOGIN) ; photos de la galerie dans ./uploads sur le poste
 services:
   maja13-app:
-    command: sh -c "npm ci --no-audit --no-fund && node src/index.js"
+    command: sh -c "npm ci --no-audit --no-fund && npm run dev"
     environment:
+      NODE_ENV: development    # l'image est en production : sans ça, npm ci n'installe pas tsx
       BASE_URL: http://localhost:3000
       SESSION_SECRET: dev-local
       POSTGRES_PASSWORD: maja13

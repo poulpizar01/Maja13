@@ -1,8 +1,21 @@
-FROM node:20-alpine
+# La Maja 13 — image du site (contexte = racine du dépôt, voir compose.yaml)
+
+# 1. construction : dépendances complètes, client Prisma, compilation TypeScript
+FROM node:22-alpine AS build
 WORKDIR /app/server
 COPY server/package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
+COPY server/ ./
+RUN npm run build
+
+# 2. exécution : dépendances de production, dépôt (site statique, schéma et migrations Prisma), code compilé
+FROM node:22-alpine
+WORKDIR /app/server
+ENV NODE_ENV=production
+COPY server/package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 COPY . /app
-ENV NODE_ENV=production PORT=3000
+COPY --from=build /app/server/dist ./dist
 EXPOSE 3000
-CMD ["node", "src/index.js"]
+# applique les migrations en attente, puis démarre (exec : le serveur reçoit directement les signaux d'arrêt)
+CMD ["sh", "-c", "npx prisma migrate deploy && exec node dist/index.js"]

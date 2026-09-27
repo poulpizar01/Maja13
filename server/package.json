@@ -1,21 +1,37 @@
 {
   "name": "maja13-casa",
   "version": "1.0.0",
-  "description": "La Maja 13 — site + espace membre (La Casa) : Express + PostgreSQL + Discord OAuth",
-  "main": "src/index.js",
+  "description": "La Maja 13 — site + espace membre (La Casa) : Express + PostgreSQL (Prisma) + Discord OAuth",
+  "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/index.js"
+    "build": "prisma generate && tsc -p .",
+    "start": "prisma migrate deploy && node dist/index.js",
+    "dev": "prisma generate && prisma migrate deploy && tsx src/index.ts",
+    "typecheck": "tsc -p . --noEmit"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
     "connect-pg-simple": "^10.0.0",
-    "express": "^4.21.2",
+    "express": "^5.2.1",
     "express-session": "^1.18.1",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.0.0",
     "pg": "^8.13.1",
-    "sharp": "^0.33.5"
+    "prisma": "7.10.0",
+    "sharp": "^0.34.0"
+  },
+  "devDependencies": {
+    "@types/connect-pg-simple": "^7.0.3",
+    "@types/express": "^5.0.6",
+    "@types/express-session": "^1.18.1",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
   }
 }

@@ -1,0 +1,132 @@
+// La Maja 13 — base de La Casa. Toute modification passe par une migration :
+//   docker compose exec maja13-app npx prisma migrate dev --name <description>
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MemberStatus {
+  pending
+  approved
+  rejected
+}
+
+// Compte La Casa, créé à la première connexion Discord
+model Member {
+  id           Int          @id @default(autoincrement())
+  discordId    String       @unique @map("discord_id") @db.VarChar(32)
+  username     String       @db.VarChar(64) // pseudo Discord
+  avatar       String?      @db.VarChar(128) // hash de l'avatar Discord
+  displayName  String?      @map("display_name") @db.VarChar(64) // nom RP
+  rankKey      String?      @map("rank") @db.VarChar(20) // null = sans grade
+  bio          String?
+  phoneRp      String?      @map("phone_rp") @db.VarChar(32)
+  status       MemberStatus @default(pending)
+  isOwner      Boolean      @default(false) @map("is_owner") // propriétaire du serveur Discord
+  joinedAt     DateTime     @default(now()) @map("joined_at") @db.Timestamptz(6)
+  lastLogin    DateTime?    @map("last_login") @db.Timestamptz(6)
+  approvedAt   DateTime?    @map("approved_at") @db.Timestamptz(6)
+  approvedById Int?         @map("approved_by")
+
+  rank       Rank?     @relation(fields: [rankKey], references: [key], onDelete: Restrict)
+  approvedBy Member?   @relation("Approvals", fields: [approvedById], references: [id], onDelete: SetNull)
+  approved   Member[]  @relation("Approvals")
+  messages   Message[]
+  photos     Photo[]
+  chatRead   ChatRead?
+
+  @@map("members")
+}
+
+// Grade de la hiérarchie, paramétré dans Gestion → Hiérarchie
+model Rank {
+  key           String  @id @db.VarChar(20) // identifiant technique, fixé à la création
+  label         String  @db.VarChar(40)
+  position      Int     @default(0) // 0 = sommet
+  color         String? @db.VarChar(7)
+  description   String? // texte public sous la rangée de l'organigramme
+  featured      Boolean @default(false) // grande carte sur l'organigramme public
+  canAdmin      Boolean @default(false) @map("can_admin") // accès à la Gestion
+  canManage     Boolean @default(false) @map("can_manage") // pouvoirs complets
+  isDefault     Boolean @default(false) @map("is_default") // grade des nouveaux comptes (un seul)
+  discordRoleId String? @unique @map("discord_role_id") @db.VarChar(32)
+
+  members    Member[]
+  orgEntries OrgEntry[]
+
+  @@map("ranks")
+}
+
+// Case de l'organigramme public (nom libre, sans lien avec les comptes)
+model OrgEntry {
+  id          Int     @id @default(autoincrement())
+  rankKey     String  @map("rank") @db.VarChar(20)
+  name        String  @db.VarChar(64)
+  subtitle    String? @db.VarChar(80)
+  description String?
+  isOpen      Boolean @default(false) @map("is_open") // poste à pourvoir
+  position    Int     @default(0)
+
+  rank Rank @relation(fields: [rankKey], references: [key], onDelete: Restrict)
+
+  @@map("org_entries")
+}
+
+// Message du Salon
+model Message {
+  id        Int       @id @default(autoincrement())
+  memberId  Int       @map("member_id")
+  content   String    @db.VarChar(1000)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt(sort: Desc)])
+  @@map("messages")
+}
+
+// Dernier message lu dans le Salon (badge « non lus »)
+model ChatRead {
+  memberId   Int      @id @map("member_id")
+  lastReadId Int      @default(0) @map("last_read_id")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("chat_reads")
+}
+
+// Photo de la galerie ; file / thumb = clés de stockage, url / thumbUrl = adresses publiques
+model Photo {
+  id        Int       @id @default(autoincrement())
+  memberId  Int       @map("member_id")
+  file      String    @db.VarChar(200)
+  thumb     String    @db.VarChar(200)
+  url       String
+  thumbUrl  String    @map("thumb_url")
+  width     Int?
+  height    Int?
+  caption   String?   @db.VarChar(200)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt(sort: Desc)])
+  @@map("photos")
+}
+
+// Sessions de connexion (gérées par connect-pg-simple, déclarées ici pour les migrations)
+model Session {
+  sid    String   @id @db.VarChar
+  sess   Json     @db.Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire], map: "idx_session_expire")
+  @@map("session")
+}

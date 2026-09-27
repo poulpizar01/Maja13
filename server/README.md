@@ -23,7 +23,10 @@ Puis nginx : copier [`deploy/nginx.conf.example`](deploy/nginx.conf.example) dan
 Le `.env` contient `COMPOSE_FILE=compose.yaml` : les commandes ci-dessus ignorent ainsi les réglages de dev (`compose.override.yaml`).
 
 ### Bot Discord
-Géré à part. La Casa n'a besoin que de trois valeurs fournies par son équipe (dans `.env`) : `BOT_DATABASE_URL` (base du bot en lecture seule), `BOT_API_URL` et `BOT_API_TOKEN` (API interne du bot). Sans elles, les pages liées au bot (tableau de bord, taxes, armurerie…) sont simplement inactives. Si le bot tourne en Docker sur la même machine, il peut rejoindre le réseau `maja13-net` pour que La Casa le joigne par nom de conteneur.
+Géré à part. La Casa lit ses données via son **API REST, en lecture seule** : rien n'est écrit dans le bot ni stocké côté La Casa.
+- `.env` : `BOT_API_URL` = URL publique de l'API du bot (vide = pages liées au bot désactivées).
+- Discord : un admin du serveur déclare La Casa comme site externe du bot : `/config site-externe set url:https://<domaine>/casa/bot-callback.html`.
+- Chaque membre connecte son compte au bot depuis La Casa (bouton « Connecter mon compte au bot ») : le bot vérifie son identité Discord et renvoie un jeton personnel (7 jours), gardé dans sa session La Casa. Les droits (admin, taxes) sont ceux de ses rôles Discord, revérifiés par le bot à chaque lecture.
 
 ## Application Discord
 1. https://discord.com/developers/applications → New Application « La Maja 13 »
