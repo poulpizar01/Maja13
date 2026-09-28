@@ -3,7 +3,7 @@ import { Router, type Response } from 'express';
 import { prisma } from '../db.js';
 import type { Member, Message } from '../generated/prisma/client.js';
 import { body, intParam, member, text } from '../http.js';
-import { author, byRankThenName } from '../members.js';
+import { author, authorFields, byRankThenName } from '../members.js';
 import { canAdmin } from '../ranks.js';
 import { limits } from '../security.js';
 
@@ -16,8 +16,8 @@ const broadcast = (event: string, data: unknown) => {
 };
 const presence = () => [...new Map([...clients.values()].map(m => [m.id, m])).values()].sort(byRankThenName).map(author);
 
-const withAuthor = { member: true } as const;
-const messageView = (g: Message & { member: Member }) => ({ id: g.id, content: g.content, createdAt: g.createdAt, author: author(g.member) });
+const withAuthor = { member: authorFields } as const;
+const messageView = (g: Message & { member: Parameters<typeof author>[0] }) => ({ id: g.id, content: g.content, createdAt: g.createdAt, author: author(g.member) });
 
 chat.get('/api/chat/messages', ...member, async (req, res) => {
   const before = Number(req.query.before) || null;
@@ -49,11 +49,15 @@ const mentionRegex = (m: Member) => new RegExp('@(' + [m.displayName, m.username
   .map(s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![\\w-])', 'i');
 chat.get('/api/chat/unread', ...member, async (req, res) => {
   const last = (await prisma.chatRead.findUnique({ where: { memberId: req.member.id } }))?.lastReadId ?? 0;
-  const unread = await prisma.message.findMany({
-    where: { id: { gt: last }, deletedAt: null, memberId: { not: req.member.id } }, select: { content: true }, orderBy: { id: 'asc' },
-  });
+  const where = { id: { gt: last }, deletedAt: null, memberId: { not: req.member.id } };
+  // appelé toutes les 30 s par chaque page ouverte : on compte en base, et seuls les messages contenant « @nom » sont lus
+  const names = [req.member.displayName, req.member.username].filter((s): s is string => !!s);
+  const [unread, candidates] = await Promise.all([
+    prisma.message.count({ where }),
+    prisma.message.findMany({ where: { ...where, OR: names.map(n => ({ content: { contains: `@${n}`, mode: 'insensitive' as const } })) }, select: { content: true } }),
+  ]);
   const re = mentionRegex(req.member);
-  res.json({ unread: unread.length, mentions: unread.filter(m => re.test(m.content)).length, lastReadId: last });
+  res.json({ unread, mentions: candidates.filter(m => re.test(m.content)).length, lastReadId: last });
 });
 chat.post('/api/chat/read', ...member, async (req, res) => {
   const id = Number(body(req).lastId) || 0;

@@ -6,7 +6,7 @@
   const hero = canvas.parentElement;
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));   // au-delà, 2× plus de pixels à calculer pour une différence à peine visible
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.15;
@@ -17,7 +17,7 @@
 
   // ---- textures
   const loader = new THREE.TextureLoader();
-  const faceTex = loader.load('assets/medallion.png');
+  const faceTex = loader.load('assets/medallion.webp');
   faceTex.encoding = THREE.sRGBEncoding;
   faceTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
 

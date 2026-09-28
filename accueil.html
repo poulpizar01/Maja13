@@ -31,7 +31,7 @@
 <!-- ============ NAV ============ -->
 <header class="nav" id="nav">
   <a class="nav__brand" href="index.html#entrada">
-    <img src="assets/logo.png" alt="" width="40" height="40">
+    <img src="assets/logo-nav.webp" alt="" width="40" height="40">
     <span>La Maja <em>13</em></span>
   </a>
   <button class="nav__burger" id="burger" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
@@ -307,7 +307,7 @@
 <section class="section section--contact" id="contacto">
   <div class="wrap">
     <div class="contact reveal">
-      <img src="assets/logo.png" alt="Blason La Maja 13" class="contact__logo" width="220" height="220">
+      <img src="assets/logo.webp" alt="Blason La Maja 13" class="contact__logo" width="220" height="220" loading="lazy">
       <h2>¿Quieres entrar en la familia?</h2>
       <p>Intégrer le groupe n'est jamais un simple choix. Chaque recrue doit prouver sa valeur, sa loyauté et sa capacité à placer la familia avant ses propres intérêts. Certains rejoignent les rangs par ambition, d'autres par nécessité — mais une fois les couleurs portées, l'engagement devient total.</p>
       <a class="btn btn--gold btn--lg" href="https://discord.gg/Wdnsa2mDt" target="_blank" rel="noopener">Rejoindre le Discord</a>
@@ -333,10 +333,11 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="hero3d.js"></script>
+<script src="main.js"></script>
 <script src="org.js"></script>
 <script src="galeria.js"></script>
-<script src="main.js"></script>
+<!-- blason 3D : three.js (~600 Ko) en différé, pour que le menu et l'apparition des sections n'attendent pas son téléchargement -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script defer src="hero3d.js"></script>
 </body>
 </html>

@@ -42,13 +42,20 @@ async function botGet(req: Request, path: string): Promise<{ status: number; dat
   if (r.status === 401) { delete req.session.botToken; forget(req); }
   return { status: r.status, data: await r.json().catch(() => ({ error: `bot ${r.status}` })) };
 }
-// lecture avec cache (réponses 200 uniquement)
+// lecture avec cache (réponses 200 uniquement) ; une même lecture déjà en cours (autre onglet, requêtes simultanées)
+// est partagée au lieu de partir une seconde fois vers le bot
+const inflight = new Map<string, Promise<{ status: number; data: unknown }>>();
 async function botRead(req: Request, path: string): Promise<{ status: number; data: unknown }> {
   const hit = cached(req, path);
   if (hit !== undefined) return { status: 200, data: hit };
-  const res = await botGet(req, path);
-  if (res.status === 200) remember(req, path, res.data);
-  return res;
+  const key = cacheKey(req, path);
+  let pending = inflight.get(key);
+  if (!pending) {
+    pending = botGet(req, path).then(res => { if (res.status === 200) remember(req, path, res.data); return res; })
+      .finally(() => inflight.delete(key));
+    inflight.set(key, pending);
+  }
+  return pending;
 }
 
 // retour après connexion : une page de La Casa uniquement

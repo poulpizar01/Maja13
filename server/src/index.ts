@@ -22,8 +22,10 @@ const app = express();
 app.set('trust proxy', 1);                     // derrière nginx (adresse IP réelle pour les limites de requêtes)
 app.use(securityHeaders);
 app.use(express.json({ limit: '32kb' }));
-app.use(session({
-  store: new (connectPg(session))({ pool, tableName: 'session' }),
+// session uniquement pour l'API et la connexion : les fichiers du site (css, js, images) ne lisent pas la base.
+// disableTouch : pas d'écriture en base à chaque requête (le cookie n'est pas prolongé non plus, rolling désactivé).
+app.use(['/api', '/auth'], session({
+  store: new (connectPg(session))({ pool, tableName: 'session', disableTouch: true }),
   name: 'maja13.sid',
   secret: config.sessionSecret,
   resave: false,

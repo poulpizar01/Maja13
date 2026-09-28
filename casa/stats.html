@@ -18,7 +18,7 @@
 <script src="casa-bg.js" defer></script>
 
 <header class="nav is-scrolled">
-  <a class="nav__brand" href="../index.html#entrada"><img src="../assets/logo.png" alt="" width="40" height="40"><span>La Maja <em>13</em></span></a>
+  <a class="nav__brand" href="../index.html#entrada"><img src="../assets/logo-nav.webp" alt="" width="40" height="40"><span>La Maja <em>13</em></span></a>
   <nav class="nav__links casa-nav">
     <a href="perfil.html">Mon profil</a>
     <a href="familia.html">La Famille</a>
@@ -310,6 +310,7 @@
   let resizeTimer; addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(refresh, 200); });
 
   async function start() {
+    casaBot.status();   // en parallèle de /api/me (repris par gate)
     const me = await api('../api/me');
     if (me.status !== 'approved') { location.replace('espera.html'); return; }
     if (!me.isAdmin) { location.replace('perfil.html'); return; }
@@ -319,7 +320,7 @@
     if (!st.linked) return;
     try {
       const [config, users, familia] = await Promise.all([get('quotas/config'), get('users'), api('../api/familia')]);
-      cfg = config; name = await casaBot.names(users);
+      cfg = config; name = await casaBot.names(users, familia);
       // catégories dans l'ordre du bot (stable d'une semaine à l'autre) : la couleur suit la catégorie, jamais son rang
       cats = [...new Set([...Object.values(cfg.activities).map(a => a.quotaType), ...Object.keys(cfg.targets), ...Object.keys(cfg.salaryRates)])].filter(Boolean);
       cats.forEach((k, i) => { color[k] = PALETTE[i] || OTHER; });

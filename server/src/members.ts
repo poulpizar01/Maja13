@@ -12,8 +12,9 @@ export const publicMember = (m: Member) => ({
   joinedAt: m.joinedAt, lastLogin: m.lastLogin, approvedAt: m.approvedAt,
 });
 
-// auteur d'un message ou d'une photo
-export const author = (m: Pick<Member, 'id' | 'displayName' | 'username' | 'rankKey' | 'discordId' | 'avatar'>) => ({
+// auteur d'un message ou d'une photo (authorFields : colonnes lues pour lui, à passer en include)
+export const authorFields = { select: { id: true, displayName: true, username: true, rankKey: true, discordId: true, avatar: true } } as const;
+export const author =(m: Pick<Member, 'id' | 'displayName' | 'username' | 'rankKey' | 'discordId' | 'avatar'>) => ({
   id: m.id, displayName: m.displayName, username: m.username, ...rankInfo(m.rankKey), avatarUrl: avatarUrl(m),
 });
 

@@ -72,7 +72,7 @@ window.casaUnread = async function () {
 };
 document.addEventListener('DOMContentLoaded', () => {
   if (document.body.classList.contains('casa-body--chat')) return;   // le Salon gère lui-même
-  casaUnread(); setInterval(casaUnread, 30000);
+  casaUnread(); setInterval(() => { if (!document.hidden) casaUnread(); }, 30000);   // onglet caché : pas d'appel (rattrapé au retour)
   document.addEventListener('visibilitychange', () => { if (!document.hidden) casaUnread(); });
 });
 
@@ -182,7 +182,10 @@ window.casaToast = function (message, ok = true) {
 
 // Données du bot Discord (géré à part), lues via La Casa — voir server/src/routes/bot.ts
 window.casaBot = {
-  status: () => fetch('../api/bot/status', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { configured: false }).catch(() => ({ configured: false })),
+  // lu une fois par page : les pages l'appellent dès le départ, en parallèle de /api/me, puis gate() reprend la même réponse
+  status() {
+    return this._status ??= fetch('../api/bot/status', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { configured: false }).catch(() => ({ configured: false }));
+  },
   // lecture d'une rubrique de l'API du bot (ex. 'quotas/config', 'taxes?status=expired') ; lève une erreur { status, message }
   async get(path) {
     const r = await fetch('../api/bot/data/' + path, { credentials: 'same-origin' });
@@ -201,9 +204,10 @@ window.casaBot = {
   },
   // message d'erreur lisible pour une lecture refusée
   error: e => e.status === 403 ? 'Réservé aux rôles concernés dans le bot Discord.' : e.status === 401 ? 'Connexion au bot expirée : recharge la page.' : e.message,
-  // noms RP des membres de La Casa par ID Discord (repli : pseudo connu du bot, puis identifiant tronqué)
-  async names(botUsers = []) {
-    const familia = await fetch('../api/familia', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []).catch(() => []);
+  // noms RP des membres de La Casa par ID Discord (repli : pseudo connu du bot, puis identifiant tronqué) ;
+  // familia : liste déjà chargée par la page (sinon lue ici)
+  async names(botUsers = [], familia) {
+    if (!Array.isArray(familia)) familia = await fetch('../api/familia', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []).catch(() => []);
     const map = Object.fromEntries(botUsers.map(u => [u.userId, u.username]));
     for (const m of familia) map[m.discordId] = m.displayName;
     return id => map[id] || `Membre #${String(id).slice(-4)}`;

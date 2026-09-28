@@ -18,7 +18,7 @@
 <script src="casa-bg.js" defer></script>
 
 <header class="nav is-scrolled">
-  <a class="nav__brand" href="../index.html#entrada"><img src="../assets/logo.png" alt="" width="40" height="40"><span>La Maja <em>13</em></span></a>
+  <a class="nav__brand" href="../index.html#entrada"><img src="../assets/logo-nav.webp" alt="" width="40" height="40"><span>La Maja <em>13</em></span></a>
   <nav class="nav__links casa-nav">
     <a href="perfil.html" class="is-active">Mon profil</a>
     <a href="familia.html">La Famille</a>
@@ -119,6 +119,7 @@
     $('f-bio').value = m.bio || '';
     document.title = `${m.displayName} — Mon profil · La Maja 13`;
   }
+  casaBot.status();   // en parallèle de /api/me (repris par gate)
   fetch('../api/me', { credentials: 'same-origin' })
     .then(r => { if (r.status === 401) { location.replace('./'); throw 0; } return r.json(); })
     .then(m => { if (m.status !== 'approved') { location.replace('espera.html'); return; } ME = m; casaNav(m); render(m); $('loading').hidden = true; $('perfil').hidden = false; loadSemaine(); })
