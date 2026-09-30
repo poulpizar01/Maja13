@@ -67,13 +67,13 @@ Un serveur Discord ne déclare **qu'un seul site externe** : tester le bot en de
 
 | Rubrique | Adresses utilisées par les pages | Pages |
 |---|---|---|
-| `quotas` | `/config`, `/summary`, `/ranking`, `/pay`, `/pay/:userId`, `/:userId` (`?week=AAAA-Sss` pour une semaine passée), `/cooldowns` (un non-admin ne reçoit que les siens), `/braquages` (places du groupe sur 7 jours glissants) | Profil, Tableau de bord, Classement, Statistiques |
+| `quotas` | `/config`, `/summary`, `/ranking`, `/pay`, `/pay/:userId`, `/:userId` (`?week=AAAA-Sss` pour une semaine passée), `/cooldowns` (un non-admin ne reçoit que les siens), `/braquages` (slots du groupe sur 7 jours glissants) | Profil, Tableau de bord, Classement, Statistiques |
 | `ventes` | `/`, `/:userId` | Profil, Tableau de bord, Classement |
 | `users` | `/` (un non-admin ne reçoit que lui-même) | Tableau de bord, Classement, Statistiques |
 | `stocks` | `/`, `/channels`, `/:channelId`, `/history?limit=`, `/items` (catalogue : ordre, groupes, objets masqués) | Tableau de bord |
 | `taxes` | `?status=active\|expired`, `/:id` (seul le détail donne téléphone et mot de passe), `/types` (libellés des types et des zones) | Taxes |
 | `armurerie` | `/`, `?status=lost`, `/ammo`, `/ammo/history`, `/ammo/production`, `/types` (modèles d'armes et catégories) | Armurerie |
-| `garages` | `/vehicles` (véhicules sortis), `/impounds` (classement fourrière, admin du bot seulement) | Garages |
+| `garages` | `/vehicles` (véhicules sortis), `/impounds` (classement fourrière, admin du bot seulement) | Garage |
 
 Les référentiels (`/types`, `/items`) évitent au site de recopier des listes du bot. Si le bot ne les connaît pas encore, les pages se replient sur les clés brutes mises en forme.
 

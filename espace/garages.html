@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Garages — {{espace}} · {{nom}}</title>
+<title>Garage — {{espace}} · {{nom}}</title>
 <meta name="application-name" content="{{nom}}">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
@@ -21,7 +21,7 @@
 <main class="espace-page espace-page--wide">
   <div class="section__head">
     <span class="numeral">✦</span>
-    <h2>Garages</h2>
+    <h2>Garage</h2>
     <p class="sub">Les véhicules de {{groupe}} sortis en ville</p>
   </div>
   <div class="espace-loading" id="loading">Chargement…</div>
@@ -69,7 +69,7 @@
     const parQui = new Map(); for (const v of list) parQui.set(qui(v), [...(parQui.get(qui(v)) || []), v]);
     $('rows').innerHTML = `<div class="arm-qui">${[...parQui].sort((x, y) => y[1].length - x[1].length || x[0].localeCompare(y[0])).map(([nom, l]) => `
       <article class="arm-porteur"><header><b>${esc(nom)}</b><span>${pluriel(l.length, 'véhicule')}</span></header>
-        <ul>${l.map(v => `<li><span><b>${esc(v.modele || 'Modèle inconnu')}</b><small>sorti il y a ${espaceDuree(Date.now() - v.since)}</small></span><code>${esc(v.plaque)}</code></li>`).join('')}</ul></article>`).join('')}</div>`;
+        <ul>${l.map(v => `<li class="vehicule"><code class="plaque">${esc(v.plaque)}</code><span><b>${esc(v.modele || 'Modèle inconnu')}</b><small>sorti il y a ${espaceDuree(Date.now() - v.since)}</small></span></li>`).join('')}</ul></article>`).join('')}</div>`;
   }
   function renderFourriere(classement) {
     $('fourriereBloc').hidden = !classement;

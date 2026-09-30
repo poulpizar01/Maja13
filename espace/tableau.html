@@ -35,17 +35,18 @@
       <div class="tile"><span>Activités déclarées</span><b id="totalActs">—</b><small id="topAct"></small></div>
     </div>
 
+    <!-- braquages limités : slots du groupe sur 7 jours glissants (masqué si le bot ne les expose pas) -->
+    <section class="admin-block" id="braqBloc" hidden>
+      <div class="bloc-tete"><h3 class="admin-block__title">Braquages</h3><p class="tax-compte">7 derniers jours glissants · tout le groupe</p></div>
+      <div class="braq" id="braquages"></div>
+    </section>
+
     <section class="admin-block">
       <div class="bloc-tete"><h3 class="admin-block__title">Classement hebdo</h3><a class="bloc-lien" href="classement.html">Classement détaillé →</a></div>
       <div class="palmares" id="rank" role="table" aria-label="Classement de la semaine"></div>
       <div class="inactifs" id="inactifs" hidden></div>
     </section>
 
-    <!-- braquages limités : places du groupe sur 7 jours glissants (masqué si le bot ne les expose pas) -->
-    <section class="admin-block" id="braqBloc" hidden>
-      <div class="bloc-tete"><h3 class="admin-block__title">Braquages</h3><p class="tax-compte">7 derniers jours glissants · tout le groupe</p></div>
-      <div class="braq" id="braquages"></div>
-    </section>
 
     <!-- stock : coffres à gauche (pastille de couleur = légende), inventaire en lignes à droite -->
     <section class="admin-block vault">
@@ -200,13 +201,14 @@
 
     vault = { total, coffres: coffres.filter(c => c.items.length) };
     renderVault();
-    // braquages : une carte par braquage limité (limite à 0 pour ce type de groupe : non proposé, omis)
+    // braquages : une carte par braquage limité (limite à 0 pour ce type de groupe : non proposé, omis). Le grand chiffre
+    // est ce qui RESTE (slots disponibles), la jauge aussi ; la ligne du bas dit ce qui a été fait, ou quand un slot se libère
     const braqs = (braquages || []).filter(b => b.limit > 0);
     $('braqBloc').hidden = !braqs.length;
-    $('braquages').innerHTML = braqs.map(b => { const complet = b.used >= b.limit, libres = b.limit - b.used;
+    $('braquages').innerHTML = braqs.map(b => { const libres = Math.max(0, b.limit - b.used), complet = !libres;
       return `<div class="braq__carte${complet ? ' is-complet' : ''}"><span>${esc(b.label)}</span>
-        <b>${b.used}<small> / ${b.limit}</small></b><i class="jauge__barre"><b style="width:${Math.min(100, Math.round(b.used / b.limit * 100))}%"></b></i>
-        <small>${complet ? (b.nextSlotAt ? `Complet · place libre dans ${espaceDuree(b.nextSlotAt - Date.now())}` : 'Complet') : `${plural(libres, 'place')} libre${libres > 1 ? 's' : ''}`}</small></div>`; }).join('');
+        <b>${libres}<small> / ${b.limit} disponible${libres > 1 ? 's' : ''}</small></b><i class="jauge__barre"><b style="width:${Math.round(libres / b.limit * 100)}%"></b></i>
+        <small>${complet ? `Tous faits · prochain slot ${b.nextSlotAt ? `dans ${espaceDuree(b.nextSlotAt - Date.now())}` : 'bientôt'}` : b.used ? `${b.used} déjà fait${b.used > 1 ? 's' : ''} sur 7 jours` : 'Aucun fait sur 7 jours'}</small></div>`; }).join('');
     // derniers mouvements : regroupés par jour, quantité en pastille (+ vert / − rouge), stock avant → après en discret
     const jour = ms => { const d = new Date(ms), auj = new Date(); const hier = new Date(Date.now() - 864e5);
       return d.toDateString() === auj.toDateString() ? "Aujourd'hui" : d.toDateString() === hier.toDateString() ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); };

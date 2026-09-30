@@ -244,7 +244,7 @@ label.modal__label{cursor:pointer}
 .perfil__name{margin:0;font-family:var(--display);font-weight:800;font-stretch:62%;font-variation-settings:"wdth" 62;font-size:clamp(44px,4.6vw,68px);line-height:.88;text-transform:uppercase;color:var(--ink);overflow-wrap:anywhere}
 .perfil__discord{margin:8px 0 0;font-family:var(--serif);font-size:12px;color:var(--ink2)}
 .perfil__discord b{font-weight:500;color:var(--ink)}
-.perfil__meta{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin:30px 0 0;background:var(--line);border:1px solid var(--line)}
+.perfil__meta{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin:30px 0 0;background:none;border:1px solid var(--line)}
 .perfil__meta div{padding:12px 14px;background:var(--bg2)}
 .perfil__meta dt{margin-bottom:4px;font-family:var(--serif);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
 .perfil__meta dd{margin:0;font-size:14px;color:var(--ink)}
@@ -291,7 +291,7 @@ label.modal__label{cursor:pointer}
 .membres-outils{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px 20px;margin-bottom:20px}
 .membres-cherche{max-width:380px;margin:0}
 .membres-compte{margin:0;font-family:var(--serif);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2)}
-.membres-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.membres-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:1px;background:none;border:1px solid var(--line)}
 .membres-grid:empty{display:none}
 .miembro{display:flex;flex-direction:column;align-items:center;padding:24px 14px 20px;text-align:center;background:var(--bg2);transition:background .2s}
 .miembro:hover{background:var(--bg3)}
@@ -421,13 +421,18 @@ label.modal__label{cursor:pointer}
 
 /* ================= TABLEAU DE BORD, CLASSEMENT, STATISTIQUES ================= */
 /* tuiles de chiffres : une planche de cases jointives */
-.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-bottom:40px;background:var(--line);border:1px solid var(--line)}
+/* grilles à traits fins : le trait entre deux cases est dessiné par chaque case (contour de 1 px dans l'espace de 1 px),
+   pas par le fond de la grille — une case vide en fin de ligne (moins d'éléments que de colonnes) reste vide au lieu
+   de prendre la couleur des traits */
+.perfil__meta>*,.membres-grid>*,.tiles>*,.vault__corps>*,.podium>*,.viz-duo>*,.comp-cartes>*,.tax-etat>*,.arm-mun>*{outline:1px solid var(--line)}
+.perfil__meta>:focus-visible,.membres-grid>:focus-visible,.tiles>:focus-visible,.vault__corps>:focus-visible,.podium>:focus-visible,.viz-duo>:focus-visible,.comp-cartes>:focus-visible,.tax-etat>:focus-visible,.arm-mun>:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}   /* cases cliquables : focus clavier toujours visible */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-bottom:40px;background:none;border:1px solid var(--line)}
 .tiles--3{grid-template-columns:repeat(3,1fr)}
 .tile{padding:20px 22px;background:var(--bg2)}
 .tile span{display:block;font-family:var(--serif);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
 .tile b{display:block;margin:10px 0 4px;font-family:var(--display);font-weight:800;font-stretch:62%;font-variation-settings:"wdth" 62;font-size:46px;line-height:.95;color:var(--ink);font-variant-numeric:tabular-nums}
 .tile small{font-size:13px;color:var(--ink2)}
-/* braquages limités (tableau de bord) : une carte par braquage, jauge rouge quand c'est complet */
+/* braquages limités (tableau de bord) : une carte par braquage ; la jauge montre les slots restants, rouge quand il n'en reste aucun */
 .braq{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
 .braq__carte{display:flex;flex-direction:column;gap:8px;padding:16px 18px;background:var(--bg2);border:1px solid var(--line)}
 .braq__carte>span{font-family:var(--serif);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
@@ -435,7 +440,7 @@ label.modal__label{cursor:pointer}
 .braq__carte>b small{font-size:.5em;color:var(--ink2)}
 .braq__carte>small{font-size:13px;color:var(--ink2)}
 .braq__carte .jauge__barre b{background:var(--ok)}
-.braq__carte.is-complet .jauge__barre b{background:var(--err)}
+.braq__carte.is-complet .jauge__barre{background:color-mix(in srgb,var(--err) 45%,transparent)}
 .braq__carte.is-complet>small{color:var(--err)}
 .dash-cols{display:grid;grid-template-columns:1fr 1fr;gap:28px}
 .dash-table{min-width:0}
@@ -447,7 +452,7 @@ label.modal__label{cursor:pointer}
 .vault__search{width:240px;margin:0}
 .vault__sort{width:auto;margin:0}
 /* coffres à gauche (pastille = couleur du coffre, reprise dans les barres), inventaire en lignes à droite */
-.vault__corps{display:grid;grid-template-columns:250px minmax(0,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}
+.vault__corps{display:grid;grid-template-columns:250px minmax(0,1fr);gap:1px;background:none;border:1px solid var(--line)}
 .vault__corps:has(.vault__tabs[hidden]){grid-template-columns:1fr}
 .vault__tabs{display:flex;flex-direction:column;background:var(--bg2)}
 .vtab{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);font:inherit;color:var(--ink);cursor:pointer;transition:background .2s}
@@ -475,7 +480,7 @@ label.modal__label{cursor:pointer}
 .vitem__barre--parts{gap:2px;background:none}
 .vitem__barre--parts>b{min-width:3px}
 .vitem__detail{display:flex;flex-wrap:wrap;gap:4px 14px;font-family:var(--serif);font-size:10px;color:var(--ink2)}
-.vitem__detail span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.vitem__detail span{display:inline-flex;align-items:center;gap:5px;min-width:0;overflow-wrap:anywhere}
 .vitem__detail i{width:6px;height:6px;border-radius:50%}
 .vitem__detail b{font-weight:500;color:var(--ink)}
 .vitem__qte{text-align:right;font-family:var(--display);font-weight:800;font-stretch:62%;font-variation-settings:"wdth" 62;font-size:28px;line-height:1;font-variant-numeric:tabular-nums}
@@ -517,7 +522,7 @@ label.modal__label{cursor:pointer}
   .vitem__jauge{grid-column:1/-1;grid-row:2}
 }
 /* classement : podium (trois premiers) + palmarès complet */
-.podium{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:1px;margin-bottom:28px;background:var(--line);border:1px solid var(--line)}
+.podium{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:1px;margin-bottom:28px;background:none;border:1px solid var(--line)}
 .podium:empty{display:none}
 .podium__carte{position:relative;display:flex;flex-direction:column;gap:18px;min-width:0;padding:22px 24px 24px;overflow:hidden;background:var(--bg2)}
 .podium__carte:first-child{background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 12%,var(--bg2)),var(--bg2) 60%)}
@@ -547,10 +552,11 @@ label.modal__label{cursor:pointer}
 .jauge.is-done .jauge__barre b{background:var(--ok)}
 .jauge.is-done .jauge__val b{color:var(--ok)}
 .jauge.is-vide .jauge__barre{opacity:.5}
-/* palmarès : même grille pour l'en-tête et chaque ligne */
-.palmares{--n:1;background:var(--bg2);border:1px solid var(--line)}
-.palmares__tete,.palmares__ligne{display:grid;grid-template-columns:52px minmax(190px,1.5fr) repeat(var(--n),minmax(96px,1fr)) 130px;align-items:center;gap:0 22px;padding:0 20px}
-.palmares.has-points .palmares__tete,.palmares.has-points .palmares__ligne{grid-template-columns:52px minmax(190px,1.5fr) repeat(var(--n),minmax(96px,1fr)) 64px 130px}
+/* palmarès : même grille pour l'en-tête et chaque ligne. Colonnes compressibles ; sous 760 px de large (la place réelle du
+   palmarès, rail et marges déduits : requête de conteneur), une fiche par membre (voir plus bas) */
+.palmares{--n:1;container-type:inline-size;overflow-x:auto;background:var(--bg2);border:1px solid var(--line)}
+.palmares__tete,.palmares__ligne{display:grid;grid-template-columns:44px minmax(110px,1.5fr) repeat(var(--n),minmax(68px,1fr)) minmax(92px,max-content);align-items:center;gap:0 18px;padding:0 18px}
+.palmares.has-points .palmares__tete,.palmares.has-points .palmares__ligne{grid-template-columns:44px minmax(110px,1.5fr) repeat(var(--n),minmax(68px,1fr)) 52px minmax(92px,max-content)}
 .palmares__tete{padding-top:12px;padding-bottom:12px;border-bottom:1px solid var(--line);font-family:var(--serif);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
 .palmares__tete small{font-size:9px;opacity:.7}
 .palmares__tete span:last-child,.palmares__paie,.palmares__points{text-align:right}
@@ -571,11 +577,14 @@ label.modal__label{cursor:pointer}
   .podium{grid-template-columns:1fr 1fr}
   .podium__carte:first-child{grid-column:1/-1}
 }
-/* palmarès sur téléphone : une fiche par membre, jauges sur deux colonnes avec leur libellé */
 @media (max-width:760px){
   .podium{grid-template-columns:1fr}
   .podium__rang{font-size:104px}
   .podium__carte:first-child .podium__rang{font-size:128px}
+}
+/* palmarès trop étroit pour sa grille (téléphone, ou fenêtre moyenne avec le rail) : une fiche par membre,
+   jauges sur deux colonnes avec leur libellé */
+@container (max-width:760px){
   .palmares__tete{display:none}
   .palmares__ligne,.palmares.has-points .palmares__ligne{position:relative;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px;padding:16px 16px 18px 58px}
   .palmares__rang{position:absolute;left:16px;top:14px}
@@ -612,7 +621,7 @@ label.modal__label{cursor:pointer}
 @keyframes tourne{to{transform:rotate(1turn)}}
 @media (prefers-reduced-motion:reduce){.stats-console.is-busy::after,.stats-charge::before{animation:none}}
 /* les deux graphiques d'évolution côte à côte */
-.viz-duo{display:grid;grid-template-columns:1.5fr 1fr;gap:1px;margin-bottom:12px;background:var(--line);border:1px solid var(--line)}
+.viz-duo{display:grid;grid-template-columns:1.5fr 1fr;gap:1px;margin-bottom:12px;background:none;border:1px solid var(--line)}
 .viz-duo .viz{margin:0;border:0}
 .stats-body{transition:opacity .2s}
 .viz{position:relative;margin-bottom:28px;padding:18px 20px;background:var(--bg2);border:1px solid var(--line)}
@@ -686,7 +695,7 @@ label.modal__label{cursor:pointer}
 .stats-member__liste [aria-disabled="true"]{opacity:.4;cursor:not-allowed}
 .stats-member__pied{display:flex;justify-content:space-between;gap:8px;margin-top:6px;padding-top:8px;border-top:1px solid var(--line)}
 /* comparaison : fiches face à face (liseré à la couleur du membre, meilleur indicateur signalé) */
-.comp-cartes{--n:2;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:1px;margin-bottom:40px;background:var(--line);border:1px solid var(--line)}
+.comp-cartes{--n:2;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:1px;margin-bottom:40px;background:none;border:1px solid var(--line)}
 .comp-carte{display:flex;flex-direction:column;min-width:0;padding:18px 20px 20px;background:var(--bg2);box-shadow:inset 0 3px var(--c)}
 .comp-carte header{display:flex;align-items:center;gap:10px;min-width:0;margin-bottom:16px}
 .comp-carte header img{width:40px;height:40px;border-radius:50%;flex:none;max-width:none;object-fit:cover}
@@ -720,7 +729,7 @@ label.modal__label{cursor:pointer}
 
 /* ================= TAXES, ARMURERIE ================= */
 /* taxes : compteurs de situation (filtres) */
-.tax-etat{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-bottom:34px;background:var(--line);border:1px solid var(--line)}
+.tax-etat{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-bottom:34px;background:none;border:1px solid var(--line)}
 .tax-compteur{--ton:var(--ink2);display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:18px 20px;text-align:left;background:var(--bg2);border:0;color:var(--ink);cursor:pointer;transition:background .2s}
 .tax-compteur b{font-family:var(--display);font-weight:800;font-stretch:62%;font-variation-settings:"wdth" 62;font-size:50px;line-height:.9;font-variant-numeric:tabular-nums}
 .tax-compteur span{display:flex;align-items:center;gap:8px;font-family:var(--serif);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
@@ -807,6 +816,10 @@ label.modal__label{cursor:pointer}
 .arm-porteur li b{display:block;font-size:14px;font-weight:600}
 .arm-porteur li small{display:block;font-family:var(--serif);font-size:10px;color:var(--ink2)}
 .arm-porteur code{font-family:var(--serif);font-size:12px;color:var(--ink2);white-space:nowrap}
+/* garage : chaque véhicule identifié d'abord par sa plaque, présentée comme une plaque d'immatriculation */
+.arm-porteur li.vehicule{display:grid;grid-template-columns:auto minmax(0,1fr);justify-content:start;gap:14px;padding:12px 16px}
+.arm-porteur li.vehicule b{font-size:15px}
+.arm-porteur .plaque{min-width:96px;padding:6px 10px;text-align:center;font-family:var(--serif);font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);background:var(--bg3);border:1px solid color-mix(in srgb,var(--ink) 30%,transparent);border-radius:3px;box-shadow:inset 0 0 0 2px var(--bg2)}
 /* autres vues : une ligne par arme, regroupées par type */
 .arm-liste{display:flex;flex-direction:column;gap:18px}
 .arm-liste+.admin-block__hint{margin-top:18px}
@@ -838,7 +851,7 @@ label.modal__label{cursor:pointer}
 .arm-carte--perdue{background:none;border-style:dashed;border-top-style:solid}
 .arm-carte--perdue .arm-carte__nom{color:var(--ink2);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--err) 60%,transparent)}
 
-.arm-mun{display:grid;grid-template-columns:1fr 1fr 1.6fr 1fr;gap:1px;margin-bottom:28px;background:var(--line);border:1px solid var(--line)}
+.arm-mun{display:grid;grid-template-columns:1fr 1fr 1.6fr 1fr;gap:1px;margin-bottom:28px;background:none;border:1px solid var(--line)}
 .arm-mun__case{display:flex;flex-direction:column;gap:6px;padding:18px 20px;background:var(--bg2)}
 .arm-mun__case>span{font-family:var(--serif);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
 .arm-mun__case>b{font-family:var(--display);font-weight:800;font-stretch:62%;font-variation-settings:'wdth' 62;font-size:44px;line-height:.95;font-variant-numeric:tabular-nums}
