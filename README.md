@@ -13,7 +13,7 @@ En cas de conflit sur un fichier propre au site (`site.json`, `theme.css`, `inde
 - `site.json` — nom, nom de l'espace membre (« La Casa »), devise, serveur, couleur d'accent (l'or), lien Discord, description ; insérés dans toutes les pages de La Casa par le serveur.
 - `theme.css` — couleurs et polices (noir, bronze, or ; Pirata One, Cinzel, EB Garamond), appliquées aussi à La Casa.
 - `index.html` (entrée), `accueil.html`, `styles.css` — vitrine (blason 3D `hero3d.js`, galerie en bandeau `galeria.js`) ; `assets/` — logo, médaillon, favicon, image de partage.
-- `sw.js` — désinstalle l'ancien service worker de M13 OS (à supprimer à terme).
+- `sw.js` — désinstalle l'ancien service worker de M13 OS (supprimé le 26/09/2026). À garder jusqu'à fin novembre 2026 : un navigateur qui a encore l'ancien service worker ne s'en débarrasse qu'en récupérant ce fichier.
 
 ## Développement
 Prérequis : Docker Desktop.
@@ -29,24 +29,24 @@ docker compose up          # http://localhost:3000  ·  La Casa : http://localho
 Déploiement, mises à jour, sauvegardes et retour en arrière : [server/README.md](server/README.md) ; nginx : [docs/nginx.md](docs/nginx.md).
 
 ### Bascule depuis l'ancienne Casa (à faire une fois)
-Le passage au modèle renomme les conteneurs, les volumes et l'utilisateur de la base (`maja13` → `site`), et La Casa passe de `/casa/` à `/espace/`. Les données (membres, grades, photos, chat) se reprennent telles quelles : le schéma de la base est identique. Sur le VPS, dans le dossier du site :
+Le passage au modèle renomme les conteneurs, les volumes et l'utilisateur de la base (`maja13` → `site`), et La Casa passe de `/casa/` à `/espace/`. Les données (membres, grades, photos, chat) se reprennent telles quelles : le schéma de la base est identique. Les photos sont sur le CDN, désormais obligatoire en production (sans lui, l'envoi de photos est refusé) : rien à copier. Sur le VPS, dans le dossier du site :
 ```bash
 # 1. sauvegarde de la base actuelle (ancienne pile encore en marche)
 docker exec maja13-db-1 pg_dump -U maja13 -d maja13 --clean --if-exists --no-owner > ~/maja13-avant-modele.sql
 # 2. arrêt de l'ancienne pile, AVANT de changer le code : elle libère le port ; ses volumes (base, photos) sont gardés
 docker compose down
-# 3. .env : ajouter SITE_ID=maja13 (garder HOST_PORT, secrets et Discord tels quels) ;
-#    si les photos sont sur le stockage distant (STORAGE_URL), ajouter aussi STORAGE_PREFIX=maja13/
+# 3. .env : ajouter SITE_ID=maja13 et STORAGE_PREFIX=maja13/ (garder HOST_PORT, secrets, Discord et STORAGE_URL /
+#    STORAGE_TOKEN tels quels) ; secrets lisibles par vous seul :
+chmod 600 .env
 # 4. nouveau code, nouveaux conteneurs (base neuve, vide, migrée au démarrage)
 git pull && docker compose up -d --build
 # 5. reprise des données dans la nouvelle base
 docker compose stop app
 docker exec -i maja13-db psql -q -U site -d site -v ON_ERROR_STOP=1 < ~/maja13-avant-modele.sql
-# 6. photos stockées sur le disque du serveur (sans STORAGE_URL) : copie vers le nouveau volume
-docker run --rm -v maja13_maja13-uploads:/from -v maja13_uploads:/to alpine cp -a /from/. /to/
 docker compose start app
-# 7. vérification : le site démarre sans erreur, les membres sont bien là
+# 6. vérification : « Stockage des images : CDN » dans les journaux, site « healthy », membres bien là
 docker compose logs app --tail 20
+docker compose ps
 docker exec maja13-db psql -U site -d site -tAc "select count(*) from members"
 ```
 **Retour arrière** (tant que les anciens volumes ne sont pas supprimés) : `docker compose down`, retirer `SITE_ID` du `.env`, `git checkout 16c46c1` (dernière version avant le modèle), `docker compose up -d --build` : l'ancienne Casa repart sur ses données d'origine, intactes.
@@ -55,4 +55,6 @@ Puis :
   `location /casa/ { rewrite ^/casa/(.*)$ /espace/$1 permanent; }`, puis `sudo nginx -t && sudo systemctl reload nginx`.
 - **Bot Discord** : redéclarer le site externe (`/config site-externe set`) avec `https://lamaja13.fbfa.fr/espace/bot-callback.html` ; chaque membre reconnecte son compte au bot.
 - Le cookie de session change de nom : tout le monde se reconnecte une fois. L'adresse de retour Discord (`/auth/discord/callback`) ne change pas.
+- Le bot doit être à jour (commit `015913f` ou plus récent) pour que Garage, braquages, cooldowns, fabrication et référentiels s'affichent ; sinon les pages gardent l'affichage d'avant.
+- **Sauvegardes hors du VPS** : mettre en place la copie nocturne décrite dans [server/README.md](server/README.md#sauvegardes-de-la-base) (rclone vers un stockage objet) — les sauvegardes locales ne protègent pas de la perte du serveur.
 - Quand tout est vérifié : `docker volume rm maja13_maja13-db maja13_maja13-uploads`. Les anciennes sauvegardes `backups/maja13-*.sql.gz` ne sont plus purgées automatiquement (les nouvelles s'appellent `site-*`) : les supprimer à la main au bout d'une semaine.

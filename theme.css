@@ -5,6 +5,8 @@
    La couleur d'accent (l'or) vient de site.json (« couleur »).
    ========================================================== */
 
+/* polices : pour La Casa (pages communes du modèle). La vitrine charge la même adresse par un <link> dans ses pages,
+   plus tôt qu'un @import (qui n'est lu qu'une fois ce fichier reçu) ; ici, elle vient alors du cache. Garder les deux identiques. */
 @import url('https://fonts.googleapis.com/css2?family=Pirata+One&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap');
 
 :root{
