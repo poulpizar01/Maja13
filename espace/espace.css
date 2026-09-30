@@ -427,6 +427,16 @@ label.modal__label{cursor:pointer}
 .tile span{display:block;font-family:var(--serif);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
 .tile b{display:block;margin:10px 0 4px;font-family:var(--display);font-weight:800;font-stretch:62%;font-variation-settings:"wdth" 62;font-size:46px;line-height:.95;color:var(--ink);font-variant-numeric:tabular-nums}
 .tile small{font-size:13px;color:var(--ink2)}
+/* braquages limités (tableau de bord) : une carte par braquage, jauge rouge quand c'est complet */
+.braq{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.braq__carte{display:flex;flex-direction:column;gap:8px;padding:16px 18px;background:var(--bg2);border:1px solid var(--line)}
+.braq__carte>span{font-family:var(--serif);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
+.braq__carte>b{font-family:var(--display);font-size:34px;line-height:1;color:var(--ink);font-variant-numeric:tabular-nums}
+.braq__carte>b small{font-size:.5em;color:var(--ink2)}
+.braq__carte>small{font-size:13px;color:var(--ink2)}
+.braq__carte .jauge__barre b{background:var(--ok)}
+.braq__carte.is-complet .jauge__barre b{background:var(--err)}
+.braq__carte.is-complet>small{color:var(--err)}
 .dash-cols{display:grid;grid-template-columns:1fr 1fr;gap:28px}
 .dash-table{min-width:0}
 .dash-table td.is-done{color:var(--ok)}
@@ -456,6 +466,8 @@ label.modal__label{cursor:pointer}
 .vitem:last-child{border-bottom:0}
 .vitem:hover{background:var(--bg2)}
 .vitem.is-empty{opacity:.45}
+/* ordre du panneau Discord : intertitre par groupe du Stock Général (même allure que les jours du journal) */
+.vault__groupe{position:sticky;top:0;z-index:1;margin:0;padding:7px 18px;background:var(--bg3);border-bottom:1px solid var(--line);font-family:var(--serif);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2)}
 .vitem__nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}
 .vitem__jauge{display:flex;flex-direction:column;gap:6px;min-width:0}
 .vitem__barre{display:flex;height:6px;background:var(--bg3);overflow:hidden}
@@ -788,7 +800,7 @@ label.modal__label{cursor:pointer}
 .arm-porteur{background:var(--bg2);border:1px solid var(--line);box-shadow:inset 3px 0 var(--warn)}
 .arm-porteur header{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--line)}
 .arm-porteur header b{font-family:var(--display);font-weight:700;font-stretch:75%;font-variation-settings:'wdth' 75;font-size:20px;text-transform:uppercase}
-.arm-porteur header span{font-family:var(--serif);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--warn)}
+.arm-porteur header span{font-family:var(--serif);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--warn);white-space:nowrap}
 .arm-porteur ul{margin:0;padding:4px 0;list-style:none}
 .arm-porteur li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 16px}
 .arm-porteur li+li{border-top:1px solid var(--line)}
@@ -797,6 +809,7 @@ label.modal__label{cursor:pointer}
 .arm-porteur code{font-family:var(--serif);font-size:12px;color:var(--ink2);white-space:nowrap}
 /* autres vues : une ligne par arme, regroupées par type */
 .arm-liste{display:flex;flex-direction:column;gap:18px}
+.arm-liste+.admin-block__hint{margin-top:18px}
 /* tableau des armes : un seul en-tête, des colonnes fixes alignées sur toutes les catégories */
 /* râtelier : une carte par arme, rangées par catégorie ; l'état se lit d'abord (bandeau + libellé en couleur) */
 .arm-rack__tete{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px 16px;margin-bottom:10px}

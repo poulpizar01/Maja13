@@ -61,6 +61,7 @@
         <div class="semaine__quotas" id="quotas"></div>
         <div class="semaine__side">
           <div class="stat"><span class="stat__label">Paie estimée</span><b class="stat__value" id="salaire">0 $</b><small id="salaireNote"></small></div>
+          <div class="stat" id="cooldownsBloc" hidden><span class="stat__label">Cooldowns</span><ul class="stat__list" id="cooldowns"></ul></div>
           <div class="stat"><span class="stat__label">Activités</span><ul class="stat__list" id="activities"><li class="muted">Rien de déclaré cette semaine</li></ul></div>
           <div class="stat"><span class="stat__label">Ventes par produit</span><ul class="stat__list" id="ventes"><li class="muted">Aucune vente cette semaine</li></ul></div>
         </div>
@@ -131,8 +132,24 @@
     const acts = Object.entries(q.map).filter(([, v]) => v.count);
     if (acts.length) $('activities').innerHTML = acts.map(([key, v]) => `<li><span>${esc(cfg.activities[key]?.label || key)}</span><b>${v.count}</b></li>`).join('');
     if (ventes.detail.length) $('ventes').innerHTML = ventes.detail.map(v => `<li><span>${esc(v.item)}</span><b>${v.quantite}</b></li>`).join('');
+    loadCooldowns();
     loadPaies(cats);
   }
+  // cooldowns en cours (le bot ne renvoie à un non-admin que les siens ; un admin reçoit tout le monde : on filtre).
+  // Bloc masqué si le bot ne les expose pas ; décompte rafraîchi chaque minute, le bot relu toutes les 5 min (cache du site).
+  let cooldowns = null;
+  function renderCooldowns() {
+    const miens = (cooldowns || []).filter(c => c.userId === ME.discordId && c.expiresAt > Date.now()).sort((a, b) => a.expiresAt - b.expiresAt);
+    $('cooldownsBloc').hidden = !cooldowns;
+    $('cooldowns').innerHTML = miens.map(c => `<li><span>${esc(c.label)}</span><b>dans ${espaceDuree(c.expiresAt - Date.now())}</b></li>`).join('')
+      || '<li class="muted">Aucun : tout est disponible</li>';
+  }
+  async function loadCooldowns() {
+    cooldowns = await espaceBot.get('quotas/cooldowns').catch(() => null);
+    renderCooldowns();
+  }
+  setInterval(() => { if (cooldowns) renderCooldowns(); }, 60000);
+  setInterval(() => { if (cooldowns) loadCooldowns(); }, 5 * 60000);
   // les 8 dernières semaines (lundi → dimanche), calculées par le bot
   async function loadPaies(cats) {
     const weeks = Array.from({ length: 8 }, (_, i) => espaceBot.isoWeek(i + 1));

@@ -33,13 +33,13 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 
 ## Espace membre (mutualisé)
 
-- Pages dans `espace/` : `index` (connexion), `attente`, `profil`, `membres`, `galerie`, `chat` (flux SSE), `classement`, puis sous « Gestion » : `admin`, `tableau`, `stats`, `taxes`, `armurerie`, `organigramme` ; `bot-callback` pour la liaison au bot.
+- Pages dans `espace/` : `index` (connexion), `attente`, `profil`, `membres`, `galerie`, `chat` (flux SSE), `classement`, `garages`, puis sous « Gestion » : `admin`, `tableau`, `stats`, `taxes`, `armurerie`, `organigramme` ; `bot-callback` pour la liaison au bot.
 - Droits par grade (espace membre → Gestion → Hiérarchie) : Membre / Gestion (`canAdmin`) / Pouvoirs complets (`canManage`). Le **propriétaire du serveur Discord** a toujours tout (`isOwner`, revérifié à chaque connexion). Gardes serveur : `member`, `admin`, `manager` dans `server/src/http.ts` ; toute route ajoutée en utilise une.
 - Détail des routes, droits et limites de requêtes : `docs/api.md`.
 
 ## Bot Discord Roxwood (API relayée)
 
-- Code : `server/src/routes/bot.ts`. Le site relaie **en lecture seule** l'API REST du bot ([roxwood-network-famille](https://github.com/poulpizar01/roxwood-network-famille)) : `/api/bot/data/<rubrique>/…` → `<BOT_API_URL>/api/<rubrique>/…` avec le jeton personnel du membre (gardé en session, jamais renvoyé au navigateur). Rubriques autorisées : `me`, `users`, `stocks`, `quotas`, `taxes`, `armurerie`, `ventes`.
+- Code : `server/src/routes/bot.ts`. Le site relaie **en lecture seule** l'API REST du bot ([roxwood-network-famille](https://github.com/poulpizar01/roxwood-network-famille)) : `/api/bot/data/<rubrique>/…` → `<BOT_API_URL>/api/<rubrique>/…` avec le jeton personnel du membre (gardé en session, jamais renvoyé au navigateur). Rubriques autorisées : `me`, `users`, `stocks`, `quotas`, `taxes`, `armurerie`, `ventes`, `garages`.
 - Le bot limite **tout le site** à 300 requêtes par quart d'heure : cache mémoire par membre (5 min, 24 h pour `?week=` passé) et limite de 150 lectures par membre. Toute nouvelle page qui lit le bot passe par `espaceBot.get()` et ne se rafraîchit pas plus souvent que toutes les 5 minutes.
 - Un serveur Discord n'a **qu'un seul site externe** déclaré (`/config site-externe set`) : tester le bot en dev sur un serveur Discord de test.
 - Quand le bot change son API, vérifier la compatibilité : cloner son dépôt, comparer `src/api/` aux adresses appelées par `espace/*.html` et aux champs lus (voir le tableau des rubriques dans `docs/api.md`).

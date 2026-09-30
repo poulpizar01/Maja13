@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Garages — {{espace}} · {{nom}}</title>
+<meta name="application-name" content="{{nom}}">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="../assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../theme.css">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="espace.css">
+<script src="espace.js"></script>
+</head>
+<body class="espace-body">
+
+<script>espaceShell()</script>
+
+<main class="espace-page espace-page--wide">
+  <div class="section__head">
+    <span class="numeral">✦</span>
+    <h2>Garages</h2>
+    <p class="sub">Les véhicules de {{groupe}} sortis en ville</p>
+  </div>
+  <div class="espace-loading" id="loading">Chargement…</div>
+  <div id="botGate" hidden></div>
+
+  <div id="page" hidden>
+    <section class="admin-block">
+      <div class="tax-barre">
+        <div class="bloc-tete"><h3 class="admin-block__title">Véhicules sortis</h3></div>
+        <input class="admin-input tax-search" id="search" type="search" placeholder="Membre, modèle, plaque…" aria-label="Rechercher un véhicule">
+      </div>
+      <p class="tax-compte" id="compte" aria-live="polite"></p>
+      <!-- qui a quel véhicule dehors : une fiche par membre, celui qui en a le plus en premier -->
+      <div class="arm-liste" id="rows"></div>
+      <p class="admin-block__hint">Sorties et rangements viennent des logs de garage du jeu, lus par le bot Discord : un véhicule rangé disparaît d'ici. <span id="maj"></span></p>
+    </section>
+
+    <!-- fourrière : Gestion seulement (et admins du bot, qui seul la renvoie) -->
+    <section class="admin-block" id="fourriereBloc" hidden>
+      <div class="bloc-tete"><h3 class="admin-block__title">Fourrière</h3><p class="tax-compte" id="fourriereTotal"></p></div>
+      <div class="table-wrap"><table class="admin-table">
+        <thead><tr><th>#</th><th>Membre</th><th>Mises en fourrière</th><th>Montant indicatif</th></tr></thead>
+        <tbody id="fourriere"></tbody>
+      </table></div>
+      <p class="admin-block__hint">Classement cumulé depuis la dernière remise à zéro dans le bot. Le montant est indicatif : rien n'est facturé automatiquement.</p>
+    </section>
+  </div>
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const money = n => Math.round(n).toLocaleString('fr-FR') + ' $';
+  const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+  const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } return r.json(); });
+  let vehicules = [], name = id => id, majA = 0;
+  // qui : nom RP du membre sur le site (par ID Discord), sinon le nom lu dans les logs du jeu
+  const qui = v => v.discordId ? name(v.discordId) : (v.joueur || '?');
+
+  function render() {
+    const q = $('search').value.trim().toLowerCase();
+    const list = vehicules.filter(v => !q || [qui(v), v.joueur, v.modele, v.plaque].some(x => x && x.toLowerCase().includes(q)));
+    $('compte').textContent = pluriel(list.length, 'véhicule') + ' dehors' + (q ? ` pour « ${$('search').value.trim()} »` : '');
+    if (!list.length) { $('rows').innerHTML = `<p class="admin-empty">${q ? 'Aucun véhicule ne correspond à la recherche.' : 'Aucun véhicule sorti en ce moment.'}</p>`; return; }
+    const parQui = new Map(); for (const v of list) parQui.set(qui(v), [...(parQui.get(qui(v)) || []), v]);
+    $('rows').innerHTML = `<div class="arm-qui">${[...parQui].sort((x, y) => y[1].length - x[1].length || x[0].localeCompare(y[0])).map(([nom, l]) => `
+      <article class="arm-porteur"><header><b>${esc(nom)}</b><span>${pluriel(l.length, 'véhicule')}</span></header>
+        <ul>${l.map(v => `<li><span><b>${esc(v.modele || 'Modèle inconnu')}</b><small>sorti il y a ${espaceDuree(Date.now() - v.since)}</small></span><code>${esc(v.plaque)}</code></li>`).join('')}</ul></article>`).join('')}</div>`;
+  }
+  function renderFourriere(classement) {
+    $('fourriereBloc').hidden = !classement;
+    if (!classement) return;
+    $('fourriereTotal').textContent = classement.length ? `${pluriel(classement.reduce((s, c) => s + c.total, 0), 'mise')} en fourrière · ${money(classement.reduce((s, c) => s + c.montant, 0))}` : '';
+    $('fourriere').innerHTML = classement.length ? classement.map((c, i) => `<tr><td>${String(i + 1).padStart(2, '0')}</td>
+      <td><b>${esc(c.discordId ? name(c.discordId) : c.joueur)}</b></td><td>${c.total}</td><td><b class="pay">${money(c.montant)}</b></td></tr>`).join('')
+      : '<tr><td colspan="4" class="admin-empty">Aucune mise en fourrière enregistrée.</td></tr>';
+  }
+  async function load(me) {
+    // la fourrière n'est demandée qu'à la Gestion ; le bot la refuse (403) à qui n'est pas admin dans Discord → bloc masqué
+    const [sortis, classement] = await Promise.all([espaceBot.get('garages/vehicles'), me.isAdmin ? espaceBot.get('garages/impounds').catch(() => null) : null]);
+    vehicules = sortis;
+    name = await espaceBot.names([...sortis, ...(classement || [])].filter(v => v.discordId).map(v => ({ userId: v.discordId, username: v.joueur })));
+    majA = Date.now(); render(); renderFourriere(classement);
+    $('page').hidden = false;
+  }
+  // « sorti il y a … » avance tout seul ; le bot n'est relu que toutes les 5 minutes
+  setInterval(() => { if (!majA) return; const m = Math.round((Date.now() - majA) / 6e4); $('maj').textContent = `Mis à jour ${m ? `il y a ${m} min` : 'à l’instant'} · actualisé toutes les 5 min.`; render(); }, 30000);
+  async function start() {
+    const me = await api('../api/me');
+    if (me.status !== 'approved') { location.replace('attente.html'); return; }
+    espaceNav(me);
+    const st = await espaceBot.gate($('botGate'));
+    $('loading').hidden = true;
+    if (!st.linked) return;
+    try { await load(me); setInterval(() => load(me).catch(() => {}), 5 * 60000); }   // 5 min : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(e.status === 404 ? 'Le bot Discord ne fournit pas encore les garages : il doit être mis à jour.' : espaceBot.error(e))}</p>`; }
+  }
+  $('search').addEventListener('input', render);
+  $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
+  start().catch(() => {});
+</script>
+</body>
+</html>

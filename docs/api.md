@@ -63,18 +63,21 @@ Le bot n'accepte que des jetons personnels, délivrés par sa propre connexion D
 Un serveur Discord ne déclare **qu'un seul site externe** : tester le bot en dev se fait sur un serveur Discord de test (sinon la prod est coupée).
 
 ### Lecture relayée
-`GET /api/bot/data/<rubrique>/…?…` → `GET <BOT_API_URL>/api/<rubrique>/…?…` avec le jeton du membre. Rubriques autorisées : `me`, `users`, `stocks`, `quotas`, `taxes`, `armurerie`, `ventes` ; toute autre adresse (ou tentative de sortir de `/api/<rubrique>`) répond `404`.
+`GET /api/bot/data/<rubrique>/…?…` → `GET <BOT_API_URL>/api/<rubrique>/…?…` avec le jeton du membre. Rubriques autorisées : `me`, `users`, `stocks`, `quotas`, `taxes`, `armurerie`, `ventes`, `garages` ; toute autre adresse (ou tentative de sortir de `/api/<rubrique>`) répond `404`.
 
 | Rubrique | Adresses utilisées par les pages | Pages |
 |---|---|---|
-| `quotas` | `/config`, `/summary`, `/ranking`, `/pay`, `/pay/:userId`, `/:userId` (`?week=AAAA-Sss` pour une semaine passée) | Profil, Tableau de bord, Classement, Statistiques |
+| `quotas` | `/config`, `/summary`, `/ranking`, `/pay`, `/pay/:userId`, `/:userId` (`?week=AAAA-Sss` pour une semaine passée), `/cooldowns` (un non-admin ne reçoit que les siens), `/braquages` (places du groupe sur 7 jours glissants) | Profil, Tableau de bord, Classement, Statistiques |
 | `ventes` | `/`, `/:userId` | Profil, Tableau de bord, Classement |
 | `users` | `/` (un non-admin ne reçoit que lui-même) | Tableau de bord, Classement, Statistiques |
-| `stocks` | `/`, `/channels`, `/:channelId`, `/history?limit=` | Tableau de bord |
-| `taxes` | `?status=active\|expired`, `/:id` (seul le détail donne téléphone et mot de passe) | Taxes |
-| `armurerie` | `/`, `?status=lost`, `/ammo`, `/ammo/history` | Armurerie |
+| `stocks` | `/`, `/channels`, `/:channelId`, `/history?limit=`, `/items` (catalogue : ordre, groupes, objets masqués) | Tableau de bord |
+| `taxes` | `?status=active\|expired`, `/:id` (seul le détail donne téléphone et mot de passe), `/types` (libellés des types et des zones) | Taxes |
+| `armurerie` | `/`, `?status=lost`, `/ammo`, `/ammo/history`, `/ammo/production`, `/types` (modèles d'armes et catégories) | Armurerie |
+| `garages` | `/vehicles` (véhicules sortis), `/impounds` (classement fourrière, admin du bot seulement) | Garages |
 
-**Droits** : décidés par le bot à chaque requête, d'après les rôles Discord du membre (admin ou non). Un membre non admin ne lit que ses propres données (quotas, paie, ventes) et ne voit pas les coffres admin.
+Les référentiels (`/types`, `/items`) évitent au site de recopier des listes du bot. Si le bot ne les connaît pas encore, les pages se replient sur les clés brutes mises en forme.
+
+**Droits** : décidés par le bot à chaque requête, d'après les rôles Discord du membre (admin ou non). Un membre non admin ne lit que ses propres données (quotas, paie, ventes, cooldowns) et ne voit ni les coffres admin ni la fourrière.
 
 **Cache** : le bot limite **tout le site** à 300 requêtes par quart d'heure. Le site garde donc en mémoire chaque réponse réussie, par membre : 5 minutes pour les données courantes, 24 heures pour une semaine passée (`?week=`). Rien n'est écrit sur disque ni en base ; tout s'efface au redémarrage ou quand le membre se relie au bot.
 

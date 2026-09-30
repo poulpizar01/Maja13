@@ -53,15 +53,12 @@
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const date = ms => new Date(ms).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('profil.html'); throw 0; } return r.json(); });
-  // Types de taxe du bot (voir modules/taxes.ts du bot) : types fixes, sinon le type EST la clé d'une zone de vente
-  // (ex. « sandy_shores »). Les zones sont regroupées sous un seul onglet ; leurs libellés reprennent ceux du bot.
-  const TYPES_FIXES = { sporex: 'Spore X', heroine: 'Héroïne', vente: 'Vente', fertilisant: 'Fertilisant', cannabis: 'Cannabis', mexicana: 'Mexicana', cocaine: 'Cocaïne', salvia: 'Salvia' };
-  const cleZone = z => z.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '_');   // même règle que le bot
-  const ZONES = Object.fromEntries(['New Cayo Perico', 'Paleto', 'Sandy Shores', 'Grapeseed', 'Vinewood', 'Aéroport', 'Wardog', 'Mirror Park', 'Fête Foraine',
-    'Barillo Plage', 'Del Perro', 'Roxwood Est', 'Eclypse Tower', 'Vespucci', 'Roxwood Ouest', 'Terrain de cross', "Champ d'éolienne", 'Cayo Perico',
-    'Roxwood Village', 'Grapeseed Valley', 'Richman', 'Cinéma', 'Hawick', 'Carson', 'Plage Cayo'].map(z => [cleZone(z), z]));
-  const estZone = type => !(type in TYPES_FIXES);
-  // zone inconnue du site (ajoutée depuis dans le bot) : clé remise en forme, « roxwood_nord » → « Roxwood Nord »
+  // Types de taxe : lus dans le référentiel du bot (/taxes/types) — types fixes, sinon le type EST la clé d'une zone de vente
+  // (ex. « sandy_shores »). Les zones sont regroupées sous un seul onglet. Sans référentiel (bot plus ancien), chaque
+  // taxe reste sous son type, clé mise en forme.
+  let TYPES_FIXES = {}, ZONES = {};
+  const estZone = type => type in ZONES || (!(type in TYPES_FIXES) && Object.keys(TYPES_FIXES).length > 0);
+  // type absent du référentiel : clé remise en forme, « roxwood_nord » → « Roxwood Nord »
   const libelle = type => TYPES_FIXES[type] || ZONES[type] || type.split('_').map(m => m.charAt(0).toUpperCase() + m.slice(1)).join(' ');
   const sousTitre = type => estZone(type) ? `Zone de vente · ${libelle(type)}` : `Taxe ${libelle(type)}`;
   // fin de la semaine en cours : lundi 0 h, juste après dimanche (heure du navigateur)
@@ -125,7 +122,8 @@
   }
   const tout = () => { renderEtat(); renderTypes(); renderRows(); };
   async function load() {
-    const [actives, expirees] = await Promise.all([espaceBot.get('taxes?status=active'), espaceBot.get('taxes?status=expired')]);
+    const [actives, expirees, ref] = await Promise.all([espaceBot.get('taxes?status=active'), espaceBot.get('taxes?status=expired'), espaceBot.get('taxes/types').catch(() => null)]);
+    if (ref) { TYPES_FIXES = Object.fromEntries(ref.fixed.map(t => [t.key, t.label])); ZONES = Object.fromEntries(ref.zones.map(z => [z.key, z.label])); }
     taxes = [...expirees, ...actives];
     majA = Date.now(); tout(); $('page').hidden = false;
   }

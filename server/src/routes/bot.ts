@@ -98,7 +98,7 @@ bot.get('/api/bot/status', ...member, async (req, res) => {
 });
 
 // lecture relayée : GET /api/bot/data/<rubrique>/… → <bot>/api/<rubrique>/… (mêmes paramètres ?week=, ?status=…)
-const SECTIONS = ['me', 'users', 'stocks', 'quotas', 'taxes', 'armurerie', 'ventes'];
+const SECTIONS = ['me', 'users', 'stocks', 'quotas', 'taxes', 'armurerie', 'ventes', 'garages'];
 // chemin relayé : rubrique autorisée, et aucun segment qui ferait remonter l'adresse hors de /api/<rubrique> ; null sinon
 function dataPath(req: Request): string | null {
   const segments = (req.params as { path: string[] }).path;

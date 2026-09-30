@@ -44,8 +44,17 @@
     <section class="admin-block">
       <h3 class="admin-block__title">Munitions</h3>
       <div class="arm-mun" id="mun"></div>
-      <div class="bloc-tete"><h4 class="viz__title">Ventes de la semaine</h4><p class="tax-compte" id="munTotal"></p></div>
-      <div class="journal" id="munVentes"></div>
+      <!-- fabrication (qui a fabriqué) et ventes de la semaine, côte à côte -->
+      <div class="dash-cols">
+        <div id="munFabBloc" hidden>
+          <div class="bloc-tete"><h4 class="viz__title">Fabrication de la semaine</h4><p class="tax-compte" id="munFabTotal"></p></div>
+          <div class="journal" id="munFab"></div>
+        </div>
+        <div>
+          <div class="bloc-tete"><h4 class="viz__title">Ventes de la semaine</h4><p class="tax-compte" id="munTotal"></p></div>
+          <div class="journal" id="munVentes"></div>
+        </div>
+      </div>
       <p class="admin-block__hint">Prêts, retours, pertes et déclarations de munitions se font depuis le panneau armurerie du bot dans Discord ; cette page reflète l'état en direct.</p>
     </section>
   </div>
@@ -64,22 +73,14 @@
   ];
   const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('profil.html'); throw 0; } return r.json(); });
   let armes = [], filter = 'pretee', type = '';
-  // Modèles d'armes du bot (ARME_TYPES de modules/armurerie.ts du bot) : le champ « type » d'une arme est la CLÉ du modèle.
-  // Pastilles = les 4 catégories du bot ; un modèle inconnu du site (ajouté depuis dans le bot) va dans « Autres ».
-  const CATALOGUE = {
-    'Armes de poing': [['pistolet_artisanal', 'Pistolet artisanal'], ['sns', 'SNS'], ['sns_pico', 'SNS PICO'], ['colt', 'Colt'], ['p88', 'P88'], ['beretta', 'Beretta'],
-      ['glock', 'Glock'], ['glock_17', 'Glock 17'], ['pistolet_en_ceramique', 'Pistolet en céramique'], ['calibre_50', 'Calibre 50'], ['berreta_mk2', 'Berreta (Pistolet MK2)'],
-      ['pistolet_lourd', 'Pistolet Lourd'], ['revolver', 'Revolver']],
-    'Fusils à pompe': [['fusil_a_canon_scie', 'Fusil à canon scié'], ['fusil_a_pompe', 'Fusil à pompe'], ['striker_12', 'Striker 12'], ['fusil_a_pompe_dassaut', "Fusil à pompe d'assaut"],
-      ['fusil_a_double_canon', 'Fusil à double canon']],
-    'Armes automatiques': [['mini_smg', 'Mini SMG'], ['micro_smg', 'Micro SMG'], ['tec9', 'TEC9'], ['mini_uzi_tactic', 'Mini Uzi Tactic'], ['mac_10', 'MAC-10'], ['mp5k', 'Mp5k'],
-      ['mitraillette_tactique', 'Mitraillette Tactique'], ['vesper_9', 'Vesper 9'], ['vortex_smg', 'Vortex SMG']],
-    'Armes lourdes': [['fusil_compact', 'Fusil compact'], ['ump_45', 'UMP 45'], ['sg552', 'SG552'], ['fusil_lourd', 'Fusil Lourd'], ['thompson', 'Thompson'], ['ak47', 'AK47'],
-      ['ump_45_chr', 'UMP 45 CHR'], ['mk_priss', 'Mk Priss'], ['ar_7', 'AR 7']],
-  };
-  const ORDRE = [...Object.keys(CATALOGUE), 'Autres'];
-  const MODELE = {}, CATEGORIE = {};
-  for (const [cat, modeles] of Object.entries(CATALOGUE)) for (const [k, l] of modeles) { MODELE[k] = l; CATEGORIE[k] = cat; }
+  // Modèles d'armes : lus dans le référentiel du bot (/armurerie/types, ordre et catégories du bot) ; le champ « type »
+  // d'une arme est la CLÉ du modèle. Un modèle absent du référentiel (ou bot plus ancien) va dans « Autres ».
+  let ORDRE = ['Autres'], MODELE = {}, CATEGORIE = {};
+  function catalogue(types) {
+    MODELE = Object.fromEntries(types.map(t => [t.key, t.label]));
+    CATEGORIE = Object.fromEntries(types.map(t => [t.key, t.category]));
+    ORDRE = [...new Set(types.map(t => t.category)), 'Autres'];
+  }
   const modele = a => !a.type ? 'Modèle non renseigné' : MODELE[a.type] || a.type.split('_').map(m => m.charAt(0).toUpperCase() + m.slice(1)).join(' ');
   const typeDe = a => CATEGORIE[a.type] || 'Autres';   // la catégorie (pastilles)
   const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
@@ -126,7 +127,7 @@
   }
 
   // munitions : une case par calibre, fabrication en jauge, ventes par jour
-  function renderMunitions(ammo, ventes) {
+  function renderMunitions(ammo, ventes, production, name) {
     const q = ammo.fabricationQuotaHebdo, fab = ammo.fabriqueesCetteSemaine, pct = q ? Math.min(100, Math.round(fab / q * 100)) : 0;
     const ca = ventes.reduce((t, v) => t + v.prix, 0);
     $('mun').innerHTML = `
@@ -138,17 +139,30 @@
     $('munTotal').textContent = ventes.length ? `${money(ca)} encaissés` : '';
     const jour = ms => { const d = new Date(ms), auj = new Date(), hier = new Date(Date.now() - 864e5);
       return d.toDateString() === auj.toDateString() ? "Aujourd'hui" : d.toDateString() === hier.toDateString() ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); };
-    let courant = '';
-    $('munVentes').innerHTML = ventes.length ? ventes.map(v => { const j = jour(v.timestamp), tete = j !== courant ? `<p class="journal__jour">${esc(j)}</p>` : ''; courant = j;
-      return `${tete}<div class="journal__ligne"><time>${new Date(v.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</time>
-        <span class="journal__quoi"><b>${units(v.quantite)} balles</b> <span class="muted">vendues à</span> ${esc(v.acheteur_id)}</span>
-        <span class="journal__delta pos">${money(v.prix)}</span><small class="journal__stock">${money(v.prix / Math.max(1, v.quantite))} la balle</small></div>`; }).join('')
+    // un journal, regroupé par jour, le plus récent en premier
+    const journal = (list, ligne) => { let courant = ''; return list.map(x => { const j = jour(x.timestamp), tete = j !== courant ? `<p class="journal__jour">${esc(j)}</p>` : ''; courant = j;
+      return `${tete}<div class="journal__ligne"><time>${new Date(x.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</time>${ligne(x)}</div>`; }).join(''); };
+    $('munVentes').innerHTML = ventes.length ? journal(ventes, v => `<span class="journal__quoi"><b>${units(v.quantite)} balles</b> <span class="muted">vendues à</span> ${esc(v.acheteur_id)}</span>
+        <span class="journal__delta pos">${money(v.prix)}</span><small class="journal__stock">${money(v.prix / Math.max(1, v.quantite))} la balle</small>`)
       : '<p class="admin-empty">Aucune vente déclarée cette semaine.</p>';
+    // fabrication : absente si le bot ne connaît pas encore /ammo/production
+    $('munFabBloc').hidden = !production;
+    $('munFabBloc').parentElement.style.gridTemplateColumns = production ? '' : '1fr';   // les ventes seules prennent toute la largeur
+    if (!production) return;
+    const fabricants = new Set(production.map(p => p.userId)).size;
+    $('munFabTotal').textContent = production.length ? pluriel(fabricants, 'fabricant') : '';
+    $('munFab').innerHTML = production.length ? journal(production, p => `<span class="journal__quoi"><b>${units(p.quantite)} balles</b> <span class="muted">fabriquées par</span> ${esc(name(p.userId))}</span>
+        <span class="journal__delta pos">+${units(p.quantite)}</span>`)
+      : '<p class="admin-empty">Aucune fabrication déclarée cette semaine.</p>';
   }
   async function load() {
-    const [enCours, perdues, ammo, ventes] = await Promise.all([espaceBot.get('armurerie'), espaceBot.get('armurerie?status=lost'), espaceBot.get('armurerie/ammo'), espaceBot.get('armurerie/ammo/history')]);
+    // référentiel et fabrication : facultatifs (bot plus ancien → repli, bloc masqué)
+    const [enCours, perdues, ammo, ventes, types, production] = await Promise.all([espaceBot.get('armurerie'), espaceBot.get('armurerie?status=lost'),
+      espaceBot.get('armurerie/ammo'), espaceBot.get('armurerie/ammo/history'), espaceBot.get('armurerie/types').catch(() => null), espaceBot.get('armurerie/ammo/production').catch(() => null)]);
+    if (types) catalogue(types);
     armes = [...enCours, ...perdues];
-    render(); renderMunitions(ammo, ventes);
+    const name = await espaceBot.names((production || []).map(p => ({ userId: p.userId, username: p.username })));
+    render(); renderMunitions(ammo, ventes, production, name);
     $('page').hidden = false;
   }
   async function start() {
