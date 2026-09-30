@@ -1,4 +1,4 @@
-/* La Maja 13 — organigramme public, chargé depuis La Casa (/api/org) */
+/* Organigramme public, chargé depuis l’espace membre (/api/org) */
 (function () {
   const root = document.getElementById('org');
   if (!root) return;
@@ -27,6 +27,6 @@
       if (rank.description) parts.push(`<p class="org__desc reveal is-in">${esc(rank.description)}</p>`);
     });
     root.innerHTML = parts.join('');
-    root.closest('section').hidden = false;
+    root.closest('section').hidden = false; const nav = document.getElementById('navHierarchie'); if (nav) nav.hidden = false;
   }).catch(() => {});
 })();

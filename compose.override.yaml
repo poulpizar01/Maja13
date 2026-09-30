@@ -2,31 +2,31 @@
 # contient COMPOSE_FILE=compose.yaml). Aucun .env à écrire.
 # - code monté depuis le poste : pages, CSS et JS servis tels quels (rafraîchir le navigateur) ;
 #   serveur lancé depuis les sources TypeScript (tsx) ; après une modification de server/src :
-#   docker compose restart maja13-app
+#   docker compose restart app
 # - migrations Prisma appliquées au démarrage ; nouvelle migration après une modification de schema.prisma :
-#   docker compose exec maja13-app npx prisma migrate dev --name <description>
+#   docker compose exec app npx prisma migrate dev --name <description>
 # - connexion sans Discord (DEV_LOGIN) ; photos de la galerie dans ./uploads sur le poste
 services:
-  maja13-app:
+  app:
     user: root                 # l'image tourne en « node » ; en dev, npm ci écrit dans le volume des dépendances
     command: sh -c "npm ci --no-audit --no-fund && npm run dev"
     environment:
       NODE_ENV: development    # l'image est en production : sans ça, npm ci n'installe pas tsx
       BASE_URL: http://localhost:3000
       SESSION_SECRET: dev-local
-      POSTGRES_PASSWORD: maja13
+      POSTGRES_PASSWORD: dev
       DEV_LOGIN: "1"
     volumes:
       - .:/app
       - ./uploads:/app/uploads
       - server-modules:/app/server/node_modules   # dépendances Linux, séparées de celles du poste
-  maja13-db:
+  db:
     environment:
-      POSTGRES_PASSWORD: maja13
-  # pas de sauvegarde automatique de la base de dev (à la main si besoin : docker compose run --rm maja13-backup)
-  maja13-backup:
+      POSTGRES_PASSWORD: dev
+  # pas de sauvegarde automatique de la base de dev (à la main si besoin : docker compose run --rm backup)
+  backup:
     profiles: ["sauvegarde"]
     environment:
-      POSTGRES_PASSWORD: maja13
+      POSTGRES_PASSWORD: dev
 volumes:
   server-modules:

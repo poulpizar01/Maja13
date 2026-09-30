@@ -4,9 +4,9 @@ import express, { Router, type RequestHandler } from 'express';
 import multer from 'multer';
 import sharp from 'sharp';
 import { prisma } from '../db.js';
-import type { Photo } from '../generated/prisma/client.js';
+import type { Member, Photo } from '../generated/prisma/client.js';
 import { body, intParam, member, text } from '../http.js';
-import { author, authorFields } from '../members.js';
+import { author } from '../members.js';
 import { canAdmin } from '../ranks.js';
 import { storage } from '../storage.js';
 import { limits } from '../security.js';
@@ -40,8 +40,8 @@ async function refusImage(buffer: Buffer): Promise<string | null> {
   return null;
 }
 
-const withAuthor = { member: authorFields } as const;
-const photoView = (p: Photo & { member: Parameters<typeof author>[0] }) => ({
+const withAuthor = { member: true } as const;
+const photoView = (p: Photo & { member: Member }) => ({
   id: p.id, url: p.url, thumb: p.thumbUrl, width: p.width, height: p.height, caption: p.caption, createdAt: p.createdAt, author: author(p.member),
 });
 

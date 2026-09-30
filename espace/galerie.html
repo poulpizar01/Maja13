@@ -3,52 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Galerie — La Casa · La Maja 13</title>
+<title>Galerie — {{espace}} · {{nom}}</title>
+<meta name="application-name" content="{{nom}}">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../theme.css">
 <link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="casa.css">
-<script src="casa.js"></script>
+<link rel="stylesheet" href="espace.css">
+<script src="espace.js"></script>
 </head>
-<body class="casa-body">
-<div class="grain" aria-hidden="true"></div>
-<script src="casa-bg.js" defer></script>
+<body class="espace-body">
 
-<header class="nav is-scrolled">
-  <a class="nav__brand" href="../index.html#entrada"><img src="../assets/logo-nav.webp" alt="" width="40" height="40"><span>La Maja <em>13</em></span></a>
-  <nav class="nav__links casa-nav">
-    <a href="perfil.html">Mon profil</a>
-    <a href="familia.html">La Famille</a>
-    <a href="classement.html">Classement</a>
-    <a href="chat.html" id="chatLink">Le Salon<span class="nav__badge" id="chatBadge" hidden></span></a>
-    <a href="galerie.html" class="is-active">Galerie</a>
-    <div class="nav__group" id="gestion" hidden>
-      <button class="nav__group-btn" type="button" aria-expanded="false">Gestion <i>▾</i></button>
-      <div class="nav__menu">
-        <a href="admin.html">Administration</a>
-        <a href="tableau.html">Tableau de bord</a>
-        <a href="stats.html">Statistiques</a>
-        <a href="taxes.html">Taxes</a>
-        <a href="armurerie.html">Armurerie</a>
-        <a href="organigramme.html" id="orgLink" hidden>Hiérarchie</a>
-      </div>
-    </div>
-    <a href="../accueil.html">Le site</a>
-    <button class="nav__cta casa-logout" id="logout">Déconnexion</button>
-  </nav>
-</header>
+<script>espaceShell()</script>
 
-<main class="casa-page casa-page--wide">
+<main class="espace-page espace-page--wide">
   <div class="section__head">
     <span class="numeral">✦</span>
     <h2>Galerie</h2>
     <p class="sub">Les photos affichées sur le site public</p>
   </div>
-  <div class="casa-loading" id="loading">Chargement…</div>
-  <p class="casa-toast" id="toast" hidden></p>
+  <div class="espace-loading" id="loading">Chargement…</div>
+  <p class="espace-toast" id="toast" hidden></p>
 
   <section class="admin-block" id="uploadBlock" hidden>
     <h3 class="admin-block__title">Poster une photo</h3>
@@ -59,15 +36,15 @@
         <span id="dropText">Glisse une image ici ou clique pour choisir<br><small>jpg, png, webp, heic (pas de gif ni d’image animée) — 15 Mo max. Elle sera redimensionnée automatiquement.</small></span>
       </label>
       <div class="upload__side">
-        <label>Légende <small>(optionnel)</small><input class="admin-input" id="caption" maxlength="200" placeholder="Ex : Réunion de la familia au barrio"></label>
-        <button class="btn btn--gold" type="submit" id="send" disabled>Publier sur le site</button>
+        <label>Légende <small>(optionnel)</small><input class="admin-input" id="caption" maxlength="200" placeholder="Ex : Réunion au QG"></label>
+        <button class="btn btn--accent" type="submit" id="send" disabled>Publier sur le site</button>
         <p class="admin-block__hint">La photo apparaît immédiatement dans la galerie publique, signée de ton nom RP. Tu peux la retirer à tout moment ; les responsables de la Gestion aussi.</p>
       </div>
     </form>
   </section>
 
   <section class="admin-block">
-    <h3 class="admin-block__title">Photos <span class="badge badge--gold" id="count">0</span></h3>
+    <h3 class="admin-block__title">Photos <span class="badge badge--accent" id="count">0</span></h3>
     <div class="gal-grid" id="grid"></div>
     <p class="admin-empty" id="empty" hidden>Aucune photo pour l'instant — sois le premier à en poster une.</p>
   </section>
@@ -78,9 +55,9 @@
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = d => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
   let me;
-  const toast = (msg, ok = true) => { const t = $('toast'); t.textContent = msg; t.className = 'casa-toast' + (ok ? '' : ' is-error'); t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 3500); };
+  const toast = (msg, ok = true) => { const t = $('toast'); t.textContent = msg; t.className = 'espace-toast' + (ok ? '' : ' is-error'); t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 3500); };
   const api = (url, opt = {}) => fetch(url, { credentials: 'same-origin', ...opt })
-    .then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('espera.html'); throw 0; } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
+    .then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('attente.html'); throw 0; } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
 
   function render(list) {
     $('count').textContent = list.length; $('empty').hidden = list.length > 0;
@@ -96,8 +73,8 @@
   }
   async function load() {
     me = await api('../api/me');
-    if (me.status !== 'approved') { location.replace('espera.html'); return; }
-    casaNav(me);
+    if (me.status !== 'approved') { location.replace('attente.html'); return; }
+    espaceNav(me);
     render(await api('../api/gallery?limit=200')); $('loading').hidden = true; $('uploadBlock').hidden = false;
   }
 
@@ -129,7 +106,7 @@
   });
   $('grid').addEventListener('click', async e => {
     const b = e.target.closest('[data-del]'); if (!b) return;
-    if (await casaConfirm('La photo sera retirée du site public.', { title: 'Retirer cette photo ?', ok: 'Retirer', danger: true })) {
+    if (await espaceConfirm('La photo sera retirée du site public.', { title: 'Retirer cette photo ?', ok: 'Retirer', danger: true })) {
       await api('../api/gallery/' + b.dataset.del, { method: 'DELETE' }).catch(() => {}); render(await api('../api/gallery?limit=200'));
     }
   });

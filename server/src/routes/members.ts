@@ -1,4 +1,4 @@
-// Profil du membre connecté, la familia, et administration des comptes (Gestion).
+// Profil du membre connecté, la liste des membres, et administration des comptes (Gestion).
 import { Router } from 'express';
 import { prisma } from '../db.js';
 import type { MemberStatus, Prisma } from '../generated/prisma/client.js';
@@ -25,8 +25,8 @@ members.patch('/api/me', ...member, async (req, res) => {
   res.json(publicMember(m));
 });
 
-// la familia : membres validés, visibles par les membres connectés
-members.get('/api/familia', ...member, async (_req, res) => {
+// membres validés, visibles par les membres connectés
+members.get('/api/membres', ...member, async (_req, res) => {
   const list = (await prisma.member.findMany({ where: { status: 'approved' } })).sort(byRankThenName);
   res.json(list.map(m => ({ discordId: m.discordId, displayName: m.displayName, username: m.username, ...rankInfo(m.rankKey), avatarUrl: avatarUrl(m) })));
 });

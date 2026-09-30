@@ -1,5 +1,5 @@
 User-agent: *
 Allow: /
-Disallow: /casa/
+Disallow: /espace/
 
-Sitemap: https://lamaja13.fbfa.fr/sitemap.xml
+Sitemap: {{url}}/sitemap.xml

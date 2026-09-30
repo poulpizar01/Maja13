@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Statistiques — {{espace}} · {{nom}}</title>
+<meta name="application-name" content="{{nom}}">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="../assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../theme.css">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="espace.css">
+<script src="espace.js"></script>
+</head>
+<body class="espace-body">
+
+<script>espaceShell()</script>
+
+<main class="espace-page espace-page--wide dash">
+  <div class="section__head">
+    <span class="numeral">✦</span>
+    <h2>Statistiques</h2>
+    <p class="sub">Les semaines de {{groupe}}, vues du bot</p>
+  </div>
+  <div class="espace-loading" id="loading">Chargement…</div>
+  <div id="botGate" hidden></div>
+
+  <div id="page" hidden>
+    <!-- filtres : une ligne, collée en haut de l'écran au défilement ; fiche du membre filtré à droite -->
+    <div class="stats-filters stats-console">
+      <div class="weekpick">
+        <button class="weekpick__arrow" id="older" type="button" aria-label="Semaine précédente">‹</button>
+        <button class="weekpick__current" id="weekBtn" type="button" aria-haspopup="listbox" aria-expanded="false">
+          <small id="weekKicker">Semaine en cours</small><b id="weekLabel">—</b>
+        </button>
+        <button class="weekpick__arrow" id="newer" type="button" aria-label="Semaine suivante">›</button>
+        <ul class="weekpick__menu" id="weekMenu" role="listbox" aria-label="Semaine" hidden></ul>
+      </div>
+      <!-- choix du membre : liste maison avec recherche (la liste native du navigateur ne se stylise pas) -->
+      <div class="stats-member" id="choixMembre">
+        <button class="stats-member__btn" id="memberBtn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="memberPop">
+          <small>Membre</small><b id="memberLabel">Tous les membres</b>
+        </button>
+        <div class="stats-member__pop" id="memberPop" hidden>
+          <input class="admin-input" id="memberQ" type="search" placeholder="Rechercher un membre…" autocomplete="off" aria-label="Rechercher un membre">
+          <ul class="stats-member__liste" id="memberList" role="listbox" aria-label="Membres" aria-multiselectable="true"></ul>
+          <!-- un membre : sa vue ; deux à quatre : comparaison -->
+          <div class="stats-member__pied">
+            <button class="btn btn--ghost btn--sm" type="button" id="memberTous">Tout le groupe</button>
+            <button class="btn btn--accent btn--sm" type="button" id="memberOk">Afficher</button>
+          </div>
+        </div>
+      </div>
+      <!-- membre filtré : sa fiche, et de quoi revenir au groupe -->
+      <div class="stats-focus" id="focus" hidden></div>
+      <!-- chargement en cours (affiché seulement s'il dure) -->
+      <p class="stats-charge" id="charge" role="status" aria-live="polite" hidden></p>
+    </div>
+
+    <div class="stats-body" id="body">
+      <!-- comparaison de 2 à 4 membres (choisis dans le sélecteur) : fiches face à face, courbes de paie, volumes groupés -->
+      <div id="comparaison" hidden>
+        <div class="comp-cartes" id="compCartes"></div>
+        <section class="admin-block">
+          <h3 class="admin-block__title">Paie sur 8 semaines</h3>
+          <div class="viz">
+            <div class="viz__head"><h4 class="viz__title">Paie estimée par membre</h4><div class="viz__legend" id="compLegende"></div></div>
+            <div class="viz__plot" id="compPaie"></div>
+          </div>
+        </section>
+        <section class="admin-block">
+          <h3 class="admin-block__title">Volumes de la semaine par catégorie</h3>
+          <div class="comp-cats" id="compCats"></div>
+        </section>
+      </div>
+
+      <div id="vueNormale">
+      <div class="tiles" id="tiles"></div>
+
+      <section class="admin-block">
+        <h3 class="admin-block__title">Évolution sur 8 semaines</h3>
+        <!-- deux graphiques côte à côte ; la semaine choisie en pleine couleur, les précédentes atténuées -->
+        <div class="viz-duo">
+          <div class="viz">
+            <div class="viz__head"><h4 class="viz__title">Volumes déclarés par catégorie</h4><div class="viz__legend" id="legend"></div></div>
+            <div class="viz__plot" id="volumes"></div>
+          </div>
+          <div class="viz">
+            <div class="viz__head"><h4 class="viz__title">Paie estimée</h4></div>
+            <div class="viz__plot" id="pay"></div>
+          </div>
+        </div>
+        <p class="admin-block__hint">Semaines du lundi au dimanche ; la semaine en cours part du dernier reset du bot. Taux de paie et objectifs : ceux configurés aujourd'hui dans le bot.</p>
+      </section>
+
+      <div class="dash-cols">
+        <section class="admin-block">
+          <h3 class="admin-block__title" id="breakdownTitle">Répartition par activité</h3>
+          <div class="hbars" id="breakdown"></div>
+        </section>
+        <section class="admin-block">
+          <h3 class="admin-block__title" id="sideTitle">Classement de la semaine</h3>
+          <div class="hbars" id="side"></div>
+          <p class="admin-block__hint" id="sideHint"></p>
+        </section>
+      </div>
+
+      <section class="admin-block" id="tableBlock">
+        <h3 class="admin-block__title">Détail de la semaine</h3>
+        <div class="table-wrap"><table class="admin-table dash-table stats-table"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+      </section>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const num = n => Math.round(n).toLocaleString('fr-FR');
+  const money = n => num(n) + ' $';
+  const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('profil.html'); throw 0; } return r.json(); });
+
+  // palette catégorielle validée (fond noir du site) : or, rouge, bleu, vert, violet — ordre fixe, jamais recyclé ;
+  // au-delà de 5 catégories, le reste est regroupé dans « Autres »
+  const PALETTE = ['#c98500', '#d0485a', '#3987e5', '#199e70', '#9085e9'];
+  const OTHER = '#6b6558';
+
+  // ---------- semaines ----------
+  const DAY = 86400e3;
+  const mondayOf = w => { const [y, n] = w.split('-W').map(Number); const jan4 = Date.UTC(y, 0, 4); const d = (new Date(jan4).getUTCDay() || 7) - 1; return jan4 - d * DAY + (n - 1) * 7 * DAY; };
+  const dshort = ms => new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  // semaine en cours ('') puis les 12 semaines ISO précédentes
+  const WEEKS = [{ key: '', short: 'En cours', kicker: 'Semaine en cours', dates: '' },   // dates : posées une fois la config du bot lue
+    ...Array.from({ length: 12 }, (_, i) => { const key = espaceBot.isoWeek(i + 1), m = mondayOf(key);
+      return { key, short: `S${key.slice(-2)}`, kicker: `Semaine ${Number(key.slice(-2))}`, dates: `${dshort(m)} → ${dshort(m + 6 * DAY)}` }; })];
+  const weekLabel = w => w.dates ? `${w.kicker} · ${w.dates}` : w.kicker;
+
+  // navigateur de semaine : flèches + bloc central qui ouvre la liste des semaines
+  function renderWeekPicker() {
+    const w = WEEKS[state.week];
+    $('weekKicker').textContent = w.kicker; $('weekLabel').textContent = w.dates || '—';
+    // pendant un chargement, tout reste bloqué (occupe) ; sinon, bornes des semaines
+    $('older').disabled = enCours || state.week >= WEEKS.length - 1; $('newer').disabled = enCours || state.week === 0;
+    $('weekMenu').innerHTML = WEEKS.map((x, i) => `<li><button type="button" role="option" aria-selected="${i === state.week}" class="${i === state.week ? 'is-on' : ''}" data-week="${i}">
+      <span><b>${esc(x.kicker)}</b><small>${esc(x.dates)}</small></span>${i === state.week ? '<i aria-hidden="true">✓</i>' : ''}</button></li>`).join('');
+  }
+  const toggleWeekMenu = open => {
+    $('weekMenu').hidden = !open; $('weekBtn').setAttribute('aria-expanded', open);
+    if (open) $('weekMenu').querySelector('.is-on')?.focus();
+  };
+  const q = (path, week) => path + (week ? (path.includes('?') ? '&' : '?') + 'week=' + week : '');
+
+  // lectures en mémoire le temps de la visite : chaque semaine n'est demandée qu'une fois (limite de requêtes du bot)
+  const cache = new Map();
+  const get = path => { if (!cache.has(path)) cache.set(path, espaceBot.get(path).catch(e => { cache.delete(path); throw e; })); return cache.get(path); };
+
+  let cfg, name, cats = [], color = {}, annu = new Map();   // annu : membres du site par ID Discord (photo, grade)
+  const state = { week: 0, sel: [] };   // week = index dans WEEKS ; sel = membres choisis (1 = sa vue, 2 à 4 = comparaison)
+  const MAX_COMPARE = 4;
+  const COMP = ['#e5b453', '#6ea8fe', '#6fcf8e', '#c792ea'];   // une couleur par membre comparé (distinctes de l'accent et des états)
+
+  // ---------- graphiques (SVG natif) ----------
+  function niceMax(v) { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); const s = [1, 2, 2.5, 5, 10].find(m => m * p * 4 >= v) * p; return Math.ceil(v / s) * s; }
+  const topRounded = (x, y, w, h, r) => { r = Math.min(r, h / 2, w / 2); return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`; };
+  // colonnes (empilées si plusieurs séries) : series = [{ label, color, values[] }], une valeur par semaine
+  function columns(el, labels, series, { format = num, tipTitle = i => labels[i], total = true } = {}) {
+    const W = Math.max(320, el.clientWidth), H = 230, pad = { l: 52, r: 8, t: 12, b: 26 };
+    const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b, band = pw / labels.length, bw = Math.min(24, band * 0.55);
+    const totals = labels.map((_, i) => series.reduce((s, se) => s + se.values[i], 0));
+    const max = niceMax(Math.max(...totals)), y = v => pad.t + ph - v / max * ph;
+    let svg = '';
+    for (let t = 0; t <= 4; t++) { const v = max * t / 4, yy = y(v); svg += `<line class="viz__grid" x1="${pad.l}" x2="${W - pad.r}" y1="${yy}" y2="${yy}"/><text class="viz__tick" x="${pad.l - 8}" y="${yy + 4}" text-anchor="end">${esc(format(v))}</text>`; }
+    labels.forEach((lab, i) => {
+      const x = pad.l + band * i + (band - bw) / 2;
+      // la semaine choisie (la dernière) en pleine couleur, les précédentes atténuées : l'œil va à ce qu'on regarde
+      const dim = i === labels.length - 1 ? '' : ' fill-opacity=".38"';
+      let base = 0; const segs = series.map(s => ({ s, v: s.values[i] })).filter(d => d.v > 0);
+      segs.forEach((d, j) => {
+        const y0 = y(base), y1 = y(base + d.v), last = j === segs.length - 1;
+        const h = Math.max(0, y0 - y1 - (j ? 2 : 0));   // espace de 2 px entre segments
+        svg += last ? `<path d="${topRounded(x, y1, bw, h, 4)}" fill="${d.s.color}"${dim}/>` : `<rect x="${x}" y="${y1}" width="${bw}" height="${h}" fill="${d.s.color}"${dim}/>`;
+        base += d.v;
+      });
+      svg += `<text class="viz__tick" x="${x + bw / 2}" y="${H - 8}" text-anchor="middle">${esc(lab)}</text>`;
+      svg += `<rect class="viz__hit" x="${pad.l + band * i}" y="${pad.t}" width="${band}" height="${ph}" data-i="${i}" tabindex="0"/>`;
+    });
+    // étiquette sélective : la dernière semaine (celle choisie)
+    const li = labels.length - 1;
+    if (totals[li]) svg += `<text class="viz__value" x="${pad.l + band * li + band / 2}" y="${y(totals[li]) - 6}" text-anchor="middle">${esc(format(totals[li]))}</text>`;
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img">${svg}</svg><div class="viz__tip" hidden></div>`;
+    const tip = el.querySelector('.viz__tip');
+    const show = (i, cx) => {
+      tip.replaceChildren();
+      const h = document.createElement('b'); h.textContent = tipTitle(i); tip.append(h);
+      for (const s of [...series].reverse()) {
+        const row = document.createElement('div'); row.className = 'viz__tiprow';
+        const key = document.createElement('i'); key.style.background = s.color;
+        const v = document.createElement('strong'); v.textContent = format(s.values[i]);
+        const l = document.createElement('span'); l.textContent = s.label;
+        row.append(key, v, l); tip.append(row);
+      }
+      if (total && series.length > 1) { const t = document.createElement('div'); t.className = 'viz__tiptotal'; t.textContent = `Total : ${format(totals[i])}`; tip.append(t); }
+      tip.hidden = false;
+      const bx = el.getBoundingClientRect(), left = Math.min(Math.max(cx - bx.left + 12, 0), bx.width - tip.offsetWidth);
+      tip.style.left = left + 'px';
+    };
+    el.querySelectorAll('.viz__hit').forEach(r => {
+      const i = +r.dataset.i;
+      r.addEventListener('pointermove', e => { r.classList.add('is-hover'); show(i, e.clientX); });
+      r.addEventListener('focus', () => { r.classList.add('is-hover'); show(i, r.getBoundingClientRect().left); });
+      const hide = () => { r.classList.remove('is-hover'); tip.hidden = true; };
+      r.addEventListener('pointerleave', hide); r.addEventListener('blur', hide);
+    });
+  }
+  // barres horizontales (une série) : rows = [{ label, value, note?, id? }], valeur au bout de la barre
+  function hbars(el, rows, { format = num, empty = 'Rien sur cette semaine.', clickable = false } = {}) {
+    const max = Math.max(1, ...rows.map(r => r.value));
+    el.innerHTML = rows.length ? rows.map(r => `<div class="hbar ${clickable ? 'is-link' : ''}" ${clickable ? `data-id="${esc(r.id)}" role="button" tabindex="0"` : ''}>
+      <span class="hbar__label" title="${esc(r.label)}">${esc(r.label)}</span>
+      <span class="hbar__track"><i style="width:${r.value / max * 100}%"></i></span>
+      <span class="hbar__value">${esc(format(r.value))}${r.note ? ` <small>${esc(r.note)}</small>` : ''}</span></div>`).join('')
+      : `<p class="muted">${empty}</p>`;
+  }
+
+  // ---------- données ----------
+  const sumCats = list => { const t = {}; for (const p of list) for (const [k, v] of Object.entries(p.byQuotaType)) t[k] = (t[k] || 0) + v; return t; };
+  const isActive = p => p.salaire > 0 || Object.values(p.byQuotaType).some(Boolean);
+  // évolution vs semaine précédente ; un écart qui s'arrondit à 0 % est « stable » (jamais « ↑ 0 % »)
+  const delta = (now, before) => {
+    if (before == null) return '';
+    if (before === 0) return now ? 'nouveau' : '';
+    const pct = Math.round((now - before) / before * 100);
+    return pct === 0 ? 'stable' : `${pct > 0 ? '+' : '−'}${Math.abs(pct)} % vs semaine précédente`;
+  };
+  // tuile : l'évolution par rapport à la semaine précédente en pastille (↑ vert, ↓ rouge), le reste en note
+  const evolHtml = note => {
+    const m = /^([+−])(\d+) %/.exec(note || '');
+    return m ? `<small class="evol evol--${m[1] === '+' ? 'haut' : 'bas'}">${m[1] === '+' ? '↑' : '↓'} ${m[2]} %<span>vs semaine précédente</span></small>`
+      : note === 'nouveau' ? '<small class="evol evol--haut">Nouveau<span>rien la semaine précédente</span></small>'
+      : note === 'stable' ? '<small class="evol">= stable<span>vs semaine précédente</span></small>' : `<small>${esc(note)}</small>`;
+  };
+  const tile = (label, value, note) => `<div class="tile"><span>${esc(label)}</span><b>${esc(value)}</b>${evolHtml(note)}</div>`;
+
+  // rang d'un membre dans la semaine : par points si le bot en attribue, sinon par paie estimée parmi les membres actifs
+  const rangTxt = n => n === 1 ? '1er' : `${n}e`;
+  function tuileRang(member, pts, ranking, payGroupe) {
+    if (ranking.some(r => r.points > 0)) {
+      const pos = ranking.findIndex(r => r.userId === member) + 1;
+      return tile('Points de classement', num(pts), pos ? `${rangTxt(pos)} sur ${ranking.length}` : 'pas encore classé');
+    }
+    const actifs = (payGroupe || []).filter(isActive).sort((a, b) => b.salaire - a.salaire);
+    const pos = actifs.findIndex(p => p.userId === member) + 1;
+    return pos ? tile('Rang de la semaine', rangTxt(pos), `sur ${actifs.length} membre${actifs.length > 1 ? 's' : ''} actif${actifs.length > 1 ? 's' : ''} · selon la paie`)
+      : tile('Rang de la semaine', '—', 'aucune déclaration cette semaine');
+  }
+
+  // ---------- chargement : un seul rendu fait foi (le dernier demandé), filtres bloqués pendant qu'il charge ----------
+  let rendu = 0, delaiCharge, enCours = false;
+  function occupe(on, texte) {
+    clearTimeout(delaiCharge); enCours = on;
+    ['older', 'newer', 'weekBtn', 'memberBtn'].forEach(id => { $(id).disabled = on; });
+    if (!on) renderWeekPicker();   // rétablit l'état normal des flèches (bornes des semaines)
+    $('body').classList.toggle('is-loading', on);
+    $('page').querySelector('.stats-console').classList.toggle('is-busy', on);
+    $('charge').hidden = true;
+    // indicateur seulement si ça dure : ce qui est déjà en mémoire s'affiche sans clignoter
+    if (on) delaiCharge = setTimeout(() => { $('charge').textContent = texte; $('charge').hidden = false; }, 150);
+  }
+
+  async function render() {
+    const jeton = ++rendu, perime = () => jeton !== rendu;   // un rendu plus récent a été demandé : on abandonne celui-ci
+    const { week, sel } = state, wk = WEEKS[week].key, member = sel.length === 1 ? sel[0] : '', comparer = sel.length > 1;
+    // ce qui reflète le choix s'affiche tout de suite : adresse (partageable), sélecteur, fiche du membre
+    history.replaceState(null, '', `?${new URLSearchParams({ ...(wk && { week: wk }), ...(sel.length && { member: sel.join(',') }) })}`);
+    $('memberLabel').textContent = comparer ? `${sel.length} membres comparés` : member ? name(member) : 'Tous les membres';
+    const fiche = annu.get(member);
+    $('focus').hidden = !member;
+    $('focus').innerHTML = member ? `${espaceAvatar(fiche?.avatarUrl, 40)}<span><b>${esc(name(member))}</b><small>${esc(fiche?.rankLabel || 'Vue individuelle')}</small></span>
+      <button class="stats-focus__retour" type="button" data-groupe>× Tout le groupe</button>` : '';
+    occupe(true, comparer ? `Chargement de la comparaison (${sel.length} membres)…` : member ? `Chargement des chiffres de ${name(member)}…` : `Chargement de ${WEEKS[week].kicker.toLowerCase()}…`);
+    try { await (comparer ? compare(perime, week, sel, wk) : dessine(jeton, perime, week, member, wk)); }
+    finally { if (!perime()) occupe(false); }
+  }
+
+  async function dessine(jeton, perime, week, member, wk) {
+    const win = WEEKS.slice(week, week + 8).reverse();                     // 8 semaines finissant à la semaine choisie
+    const prev = WEEKS[week + 1]?.key;
+    const hasPrev = week + 1 < WEEKS.length;
+    renderWeekPicker();
+    $('comparaison').hidden = true; $('vueNormale').hidden = false;
+
+    // toutes les lectures d'abord, puis tout le dessin d'un coup : jamais d'écran à moitié mis à jour
+
+    const payPath = member ? 'quotas/pay/' + member : 'quotas/pay';
+    const evo = await Promise.all(win.map(w => get(q(payPath, w.key))));   // membre : { salaire, byQuotaType } ; groupe : [ … ]
+    if (perime()) return;
+    const perWeek = evo.map(d => member ? { vol: d.byQuotaType, pay: d.salaire } : { vol: sumCats(d), pay: d.reduce((s, p) => s + p.salaire, 0), actifs: d.filter(isActive).length });
+    const cur = perWeek.at(-1), before = hasPrev && win.length > 1 ? perWeek.at(-2) : null;
+    const ventesPath = member ? 'ventes/' + member : 'ventes';
+    // vue d'un membre : la paie de tout le groupe sert à situer le membre si le bot n'attribue pas de points (lecture en cache)
+    const [ventes, ventesPrev, ranking, repartition, payGroupe] = await Promise.all([get(q(ventesPath, wk)), hasPrev ? get(q(ventesPath, prev)) : null, get(q('quotas/ranking', wk)),
+      get(q(member ? 'quotas/' + member : 'quotas/summary', wk)), member ? get(q('quotas/pay', wk)) : null]);
+    if (perime()) return;
+    const ventesTotal = v => v ? (member ? v.total : v.groupTotal) : null;
+    const acts = v => Object.values(v).reduce((s, n) => s + n, 0);
+
+    // chiffres clés
+    const pts = ranking.find(r => r.userId === member)?.points || 0;
+    $('tiles').innerHTML = tile('Paie estimée', money(cur.pay), delta(cur.pay, before?.pay))
+      + tile('Ventes', num(ventesTotal(ventes)), delta(ventesTotal(ventes), ventesTotal(ventesPrev)))
+      + tile('Volumes déclarés', num(acts(cur.vol)), delta(acts(cur.vol), before && acts(before.vol)))
+      + (member ? tuileRang(member, pts, ranking, payGroupe)
+               : tile('Membres actifs', num(cur.actifs), delta(cur.actifs, before?.actifs)));
+
+    // évolution : volumes (empilés par catégorie) puis paie — deux graphiques, jamais deux échelles sur un seul
+    const shown = cats.slice(0, PALETTE.length), rest = cats.slice(PALETTE.length);
+    const series = shown.map(k => ({ label: espaceBot.label(k), color: color[k], values: perWeek.map(w => w.vol[k] || 0) }));
+    if (rest.length) series.push({ label: 'Autres', color: OTHER, values: perWeek.map(w => rest.reduce((s, k) => s + (w.vol[k] || 0), 0)) });
+    $('legend').innerHTML = series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.label)}</span>`).join('');
+    const labels = win.map(w => w.short), tipTitle = i => weekLabel(win[i]);
+    columns($('volumes'), labels, series, { tipTitle });
+    columns($('pay'), labels, [{ label: 'Paie', color: PALETTE[0], values: perWeek.map(w => w.pay) }], { format: money, tipTitle, total: false });
+
+    // répartition par activité
+    const who = member ? name(member) : 'le groupe';
+    $('breakdownTitle').textContent = `Répartition par activité`;
+    if (member) {
+      hbars($('breakdown'), Object.entries(repartition.map).filter(([, v]) => v.count).map(([k, v]) => ({ label: cfg.activities[k]?.label || k, value: v.count })).sort((a, b) => b.value - a.value), { empty: `${who} n'a rien déclaré cette semaine.` });
+    } else {
+      hbars($('breakdown'), repartition.filter(a => a.total).sort((a, b) => b.total - a.total).map(a => ({ label: a.label, value: a.total })));
+    }
+
+    // à droite : classement (groupe) ou ventes par produit (membre)
+    if (member) {
+      $('sideTitle').textContent = 'Ventes par produit';
+      hbars($('side'), ventes.detail.map(d => ({ label: d.item.charAt(0).toUpperCase() + d.item.slice(1), value: d.quantite })).sort((a, b) => b.value - a.value), { empty: 'Aucune vente cette semaine.' });
+      $('sideHint').textContent = '';
+    } else {
+      const pay = evo.at(-1);
+      const byId = Object.fromEntries(pay.map(p => [p.userId, p.salaire]));
+      $('sideTitle').textContent = 'Classement de la semaine';
+      // par points si le bot en attribue ; sinon (tous à 0, barres vides) par paie estimée
+      if (ranking.some(r => r.points > 0)) hbars($('side'), ranking.slice(0, 10).map(r => ({ id: r.userId, label: name(r.userId), value: r.points, note: `pts · ${money(byId[r.userId] || 0)}` })), { clickable: true, empty: 'Aucun point cette semaine.' });
+      else hbars($('side'), pay.filter(p => p.salaire > 0).sort((a, b) => b.salaire - a.salaire).slice(0, 10).map(p => ({ id: p.userId, label: name(p.userId), value: p.salaire })), { clickable: true, format: money, empty: 'Aucune paie cette semaine.' });
+      $('sideHint').textContent = ranking.length || pay.length ? `${ranking.some(r => r.points > 0) ? 'Par points du bot.' : 'Par paie estimée (aucun point attribué par le bot).'} Clique sur un membre pour voir son détail.` : '';
+    }
+
+    // tableau détaillé (groupe)
+    $('tableBlock').hidden = !!member;
+    if (!member) renderTable(evo.at(-1), ranking);
+  }
+
+  // ---------- comparaison de 2 à 4 membres ----------
+  const somme = v => Object.values(v || {}).reduce((t, n) => t + n, 0);
+  async function compare(perime, week, sel, wk) {
+    renderWeekPicker();
+    const win = WEEKS.slice(week, week + 8).reverse(), prev = WEEKS[week + 1]?.key, hasPrev = week + 1 < WEEKS.length;
+    // toutes les lectures d'abord (8 semaines de paie par membre, gardées en mémoire), puis tout le dessin d'un coup
+    const lu = await Promise.all(sel.map(id => Promise.all([
+      Promise.all(win.map(w => get(q('quotas/pay/' + id, w.key)))), get(q('ventes/' + id, wk)), hasPrev ? get(q('ventes/' + id, prev)) : null])));
+    if (perime()) return;
+    const d = sel.map((id, i) => {
+      const [evo, v, vp] = lu[i], cur = evo.at(-1), bef = hasPrev && evo.length > 1 ? evo.at(-2) : null;
+      return { id, nom: name(id), couleur: COMP[i], evo, cur, paie: cur.salaire, paieAv: bef?.salaire, ventes: v.total, ventesAv: vp?.total, vol: somme(cur.byQuotaType), volAv: bef && somme(bef.byQuotaType) };
+    });
+    $('vueNormale').hidden = true; $('comparaison').hidden = false;
+    // fiches face à face : le meilleur de chaque indicateur est signalé
+    const meilleur = k => Math.max(...d.map(x => x[k]));
+    const ligne = (x, k, label, fmt, av) => `<div class="${x[k] > 0 && x[k] === meilleur(k) ? 'is-best' : ''}"><dt>${label}</dt><dd>${fmt(x[k])}</dd>${evolHtml(delta(x[k], x[av]))}</div>`;
+    $('compCartes').style.setProperty('--n', d.length);
+    $('compCartes').innerHTML = d.map(x => { const f = annu.get(x.id); return `<article class="comp-carte" style="--c:${x.couleur}">
+      <header>${espaceAvatar(f?.avatarUrl, 40)}<span><b>${esc(x.nom)}</b><small>${esc(f?.rankLabel || 'Pas de compte sur le site')}</small></span>
+        <button class="comp-carte__seul" type="button" data-id="${esc(x.id)}" title="Voir ce membre seul">Voir seul</button></header>
+      <dl>${ligne(x, 'paie', 'Paie estimée', money, 'paieAv')}${ligne(x, 'ventes', 'Ventes', num, 'ventesAv')}${ligne(x, 'vol', 'Volumes déclarés', num, 'volAv')}</dl></article>`; }).join('');
+    // paie sur 8 semaines : une courbe par membre
+    $('compLegende').innerHTML = d.map(x => `<span><i style="background:${x.couleur}"></i>${esc(x.nom)}</span>`).join('');
+    courbes($('compPaie'), win.map(w => w.short), d.map(x => ({ label: x.nom, color: x.couleur, values: x.evo.map(e => e.salaire) })), { format: money, tipTitle: i => weekLabel(win[i]) });
+    // volumes de la semaine : pour chaque catégorie, une barre par membre
+    const visibles = cats.filter(k => d.some(x => x.cur.byQuotaType[k]));
+    $('compCats').innerHTML = visibles.map(k => { const max = Math.max(1, ...d.map(x => x.cur.byQuotaType[k] || 0)), t = cfg.targets[k];
+      return `<div class="comp-cat"><p>${esc(espaceBot.label(k))}${t ? ` <small>objectif ${num(t)}</small>` : ''}</p>${d.map(x => { const v = x.cur.byQuotaType[k] || 0;
+        return `<div class="comp-barre"><span>${esc(x.nom)}</span><i><b style="width:${v / max * 100}%;background:${x.couleur}"></b></i><em>${v ? num(v) : '—'}</em></div>`; }).join('')}</div>`; }).join('')
+      || '<p class="admin-empty">Aucun volume déclaré cette semaine par ces membres.</p>';
+  }
+  // courbes (une par série), même habillage que les colonnes ; info-bulle : toutes les séries de la semaine survolée
+  function courbes(el, labels, series, { format = num, tipTitle = i => labels[i] } = {}) {
+    const W = Math.max(320, el.clientWidth), H = 260, pad = { l: 64, r: 18, t: 16, b: 26 };
+    const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b, pas = pw / Math.max(1, labels.length - 1);
+    const max = niceMax(Math.max(...series.flatMap(s => s.values))), x = i => pad.l + pas * i, y = v => pad.t + ph - v / max * ph;
+    let svg = '';
+    for (let t = 0; t <= 4; t++) { const v = max * t / 4, yy = y(v); svg += `<line class="viz__grid" x1="${pad.l}" x2="${W - pad.r}" y1="${yy}" y2="${yy}"/><text class="viz__tick" x="${pad.l - 8}" y="${yy + 4}" text-anchor="end">${esc(format(v))}</text>`; }
+    // libellés des semaines : les extrêmes alignés sur le bord pour ne pas être coupés (« En cours »)
+    labels.forEach((lab, i) => { svg += `<text class="viz__tick" x="${x(i)}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === labels.length - 1 ? 'end' : 'middle'}">${esc(lab)}</text>`; });
+    svg += '<line class="viz__guide" y1="' + pad.t + '" y2="' + (pad.t + ph) + '" x1="0" x2="0" hidden/>';
+    for (const s of series) {
+      svg += `<path d="${s.values.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join('')}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+      svg += s.values.map((v, i) => `<circle cx="${x(i)}" cy="${y(v)}" r="${i === s.values.length - 1 ? 4.5 : 3}" fill="${i === s.values.length - 1 ? s.color : 'var(--bg2)'}" stroke="${s.color}" stroke-width="2"/>`).join('');
+    }
+    labels.forEach((_, i) => { svg += `<rect class="viz__hit" x="${x(i) - pas / 2}" y="${pad.t}" width="${pas}" height="${ph}" data-i="${i}" tabindex="0"/>`; });
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img">${svg}</svg><div class="viz__tip" hidden></div>`;
+    const tip = el.querySelector('.viz__tip'), guide = el.querySelector('.viz__guide');
+    const show = (i, cx) => {
+      guide.setAttribute('x1', x(i)); guide.setAttribute('x2', x(i)); guide.removeAttribute('hidden');
+      tip.replaceChildren();
+      const h = document.createElement('b'); h.textContent = tipTitle(i); tip.append(h);
+      for (const s of [...series].sort((a, b) => b.values[i] - a.values[i])) {
+        const row = document.createElement('div'); row.className = 'viz__tiprow';
+        const key = document.createElement('i'); key.style.background = s.color;
+        const v = document.createElement('strong'); v.textContent = format(s.values[i]);
+        const l = document.createElement('span'); l.textContent = s.label;
+        row.append(key, v, l); tip.append(row);
+      }
+      tip.hidden = false;
+      const bx = el.getBoundingClientRect(); tip.style.left = Math.min(Math.max(cx - bx.left + 12, 0), bx.width - tip.offsetWidth) + 'px';
+    };
+    el.querySelectorAll('.viz__hit').forEach(r => {
+      const i = +r.dataset.i;
+      r.addEventListener('pointermove', e => show(i, e.clientX));
+      r.addEventListener('focus', () => show(i, r.getBoundingClientRect().left));
+      const hide = () => { tip.hidden = true; guide.setAttribute('hidden', ''); };
+      r.addEventListener('pointerleave', hide); r.addEventListener('blur', hide);
+    });
+  }
+
+  // tri du tableau : paie décroissante par défaut ; sur une colonne, 1er clic = sens naturel (A→Z, plus grand d'abord),
+  // 2e clic = inverse, 3e clic = plus aucun tri (ordre renvoyé par le bot)
+  let sortKey = 'pay', sortDir = -1;
+  const sensNaturel = key => key === 'name' ? 1 : -1;
+  function renderTable(pay, ranking) {
+    const pts = Object.fromEntries(ranking.map(r => [r.userId, r.points]));
+    const rows = pay.filter(isActive).map(p => ({ id: p.userId, name: name(p.userId), points: pts[p.userId] || 0, pay: p.salaire, ...Object.fromEntries(cats.map(k => [k, p.byQuotaType[k] || 0])) }));
+    if (sortKey) rows.sort((a, b) => (typeof a[sortKey] === 'string' ? a[sortKey].localeCompare(b[sortKey]) : a[sortKey] - b[sortKey]) * sortDir);
+    const th = (key, label) => `<th aria-sort="${sortKey === key ? (sortDir < 0 ? 'descending' : 'ascending') : 'none'}"><button class="th-sort ${sortKey === key ? 'is-on' : ''}" title="Trier (3e clic : sans tri)" data-sort="${esc(key)}">${esc(label)}${sortKey === key ? (sortDir < 0 ? ' ↓' : ' ↑') : ''}</button></th>`;
+    $('thead').innerHTML = `<tr>${th('name', 'Membre')}${cats.map(k => th(k, espaceBot.label(k))).join('')}${th('points', 'Points')}${th('pay', 'Paie')}</tr>`;
+    $('tbody').innerHTML = rows.length ? rows.map(r => `<tr><td><button class="link-btn" data-id="${esc(r.id)}">${esc(r.name)}</button></td>${cats.map(k => `<td>${r[k] ? num(r[k]) : '<span class="muted">—</span>'}</td>`).join('')}<td>${r.points ? num(r.points) : '<span class="muted">—</span>'}</td><td><b>${money(r.pay)}</b></td></tr>`).join('')
+      : `<tr><td colspan="${cats.length + 3}" class="muted">Aucune activité cette semaine.</td></tr>`;
+    $('thead').onclick = e => { const b = e.target.closest('[data-sort]'); if (!b) return; const k = b.dataset.sort;
+      if (sortKey !== k) { sortKey = k; sortDir = sensNaturel(k); } else if (sortDir === sensNaturel(k)) sortDir = -sortDir; else sortKey = null;
+      renderTable(pay, ranking); };
+  }
+
+  const refresh = () => render().catch(e => espaceToast(espaceBot.error(e), false));   // l'état de chargement est levé par render()
+  // ---- choix des membres : liste avec recherche et cases à cocher ; « Afficher » applique (1 = sa vue, 2 à 4 = comparaison)
+  let gens = [], coches = new Set();   // gens : [id, nom] triés par nom ; coches : choix en cours dans la liste, pas encore appliqué
+  const normalise = t => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  function listeMembres() {
+    const q = normalise($('memberQ').value.trim()), plein = coches.size >= MAX_COMPARE;
+    const options = gens.filter(([, n]) => !q || normalise(n).includes(q));
+    $('memberList').innerHTML = options.map(([id, n]) => { const f = annu.get(id), on = coches.has(id), bloque = plein && !on;
+      return `<li><button type="button" role="option" aria-selected="${on}" data-membre="${esc(id)}"${bloque ? ' aria-disabled="true" title="4 membres au plus"' : ''}>
+        <span class="stats-member__case" aria-hidden="true">${on ? '✓' : ''}</span>${espaceAvatar(f?.avatarUrl, 28)}
+        <span><b>${esc(n)}</b><small>${esc(f?.rankLabel || 'Sans compte sur le site')}</small></span></button></li>`; }).join('')
+      || '<li class="stats-member__vide">Aucun membre ne correspond.</li>';
+    $('memberOk').textContent = coches.size > 1 ? `Comparer (${coches.size})` : coches.size ? 'Afficher' : 'Afficher le groupe';
+  }
+  function ouvreMembres(ouvrir) {
+    $('memberPop').hidden = !ouvrir; $('memberBtn').setAttribute('aria-expanded', ouvrir);
+    if (ouvrir) { coches = new Set(state.sel); $('memberQ').value = ''; listeMembres(); $('memberQ').focus(); }
+  }
+  const applique = ids => { ouvreMembres(false); ids = ids.slice(0, MAX_COMPARE); if (ids.join() === state.sel.join()) return; state.sel = ids; refresh(); };
+  const pickMember = id => applique(id ? [id] : []);
+  $('memberBtn').addEventListener('click', () => ouvreMembres($('memberPop').hidden));
+  $('memberQ').addEventListener('input', listeMembres);
+  $('memberList').addEventListener('click', e => {
+    const b = e.target.closest('[data-membre]'); if (!b || b.getAttribute('aria-disabled')) return;
+    const id = b.dataset.membre; coches.has(id) ? coches.delete(id) : coches.add(id);
+    listeMembres(); $('memberList').querySelector(`[data-membre="${CSS.escape(id)}"]`)?.focus();
+  });
+  $('memberOk').addEventListener('click', () => { applique([...coches]); $('memberBtn').focus(); });
+  $('memberTous').addEventListener('click', () => { applique([]); $('memberBtn').focus(); });
+  $('choixMembre').addEventListener('keydown', e => {
+    if ($('memberPop').hidden) return;
+    const items = [...$('memberList').querySelectorAll('button')], i = items.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); ouvreMembres(false); $('memberBtn').focus(); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); items[Math.min(items.length - 1, Math.max(0, i + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus(); }
+    else if (e.key === 'Enter' && document.activeElement === $('memberQ')) { e.preventDefault(); $('memberOk').click(); }
+  });
+  // clic hors du sélecteur : on ferme. composedPath() et non closest() : cocher redessine la liste, l'élément cliqué
+  // n'est alors plus dans la page et closest() croirait à un clic à l'extérieur
+  document.addEventListener('click', e => { if (!e.composedPath().includes($('choixMembre'))) ouvreMembres(false); });
+  $('older').addEventListener('click', () => { state.week++; refresh(); });
+  $('newer').addEventListener('click', () => { state.week--; refresh(); });
+  $('weekBtn').addEventListener('click', () => toggleWeekMenu($('weekMenu').hidden));
+  $('weekMenu').addEventListener('click', e => { const b = e.target.closest('[data-week]'); if (!b) return; state.week = +b.dataset.week; toggleWeekMenu(false); $('weekBtn').focus(); refresh(); });
+  document.addEventListener('click', e => { if (!e.target.closest('.weekpick')) toggleWeekMenu(false); });
+  document.addEventListener('keydown', e => {
+    if ($('weekMenu').hidden) return;
+    if (e.key === 'Escape') { toggleWeekMenu(false); $('weekBtn').focus(); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const items = [...$('weekMenu').querySelectorAll('button')], i = items.indexOf(document.activeElement);
+      e.preventDefault(); items[Math.min(items.length - 1, Math.max(0, i + (e.key === 'ArrowDown' ? 1 : -1)))].focus();
+    }
+  });
+  document.addEventListener('click', e => { const b = e.target.closest('.hbar.is-link, .link-btn'); if (b) pickMember(b.dataset.id); if (e.target.closest('[data-groupe]')) pickMember(''); const seul = e.target.closest('.comp-carte__seul'); if (seul) pickMember(seul.dataset.id); });
+  document.addEventListener('keydown', e => { const b = e.target.closest?.('.hbar.is-link'); if (b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pickMember(b.dataset.id); } });
+  let resizeTimer; addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(refresh, 200); });
+
+  async function start() {
+    const me = await api('../api/me');
+    if (me.status !== 'approved') { location.replace('attente.html'); return; }
+    if (!me.isAdmin) { location.replace('profil.html'); return; }
+    espaceNav(me);
+    const st = await espaceBot.gate($('botGate'));
+    $('loading').hidden = true;
+    if (!st.linked) return;
+    try {
+      const [config, users, annuaire] = await Promise.all([get('quotas/config'), get('users'), api('../api/membres')]);
+      cfg = config; name = await espaceBot.names(users);
+      annu = new Map(annuaire.map(m => [m.discordId, m]));
+      // catégories dans l'ordre du bot (stable d'une semaine à l'autre) : la couleur suit la catégorie, jamais son rang
+      cats = [...new Set([...Object.values(cfg.activities).map(a => a.quotaType), ...Object.keys(cfg.targets), ...Object.keys(cfg.salaryRates)])].filter(Boolean);
+      cats.forEach((k, i) => { color[k] = PALETTE[i] || OTHER; });
+      const people = new Map([...users.map(u => [u.userId, name(u.userId)]), ...annuaire.map(m => [m.discordId, m.displayName])]);
+      gens = [...people].sort((a, b) => a[1].localeCompare(b[1]));
+      if (cfg.range.since) WEEKS[0].dates = `depuis le ${new Date(cfg.range.since).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}`;
+      const params = new URLSearchParams(location.search);
+      state.week = Math.max(0, WEEKS.findIndex(w => w.key === (params.get('week') || '')));
+      state.sel = [...new Set((params.get('member') || '').split(','))].filter(id => people.has(id)).slice(0, MAX_COMPARE);
+      $('page').hidden = false;
+      await render();
+    } catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(espaceBot.error(e))}</p>`; }
+  }
+  $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
+  start().catch(() => {});
+</script>
+</body>
+</html>

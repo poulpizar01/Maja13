@@ -27,7 +27,7 @@ auth.get('/auth/discord', async (req, res) => {
       update: { isOwner: true, lastLogin: new Date() },
     });
     await openSession(req, m.id);
-    res.redirect('/casa/perfil.html');
+    res.redirect('/espace/profil.html');
     return;
   }
   const state = crypto.randomBytes(16).toString('hex');
@@ -40,7 +40,7 @@ auth.get('/auth/discord', async (req, res) => {
 auth.get('/auth/discord/callback', async (req, res) => {
   try {
     const { code, state, error } = req.query;
-    if (error || typeof code !== 'string' || state !== req.session.oauthState) { res.redirect('/casa/?error=oauth'); return; }
+    if (error || typeof code !== 'string' || state !== req.session.oauthState) { res.redirect('/espace/?error=oauth'); return; }
     delete req.session.oauthState;
 
     // 1. code → jeton
@@ -49,14 +49,14 @@ auth.get('/auth/discord/callback', async (req, res) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ client_id: config.discord.clientId, client_secret: config.discord.clientSecret, grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI }),
     });
-    if (!tokenRes.ok) { res.redirect('/casa/?error=token'); return; }
+    if (!tokenRes.ok) { res.redirect('/espace/?error=token'); return; }
     const { access_token } = await tokenRes.json() as { access_token: string };
     const discord = async <T>(path: string) => (await fetch(`${DISCORD_API}${path}`, { headers: { Authorization: `Bearer ${access_token}` } })).json() as Promise<T>;
 
     // 2. identité, appartenance au serveur (+ rôles), propriété du serveur
     const user = await discord<DiscordUser>('/users/@me');
     const memberRes = await fetch(`${DISCORD_API}/users/@me/guilds/${config.discord.guildId}/member`, { headers: { Authorization: `Bearer ${access_token}` } });
-    if (!memberRes.ok) { res.redirect('/casa/?error=not-member'); return; }
+    if (!memberRes.ok) { res.redirect('/espace/?error=not-member'); return; }
     const guildMember = await memberRes.json() as GuildMember;
     const guilds = await discord<UserGuild[]>('/users/@me/guilds');
     const owner = Array.isArray(guilds) && guilds.some(g => g.id === config.discord.guildId && g.owner === true);
@@ -84,13 +84,13 @@ auth.get('/auth/discord/callback', async (req, res) => {
     });
 
     await openSession(req, m.id);
-    res.redirect(m.status === 'approved' ? '/casa/perfil.html' : '/casa/espera.html');
+    res.redirect(m.status === 'approved' ? '/espace/profil.html' : '/espace/attente.html');
   } catch (e) {
     console.error(e);
-    res.redirect('/casa/?error=server');
+    res.redirect('/espace/?error=server');
   }
 });
 
 auth.post('/auth/logout', (req, res) => {
-  req.session.destroy(() => res.clearCookie('maja13.sid').json({ ok: true }));
+  req.session.destroy(() => res.clearCookie('site.sid').json({ ok: true }));
 });

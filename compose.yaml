@@ -1,9 +1,10 @@
-# La Maja 13 — site + base, le même fichier en dev et en prod.
+# Site (vitrine + espace membre) + base, le même fichier en dev et en prod.
 #   dev  : docker compose up   (compose.override.yaml est ajouté automatiquement, aucun .env)
 #   prod : docker compose up -d --build   avec un .env à la racine (voir .env.example), dont
 #          COMPOSE_FILE=compose.yaml écarte les réglages de dev
 # Le site n'écoute que sur 127.0.0.1 : en prod, c'est nginx sur la machine qui l'expose en HTTPS.
-name: maja13
+# SITE_ID (.env) nomme le projet, les conteneurs et les volumes : plusieurs sites cohabitent sur un même VPS
+name: ${SITE_ID:-site}
 # logs Docker limités à 3 fichiers de 10 Mo par service (sans ça, ils grossissent sans fin sur le disque)
 x-logs: &logs
   driver: json-file
@@ -11,8 +12,8 @@ x-logs: &logs
     max-size: 10m
     max-file: "3"
 services:
-  maja13-app:
-    container_name: maja13-app-1
+  app:
+    container_name: ${SITE_ID:-site}-app
     # plafonds de ressources (réglables dans .env) : un site ne peut pas accaparer le VPS
     mem_limit: ${APP_MEMORY:-512m}
     cpus: ${APP_CPUS:-1}
@@ -32,12 +33,12 @@ services:
     ports:
       - "127.0.0.1:${HOST_PORT:-3000}:3000"
     volumes:
-      - maja13-uploads:/app/uploads   # photos de la galerie quand le stockage distant n'est pas configuré
+      - uploads:/app/uploads   # photos de la galerie quand le stockage distant n'est pas configuré
     depends_on:
-      maja13-db:
+      db:
         condition: service_healthy
-  maja13-db:
-    container_name: maja13-db-1
+  db:
+    container_name: ${SITE_ID:-site}-db
     mem_limit: ${DB_MEMORY:-256m}
     cpus: ${DB_CPUS:-1}
     pids_limit: 256
@@ -48,20 +49,20 @@ services:
       - path: .env             # fournit POSTGRES_PASSWORD
         required: false
     environment:
-      POSTGRES_DB: maja13
-      POSTGRES_USER: maja13
+      POSTGRES_DB: site
+      POSTGRES_USER: site
     volumes:
-      - maja13-db:/var/lib/postgresql/data
+      - db:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U maja13 -d maja13"]
+      test: ["CMD-SHELL", "pg_isready -U site -d site"]
       interval: 5s
       timeout: 3s
       retries: 10
   # Sauvegarde de la base : au démarrage puis toutes les 24 h, dans ./backups sur la machine
   # (un dossier, pas un volume Docker : il survit à un `docker compose down -v`), 7 jours conservés.
   # Restauration : voir server/README.md. Désactivé en dev (compose.override.yaml).
-  maja13-backup:
-    container_name: maja13-backup-1
+  backup:
+    container_name: ${SITE_ID:-site}-backup
     mem_limit: 128m
     cpus: 0.5
     pids_limit: 64
@@ -72,27 +73,27 @@ services:
       - path: .env             # fournit POSTGRES_PASSWORD
         required: false
     environment:
-      PGHOST: maja13-db
-      PGUSER: maja13
-      PGDATABASE: maja13
+      PGHOST: db
+      PGUSER: site
+      PGDATABASE: site
       BACKUP_KEEP_DAYS: 7
       BACKUP_INTERVAL: 86400   # secondes
       TZ: Europe/Paris         # heure des noms de fichiers
     volumes:
       - ./backups:/backups
     depends_on:
-      maja13-db:
+      db:
         condition: service_healthy
     entrypoint: ["sh", "-c"]
     command:
       - |
         export PGPASSWORD="$$POSTGRES_PASSWORD"
         while true; do
-          f="/backups/maja13-$$(date +%Y-%m-%d_%Hh%M).sql.gz"
+          f="/backups/site-$$(date +%Y-%m-%d_%Hh%M).sql.gz"
           if pg_dump --clean --if-exists --no-owner | gzip > "$$f.tmp"; then mv "$$f.tmp" "$$f"; echo "sauvegarde : $$f"; else rm -f "$$f.tmp"; echo "ÉCHEC de la sauvegarde" >&2; fi
-          find /backups -name 'maja13-*.sql.gz' -mtime +$$BACKUP_KEEP_DAYS -delete
+          find /backups -name 'site-*.sql.gz' -mtime +$$BACKUP_KEEP_DAYS -delete
           sleep "$$BACKUP_INTERVAL"
         done
 volumes:
-  maja13-db:
-  maja13-uploads:
+  db:
+  uploads:

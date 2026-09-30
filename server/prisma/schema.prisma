@@ -1,5 +1,5 @@
-// La Maja 13 — base de La Casa. Toute modification passe par une migration :
-//   docker compose exec maja13-app npx prisma migrate dev --name <description>
+// Base du site (espace membre). Toute modification passe par une migration :
+//   docker compose exec app npx prisma migrate dev --name <description>
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -15,7 +15,7 @@ enum MemberStatus {
   rejected
 }
 
-// Compte La Casa, créé à la première connexion Discord
+// Compte de l’espace membre, créé à la première connexion Discord
 model Member {
   id           Int          @id @default(autoincrement())
   discordId    String       @unique @map("discord_id") @db.VarChar(32)
@@ -78,7 +78,7 @@ model OrgEntry {
   @@map("org_entries")
 }
 
-// Message du Salon
+// Message du chat
 model Message {
   id        Int       @id @default(autoincrement())
   memberId  Int       @map("member_id")
@@ -93,7 +93,7 @@ model Message {
   @@map("messages")
 }
 
-// Dernier message lu dans le Salon (badge « non lus »)
+// Dernier message lu dans le chat (badge « non lus »)
 model ChatRead {
   memberId   Int      @id @map("member_id")
   lastReadId Int      @default(0) @map("last_read_id")

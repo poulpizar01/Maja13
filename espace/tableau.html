@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tableau de bord — {{espace}} · {{nom}}</title>
+<meta name="application-name" content="{{nom}}">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="../assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../theme.css">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="espace.css">
+<script src="espace.js"></script>
+</head>
+<body class="espace-body">
+
+<script>espaceShell()</script>
+
+<main class="espace-page espace-page--wide dash">
+  <div class="section__head">
+    <span class="numeral">✦</span>
+    <h2>Tableau de bord</h2>
+    <p class="sub" id="period">La semaine de {{groupe}}, vue du bot</p>
+  </div>
+  <div class="espace-loading" id="loading">Chargement…</div>
+  <div id="botGate" hidden></div>
+
+  <div id="dash" hidden>
+    <div class="tiles">
+      <div class="tile"><span>Masse salariale estimée</span><b id="masse">—</b><small>cette semaine, selon les taux du bot</small></div>
+      <div class="tile"><span>Membres actifs</span><b id="actifs">—</b><small id="inactifsNote"></small></div>
+      <div class="tile"><span>Ventes du groupe</span><b id="ventes">—</b><small>unités vendues cette semaine</small></div>
+      <div class="tile"><span>Activités déclarées</span><b id="totalActs">—</b><small id="topAct"></small></div>
+    </div>
+
+    <section class="admin-block">
+      <div class="bloc-tete"><h3 class="admin-block__title">Classement hebdo</h3><a class="bloc-lien" href="classement.html">Classement détaillé →</a></div>
+      <div class="palmares" id="rank" role="table" aria-label="Classement de la semaine"></div>
+      <div class="inactifs" id="inactifs" hidden></div>
+    </section>
+
+    <!-- stock : coffres à gauche (pastille de couleur = légende), inventaire en lignes à droite -->
+    <section class="admin-block vault">
+      <div class="vault__head">
+        <h3 class="admin-block__title">Stock</h3>
+        <div class="vault__tools">
+          <input class="admin-input vault__search" id="vaultSearch" type="search" placeholder="Rechercher un objet…" aria-label="Rechercher un objet">
+          <select class="admin-select vault__sort" id="vaultSort" aria-label="Trier">
+            <option value="qty">Quantité décroissante</option>
+            <option value="name">Nom croissant</option>
+          </select>
+          <label class="check"><input type="checkbox" id="vaultEmpty"><span>Objets à 0</span></label>
+        </div>
+      </div>
+      <div class="vault__corps">
+        <div class="vault__tabs" id="vaultTabs" role="tablist" aria-label="Coffres"></div>
+        <div class="vault__inventaire">
+          <p class="vault__compte" id="vaultCount"></p>
+          <div class="vault__liste" id="vaultGrid" role="table" aria-label="Objets"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="dash-cols">
+      <section class="admin-block">
+        <h3 class="admin-block__title">Derniers mouvements</h3>
+        <div class="journal" id="history"></div>
+      </section>
+      <section class="admin-block">
+        <h3 class="admin-block__title">Bilan de la semaine</h3>
+        <div class="hbars" id="summary"></div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const money = n => Math.round(n).toLocaleString('fr-FR') + ' $';
+  const when = ms => new Date(ms).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const dlong = ms => new Date(ms).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('profil.html'); throw 0; } return r.json(); });
+  const units = n => n.toLocaleString('fr-FR');
+
+  // ---- le stock : tous les coffres ou un seul ; inventaire en lignes, avec recherche, tri et objets vides masqués.
+  // Chaque coffre a une couleur (pastille dans la liste) ; dans la vue d'ensemble, la barre de chaque objet est
+  // segmentée selon sa répartition entre coffres, avec ces mêmes couleurs.
+  let vault = { total: [], coffres: [] }, vaultView = 'all';
+  const COULEURS = ['var(--accent)', '#6fcf8e', '#e5b453', '#6ea8fe', '#c792ea', '#9aa0a6', '#f28b82', '#80cbc4'];
+  const itemName = s => s.charAt(0).toUpperCase() + s.slice(1);
+  const coffreName = c => c.label || `Coffre ${String(c.channelId).slice(-4)}`;
+  function renderVault() {
+    const { total, coffres } = vault;
+    if (!coffres.some(c => c.channelId === vaultView)) vaultView = 'all';
+    const sum = list => list.reduce((s, i) => s + i.quantite, 0);
+    const multi = coffres.length > 1;
+    const tab = (key, label, list, admin, couleur) => `<button class="vtab ${key === vaultView ? 'is-on' : ''}" role="tab" aria-selected="${key === vaultView}" data-vault="${esc(key)}">
+      ${couleur ? `<i class="vtab__pastille" style="background:${couleur}"></i>` : '<i class="vtab__pastille vtab__pastille--tous"></i>'}
+      <span><b>${esc(label)}${admin ? ' <i class="tag">admin</i>' : ''}</b><small>${list.filter(i => i.quantite).length} objets · ${units(sum(list))} unités</small></span></button>`;
+    $('vaultTabs').hidden = !multi;
+    $('vaultTabs').innerHTML = tab('all', 'Tous les coffres', total) + coffres.map((c, k) => tab(c.channelId, coffreName(c), c.items, c.role === 'logs_coffres_admin', COULEURS[k % COULEURS.length])).join('');
+
+    const current = vaultView === 'all' ? total : coffres.find(c => c.channelId === vaultView).items;
+    const q = $('vaultSearch').value.trim().toLowerCase();
+    let list = current.filter(i => ($('vaultEmpty').checked || i.quantite) && (!q || i.item.toLowerCase().includes(q)));
+    list = [...list].sort($('vaultSort').value === 'name' ? (a, b) => a.item.localeCompare(b.item) : (a, b) => b.quantite - a.quantite || a.item.localeCompare(b.item));
+    const max = Math.max(1, ...current.map(i => i.quantite));
+    const shown = current.filter(i => $('vaultEmpty').checked || i.quantite).length;
+    $('vaultCount').textContent = q ? `${list.length} résultat${list.length > 1 ? 's' : ''} sur ${shown}` : `${shown} objet${shown > 1 ? 's' : ''}`;
+    // barre : longueur sur une échelle logarithmique (un objet à 700 000 n'écrase pas ceux à 13 ; le chiffre exact est à droite) ;
+    // segments = part de chaque coffre (vue d'ensemble)
+    const barre = i => {
+      const w = i.quantite ? Math.max(3, Math.round(Math.log10(i.quantite + 1) / Math.log10(max + 1) * 100)) : 0;
+      if (vaultView !== 'all' || !multi || !i.quantite) return `<i class="vitem__barre"><b style="width:${w}%"></b></i>`;
+      const parts = coffres.map((c, k) => ({ nom: coffreName(c), n: c.items.find(x => x.item === i.item)?.quantite || 0, couleur: COULEURS[k % COULEURS.length] })).filter(p => p.n);
+      return `<i class="vitem__barre vitem__barre--parts" style="width:${w}%">${parts.map(p => `<b style="flex:${p.n};background:${p.couleur}" title="${esc(p.nom)} : ${units(p.n)}"></b>`).join('')}</i>`;
+    };
+    const detail = i => vaultView === 'all' && multi && i.quantite
+      ? coffres.map((c, k) => ({ nom: coffreName(c), n: c.items.find(x => x.item === i.item)?.quantite || 0, couleur: COULEURS[k % COULEURS.length] })).filter(p => p.n).sort((a, b) => b.n - a.n)
+        .map(p => `<span><i style="background:${p.couleur}"></i>${esc(p.nom)} <b>${units(p.n)}</b></span>`).join('') : '';
+    $('vaultGrid').innerHTML = list.length ? list.map(i => `<div class="vitem ${i.quantite ? '' : 'is-empty'}" role="row">
+      <span class="vitem__nom" role="cell" title="${esc(itemName(i.item))}">${esc(itemName(i.item))}</span>
+      <span class="vitem__jauge" role="cell">${barre(i)}${detail(i) ? `<span class="vitem__detail">${detail(i)}</span>` : ''}</span>
+      <b class="vitem__qte" role="cell">${units(i.quantite)}</b></div>`).join('')
+      : `<p class="admin-empty vault__empty">${q ? 'Aucun objet ne correspond à la recherche.' : 'Ce coffre est vide.'}</p>`;
+  }
+  $('vaultTabs').addEventListener('click', e => { const b = e.target.closest('[data-vault]'); if (b) { vaultView = b.dataset.vault; renderVault(); } });
+  ['vaultSearch', 'vaultSort', 'vaultEmpty'].forEach(id => $(id).addEventListener('input', renderVault));
+  const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`;
+
+  async function load() {
+    const [cfg, pay, summary, ventes, users, stocks, channels, history, annuaire] = await Promise.all([
+      espaceBot.get('quotas/config'), espaceBot.get('quotas/pay'), espaceBot.get('quotas/summary'), espaceBot.get('ventes'), espaceBot.get('users'),
+      espaceBot.get('stocks'), espaceBot.get('stocks/channels'), espaceBot.get('stocks/history?limit=40'), api('../api/membres')]);
+    const name = await espaceBot.names(users);
+    const coffres = await Promise.all(channels.map(c => espaceBot.get('stocks/' + c.channelId).then(items => ({ ...c, items })).catch(() => ({ ...c, items: [] }))));
+    const cats = [...new Set([...Object.keys(cfg.targets), ...Object.keys(cfg.salaryRates), ...pay.flatMap(p => Object.keys(p.byQuotaType))])];
+    const actifs = pay.filter(p => p.salaire > 0 || Object.values(p.byQuotaType).some(Boolean)).sort((a, b) => b.salaire - a.salaire);
+    const inactifs = annuaire.filter(m => !actifs.some(p => p.userId === m.discordId)).map(m => m.displayName);
+
+    $('period').textContent = cfg.range.since ? `Depuis ${dlong(cfg.range.since)} · vue du bot` : 'La semaine en cours, vue du bot';
+    $('masse').textContent = money(pay.reduce((s, p) => s + p.salaire, 0));
+    $('actifs').textContent = actifs.length;
+    $('inactifsNote').textContent = inactifs.length ? `${plural(inactifs.length, 'membre')} sans déclaration` : 'tout le monde a déclaré';
+    $('ventes').textContent = ventes.groupTotal;
+    const top = [...summary].sort((a, b) => b.total - a.total)[0];
+    $('totalActs').textContent = summary.reduce((s, a) => s + a.total, 0);
+    $('topAct').textContent = top && top.total ? `surtout : ${top.label}` : '';
+
+    // classement hebdo : même palmarès que la page Classement (rang, avatar, jauges par catégorie, paie)
+    const avatars = Object.fromEntries(annuaire.map(m => [m.discordId, m.avatarUrl]));
+    const jauge = (v, t, label) => {
+      const etat = !v ? 'is-vide' : t && v >= t ? 'is-done' : 'is-cours', pct = t ? Math.min(100, Math.round(v / t * 100)) : (v ? 100 : 0);
+      return `<div class="jauge ${etat}" role="cell" data-label="${esc(label)}"><span class="jauge__val">${v ? `<b>${v}</b>${t ? `<small> / ${t}</small>` : ''}` : '<small>—</small>'}</span><i class="jauge__barre"><b style="width:${pct}%"></b></i></div>`;
+    };
+    const rank = $('rank');
+    rank.style.setProperty('--n', cats.length);
+    rank.innerHTML = !actifs.length ? '<p class="admin-empty">Aucune déclaration cette semaine.</p>' : `
+      <div class="palmares__tete" role="row"><span role="columnheader">#</span><span role="columnheader">Membre</span>
+        ${cats.map(k => `<span role="columnheader">${esc(espaceBot.label(k))}${cfg.targets[k] ? ` <small>/ ${cfg.targets[k]}</small>` : ''}</span>`).join('')}<span role="columnheader">Paie</span></div>
+      ${actifs.map((p, i) => `<div class="palmares__ligne${i < 3 ? ' is-podium' : ''}" role="row">
+        <span class="palmares__rang" role="cell">${String(i + 1).padStart(2, '0')}</span>
+        <span class="palmares__qui" role="cell">${espaceAvatar(avatars[p.userId])}<b>${esc(name(p.userId))}</b></span>
+        ${cats.map(k => jauge(p.byQuotaType[k] || 0, cfg.targets[k], espaceBot.label(k))).join('')}
+        <span class="palmares__paie" role="cell">${money(p.salaire)}</span></div>`).join('')}`;
+    // membres de l'espace sans déclaration : pastilles avec avatar
+    const sansDecl = annuaire.filter(m => !actifs.some(p => p.userId === m.discordId));
+    $('inactifs').hidden = !sansDecl.length;
+    $('inactifs').innerHTML = `<p>Sans déclaration cette semaine <b>${sansDecl.length}</b></p><div>${sansDecl.map(m => `<span class="pastille-membre">${espaceAvatar(m.avatarUrl, 22)}${esc(m.displayName)}</span>`).join('')}</div>`;
+
+    vault = { total: stocks, coffres: coffres.filter(c => c.items.length) };
+    renderVault();
+    // derniers mouvements : regroupés par jour, quantité en pastille (+ vert / − rouge), stock avant → après en discret
+    const jour = ms => { const d = new Date(ms), auj = new Date(); const hier = new Date(Date.now() - 864e5);
+      return d.toDateString() === auj.toDateString() ? "Aujourd'hui" : d.toDateString() === hier.toDateString() ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); };
+    const heure = ms => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    let jourCourant = '';
+    $('history').innerHTML = history.length ? history.map(h => {
+      const j = jour(h.timestamp), tete = j !== jourCourant ? `<p class="journal__jour">${esc(j)}</p>` : ''; jourCourant = j;
+      return `${tete}<div class="journal__ligne"><time>${heure(h.timestamp)}</time>
+        <span class="journal__quoi"><b>${esc(h.joueur)}</b> <span class="muted">${esc(h.action)}</span> ${esc(itemName(h.item))}</span>
+        <span class="journal__delta ${h.quantite < 0 ? 'neg' : 'pos'}">${h.quantite > 0 ? '+' : ''}${units(h.quantite)}</span>
+        <small class="journal__stock">${units(h.stockAvant)} → ${units(h.stockApres)}</small></div>`;
+    }).join('') : '<p class="admin-empty">Aucun mouvement enregistré.</p>';
+    // bilan : barres horizontales, relatives à l'activité la plus déclarée
+    const faites = summary.filter(a => a.total).sort((a, b) => b.total - a.total), maxAct = Math.max(1, ...faites.map(a => a.total));
+    $('summary').innerHTML = faites.map(a => `<div class="hbar"><span class="hbar__label">${esc(a.label)}</span><span class="hbar__track"><i style="width:${Math.round(a.total / maxAct * 100)}%"></i></span><span class="hbar__value">${units(a.total)}</span></div>`).join('')
+      || '<p class="admin-empty">Rien de déclaré cette semaine.</p>';
+    $('dash').hidden = false;
+  }
+  async function start() {
+    const me = await api('../api/me');
+    if (me.status !== 'approved') { location.replace('attente.html'); return; }
+    if (!me.isAdmin) { location.replace('profil.html'); return; }
+    espaceNav(me);
+    const st = await espaceBot.gate($('botGate'));
+    $('loading').hidden = true;
+    if (!st.linked) return;
+    try { await load(); setInterval(() => load().catch(() => {}), 5 * 60000); }   // 5 min : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(espaceBot.error(e))}</p>`; }
+  }
+  $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
+  start().catch(() => {});
+</script>
+</body>
+</html>

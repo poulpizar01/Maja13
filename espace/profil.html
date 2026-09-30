@@ -3,46 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mon profil — La Casa · La Maja 13</title>
+<title>Mon profil — {{espace}} · {{nom}}</title>
+<meta name="application-name" content="{{nom}}">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../theme.css">
 <link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="casa.css">
-<script src="casa.js"></script>
+<link rel="stylesheet" href="espace.css">
+<script src="espace.js"></script>
 </head>
-<body class="casa-body">
-<div class="grain" aria-hidden="true"></div>
-<script src="casa-bg.js" defer></script>
+<body class="espace-body">
 
-<header class="nav is-scrolled">
-  <a class="nav__brand" href="../index.html#entrada"><img src="../assets/logo-nav.webp" alt="" width="40" height="40"><span>La Maja <em>13</em></span></a>
-  <nav class="nav__links casa-nav">
-    <a href="perfil.html" class="is-active">Mon profil</a>
-    <a href="familia.html">La Famille</a>
-    <a href="classement.html">Classement</a>
-    <a href="chat.html" id="chatLink">Le Salon<span class="nav__badge" id="chatBadge" hidden></span></a>
-    <a href="galerie.html">Galerie</a>
-    <div class="nav__group" id="gestion" hidden>
-      <button class="nav__group-btn" type="button" aria-expanded="false">Gestion <i>▾</i></button>
-      <div class="nav__menu">
-        <a href="admin.html">Administration</a>
-        <a href="tableau.html">Tableau de bord</a>
-        <a href="stats.html">Statistiques</a>
-        <a href="taxes.html">Taxes</a>
-        <a href="armurerie.html">Armurerie</a>
-        <a href="organigramme.html" id="orgLink" hidden>Hiérarchie</a>
-      </div>
-    </div>
-    <a href="../accueil.html">Le site</a>
-    <button class="nav__cta casa-logout" id="logout">Déconnexion</button>
-  </nav>
-</header>
+<script>espaceShell()</script>
 
-<main class="casa-page">
-  <div class="casa-loading" id="loading">Chargement…</div>
+<main class="espace-page">
+  <div class="espace-loading" id="loading">Chargement…</div>
 
   <section class="perfil" id="perfil" hidden>
     <div class="perfil__card">
@@ -54,7 +31,7 @@
       <h1 class="perfil__name" id="displayName">—</h1>
       <p class="perfil__discord">Discord : <b id="username">—</b></p>
       <dl class="perfil__meta">
-        <div><dt>Dans la familia depuis</dt><dd id="joinedAt">—</dd></div>
+        <div><dt>Membre depuis</dt><dd id="joinedAt">—</dd></div>
         <div><dt>Dernière connexion</dt><dd id="lastLogin">—</dd></div>
         <div><dt>Téléphone RP</dt><dd id="phoneRpView">—</dd></div>
       </dl>
@@ -65,9 +42,9 @@
       <h2>Modifier</h2>
       <label>Nom RP<input name="displayName" id="f-displayName" maxlength="64" required></label>
       <label>Téléphone RP<input name="phoneRp" id="f-phoneRp" maxlength="32" placeholder="555-123-123"></label>
-      <label>Bio<textarea name="bio" id="f-bio" rows="5" maxlength="600" placeholder="Qui tu es dans la familia, d'où tu viens…"></textarea></label>
+      <label>Bio<textarea name="bio" id="f-bio" rows="5" maxlength="600" placeholder="Qui tu es, d'où tu viens…"></textarea></label>
       <div class="perfil__actions">
-        <button class="btn btn--gold" type="submit">Enregistrer</button>
+        <button class="btn btn--accent" type="submit">Enregistrer</button>
         <span class="perfil__saved" id="saved" hidden>Enregistré ✦</span>
       </div>
     </form>
@@ -88,7 +65,7 @@
           <div class="stat"><span class="stat__label">Ventes par produit</span><ul class="stat__list" id="ventes"><li class="muted">Aucune vente cette semaine</li></ul></div>
         </div>
       </div>
-      <p class="semaine__hint">Ces chiffres viennent du bot Discord de la familia : les déclarations se font sur Discord, elles apparaissent ici aussitôt.</p>
+      <p class="semaine__hint">Ces chiffres viennent du bot Discord du groupe : les déclarations se font sur Discord, elles apparaissent ici aussitôt.</p>
     </div>
   </section>
 
@@ -117,12 +94,11 @@
     $('f-displayName').value = m.displayName || '';
     $('f-phoneRp').value = m.phoneRp || '';
     $('f-bio').value = m.bio || '';
-    document.title = `${m.displayName} — Mon profil · La Maja 13`;
+    document.title = `${m.displayName} — ${document.title}`;
   }
-  casaBot.status();   // en parallèle de /api/me (repris par gate)
   fetch('../api/me', { credentials: 'same-origin' })
     .then(r => { if (r.status === 401) { location.replace('./'); throw 0; } return r.json(); })
-    .then(m => { if (m.status !== 'approved') { location.replace('espera.html'); return; } ME = m; casaNav(m); render(m); $('loading').hidden = true; $('perfil').hidden = false; loadSemaine(); })
+    .then(m => { if (m.status !== 'approved') { location.replace('attente.html'); return; } ME = m; espaceNav(m); render(m); $('loading').hidden = true; $('perfil').hidden = false; loadSemaine(); })
     .catch(() => {});
 
   // ---- Ma semaine & mes paies (données du bot Discord, en lecture seule)
@@ -131,14 +107,14 @@
   const dlong = ms => new Date(ms).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
   let ME = null;
   async function loadSemaine() {
-    const st = await casaBot.gate($('botGate'));
+    const st = await espaceBot.gate($('botGate'));
     if (!st.configured) return;
     $('semaine').hidden = false;
     if (!st.linked) return;
     let cfg, q, pay, ventes;
     try {
-      [cfg, q, pay, ventes] = await Promise.all([casaBot.get('quotas/config'), casaBot.get('quotas/' + ME.discordId), casaBot.get('quotas/pay/' + ME.discordId), casaBot.get('ventes/' + ME.discordId)]);
-    } catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(casaBot.error(e))}</p>`; return; }
+      [cfg, q, pay, ventes] = await Promise.all([espaceBot.get('quotas/config'), espaceBot.get('quotas/' + ME.discordId), espaceBot.get('quotas/pay/' + ME.discordId), espaceBot.get('ventes/' + ME.discordId)]);
+    } catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(espaceBot.error(e))}</p>`; return; }
     $('semaineBody').hidden = false;
     $('since').textContent = cfg.range.since ? `Depuis ${dlong(cfg.range.since)}` : '';
     const cats = [...new Set([...Object.keys(cfg.targets), ...Object.keys(cfg.salaryRates), ...Object.keys(q.byQuotaType)])];
@@ -146,7 +122,7 @@
       const count = q.byQuotaType[k] || 0, target = cfg.targets[k], rate = cfg.salaryRates[k];
       const pct = target ? Math.min(100, Math.round(count / target * 100)) : 0;
       return `<div class="quota ${target && count >= target ? 'is-done' : ''}">
-        <div class="quota__head"><span>${esc(casaBot.label(k))}</span><b>${count}${target ? ` / ${target}` : ''}</b></div>
+        <div class="quota__head"><span>${esc(espaceBot.label(k))}</span><b>${count}${target ? ` / ${target}` : ''}</b></div>
         <div class="quota__bar"><i style="width:${target ? pct : (count ? 100 : 0)}%"></i></div>
         <small>${target ? (count >= target ? 'Objectif atteint ✦' : `${target - count} restant${target - count > 1 ? 's' : ''}`) : 'Pas d’objectif fixé'}${rate ? ` · ${rate} $ / unité` : ''}</small>
       </div>`; }).join('') || '<p class="muted">Aucune catégorie de quota configurée dans le bot.</p>';
@@ -159,13 +135,13 @@
   }
   // les 8 dernières semaines (lundi → dimanche), calculées par le bot
   async function loadPaies(cats) {
-    const weeks = Array.from({ length: 8 }, (_, i) => casaBot.isoWeek(i + 1));
-    const list = (await Promise.all(weeks.map(w => casaBot.get(`quotas/pay/${ME.discordId}?week=${w}`).then(p => ({ week: w, ...p })).catch(() => null)))).filter(p => p && (p.salaire || Object.values(p.byQuotaType).some(Boolean)));
+    const weeks = Array.from({ length: 8 }, (_, i) => espaceBot.isoWeek(i + 1));
+    const list = (await Promise.all(weeks.map(w => espaceBot.get(`quotas/pay/${ME.discordId}?week=${w}`).then(p => ({ week: w, ...p })).catch(() => null)))).filter(p => p && (p.salaire || Object.values(p.byQuotaType).some(Boolean)));
     if (!list.length) return;
     $('paies').hidden = false;
     const total = list.reduce((s, p) => s + p.salaire, 0), best = Math.max(...list.map(p => p.salaire));
     $('paiesTotal').innerHTML = `${list.length} semaine${list.length > 1 ? 's' : ''} · <b>${money(total)}</b> cumulés`;
-    $('paiesHead').innerHTML = `<tr><th>Semaine</th>${cats.map(k => `<th>${esc(casaBot.label(k))}</th>`).join('')}<th>Paie</th></tr>`;
+    $('paiesHead').innerHTML = `<tr><th>Semaine</th>${cats.map(k => `<th>${esc(espaceBot.label(k))}</th>`).join('')}<th>Paie</th></tr>`;
     $('paiesRows').innerHTML = list.map(p => `<tr><td><b>${p.week.replace('-W', ' · semaine ')}</b></td>${cats.map(k => `<td>${p.byQuotaType[k] || 0}</td>`).join('')}<td><b class="pay">${money(p.salaire)}</b>${p.salaire === best && best > 0 ? ' ✦' : ''}</td></tr>`).join('');
   }
 

@@ -1,4 +1,4 @@
-// Accès à la base de La Casa : Prisma pour les données, un pool pg pour les sessions (connect-pg-simple).
+// Accès à la base du site : Prisma pour les données, un pool pg pour les sessions (connect-pg-simple).
 import pg from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from './generated/prisma/client.js';

@@ -3,52 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Administration — La Casa · La Maja 13</title>
+<title>Administration — {{espace}} · {{nom}}</title>
+<meta name="application-name" content="{{nom}}">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../theme.css">
 <link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="casa.css">
-<script src="casa.js"></script>
+<link rel="stylesheet" href="espace.css">
+<script src="espace.js"></script>
 </head>
-<body class="casa-body">
-<div class="grain" aria-hidden="true"></div>
-<script src="casa-bg.js" defer></script>
+<body class="espace-body">
 
-<header class="nav is-scrolled">
-  <a class="nav__brand" href="../index.html#entrada"><img src="../assets/logo-nav.webp" alt="" width="40" height="40"><span>La Maja <em>13</em></span></a>
-  <nav class="nav__links casa-nav">
-    <a href="perfil.html">Mon profil</a>
-    <a href="familia.html">La Famille</a>
-    <a href="classement.html">Classement</a>
-    <a href="chat.html" id="chatLink">Le Salon<span class="nav__badge" id="chatBadge" hidden></span></a>
-    <a href="galerie.html">Galerie</a>
-    <div class="nav__group" id="gestion" hidden>
-      <button class="nav__group-btn is-active" type="button" aria-expanded="false">Gestion <i>▾</i></button>
-      <div class="nav__menu">
-        <a href="admin.html" class="is-active">Administration</a>
-        <a href="tableau.html">Tableau de bord</a>
-        <a href="stats.html">Statistiques</a>
-        <a href="taxes.html">Taxes</a>
-        <a href="armurerie.html">Armurerie</a>
-        <a href="organigramme.html" id="orgLink" hidden>Hiérarchie</a>
-      </div>
-    </div>
-    <a href="../accueil.html">Le site</a>
-    <button class="nav__cta casa-logout" id="logout">Déconnexion</button>
-  </nav>
-</header>
+<script>espaceShell()</script>
 
-<main class="casa-page casa-page--wide">
+<main class="espace-page espace-page--wide">
   <div class="section__head">
     <span class="numeral">✦</span>
     <h2>Administration</h2>
-    <p class="sub">Gestion de la familia</p>
+    <p class="sub">Gestion de {{groupe}}</p>
   </div>
-  <div class="casa-loading" id="loading">Chargement…</div>
-  <p class="casa-toast" id="toast" hidden></p>
+  <div class="espace-loading" id="loading">Chargement…</div>
+  <p class="espace-toast" id="toast" hidden></p>
 
   <section class="admin-block" id="pendingBlock" hidden>
     <h3 class="admin-block__title">En attente <span class="badge" id="pendingCount">0</span></h3>
@@ -57,7 +34,7 @@
   </section>
 
   <section class="admin-block" id="membersBlock" hidden>
-    <h3 class="admin-block__title">Membres <span class="badge badge--gold" id="memberCount">0</span></h3>
+    <h3 class="admin-block__title">Membres <span class="badge badge--accent" id="memberCount">0</span></h3>
     <p class="admin-block__hint">Modifie le nom RP ou le grade puis <b>Enregistrer</b>. Le pseudo Discord ne se change pas ici, il vient de Discord.</p>
     <div class="table-wrap">
       <table class="admin-table members-table">
@@ -75,9 +52,9 @@
   const STATUS = { pending: 'En attente', approved: 'Validé', rejected: 'Refusé' };
   let me, ranks = [];
 
-  const toast = (msg, ok = true) => { const t = $('toast'); t.textContent = msg; t.className = 'casa-toast' + (ok ? '' : ' is-error'); t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 3000); };
+  const toast = (msg, ok = true) => { const t = $('toast'); t.textContent = msg; t.className = 'espace-toast' + (ok ? '' : ' is-error'); t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 3000); };
   const api = (url, opt = {}) => fetch(url, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, ...opt })
-    .then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('perfil.html'); throw 0; } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
+    .then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('profil.html'); throw 0; } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
 
   // les grades à pouvoirs complets ne s'attribuent / ne se retirent que par quelqu'un qui les a
   const managesRank = key => !!ranks.find(r => r.key === key)?.canManage;
@@ -101,7 +78,7 @@
           <label>Grade${rankSelect(m, m.id)}</label>
         </div>
         <div class="pending-card__actions">
-          <button class="btn btn--gold" data-approve="${m.id}">Approuver</button>
+          <button class="btn btn--accent" data-approve="${m.id}">Approuver</button>
           <button class="btn btn--ghost btn--danger" data-reject="${m.id}">Refuser</button>
         </div>
       </article>`).join('') : '<p class="admin-empty">Personne en attente.</p>';
@@ -115,7 +92,7 @@
         <td><span class="status status--${m.status}">${STATUS[m.status]}</span></td>
         <td class="muted">${fmt(m.approvedAt || m.joinedAt)}</td>
         <td class="admin-actions">
-          <button class="btn btn--gold btn--sm" data-save="${m.id}">Enregistrer</button>
+          <button class="btn btn--accent btn--sm" data-save="${m.id}">Enregistrer</button>
           ${m.id !== me.id ? (m.status === 'rejected'
             ? `<button class="btn btn--ghost btn--sm" data-approve="${m.id}">Approuver</button>`
             : `<button class="btn btn--ghost btn--sm btn--danger" data-reject="${m.id}" title="Retirer l'accès">Exclure</button>`) : ''}
@@ -126,8 +103,8 @@
   async function load() {
     const [meData, r, list] = await Promise.all([api('../api/me'), api('../api/ranks'), api('../api/admin/members')]);
     me = meData; ranks = r;
-    if (!me.isAdmin) { location.replace('perfil.html'); return; }
-    casaNav(me);
+    if (!me.isAdmin) { location.replace('profil.html'); return; }
+    espaceNav(me);
     render(list); $('loading').hidden = true;
   }
 
@@ -145,10 +122,10 @@
     const b = e.target.closest('button[data-save],button[data-approve],button[data-reject]');
     if (!b) return;
     if (b.dataset.save) return patch(b.dataset.save, fieldsOf(b.dataset.save), 'Enregistré ✦');
-    if (b.dataset.approve) return patch(b.dataset.approve, { ...fieldsOf(b.dataset.approve), status: 'approved' }, 'Bienvenue dans la familia ✦');
+    if (b.dataset.approve) return patch(b.dataset.approve, { ...fieldsOf(b.dataset.approve), status: 'approved' }, 'Membre validé ✦');
     if (b.dataset.reject) {
       const row = b.closest('[data-row]'); const name = row?.querySelector('[data-field="displayName"]')?.value || 'ce membre';
-      if (await casaConfirm(`${name} n'aura plus accès à La Casa. Tu pourras le réintégrer plus tard.`, { title: "Retirer l'accès ?", ok: "Retirer l'accès", danger: true }))
+      if (await espaceConfirm(`${name} n'aura plus accès à l'espace membre. Tu pourras le réintégrer plus tard.`, { title: "Retirer l'accès ?", ok: "Retirer l'accès", danger: true }))
         patch(b.dataset.reject, { status: 'rejected' }, 'Accès retiré');
     }
   });

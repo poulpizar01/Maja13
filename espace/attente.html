@@ -3,30 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>En attente — La Casa · La Maja 13</title>
+<title>En attente — {{espace}} · {{nom}}</title>
+<meta name="application-name" content="{{nom}}">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../theme.css">
 <link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="casa.css">
+<link rel="stylesheet" href="espace.css">
 </head>
-<body class="casa-body">
-<div class="grain" aria-hidden="true"></div>
-<script src="casa-bg.js" defer></script>
+<body class="espace-body">
 
-<main class="casa-login">
-  <a class="casa-login__back" href="../accueil.html">← Retour au site</a>
-  <img class="casa-login__logo" src="../assets/logo.webp" alt="La Maja 13" width="200" height="200">
+<main class="espace-login">
+  <a class="espace-login__back" href="../">← Retour au site</a>
+  <img class="espace-login__logo" src="../assets/logo.png" alt="{{nom}}" width="200" height="200">
   <p class="eyebrow" id="eyebrow">Demande reçue</p>
   <h1 id="title">En attente</h1>
-  <p class="casa-login__lead" id="lead">Ton compte Discord <b id="who"></b> est bien enregistré. Le Jefe doit maintenant valider ton entrée dans la familia — reviens ici une fois qu'il t'a donné le feu vert.</p>
-  <div class="casa-login__actions">
+  <p class="espace-login__lead" id="lead">Ton compte Discord <b id="who"></b> est bien enregistré. Un responsable doit maintenant valider ton entrée dans {{groupe}} — reviens ici une fois ton accès accordé.</p>
+  <div class="espace-login__actions">
     <button class="btn btn--ghost" id="refresh">Vérifier</button>
-    <button class="btn btn--ghost casa-logout" id="logout">Déconnexion</button>
+    <button class="btn btn--ghost espace-logout" id="logout">Déconnexion</button>
   </div>
-  <p class="casa-login__small">Lealtad · Respeto · La familia es sagrada</p>
+  <p class="espace-login__small">{{devise}}</p>
 </main>
 
 <script>
@@ -35,12 +34,12 @@
     fetch('../api/me', { credentials: 'same-origin' })
       .then(r => { if (r.status === 401) { location.replace('./'); throw 0; } return r.json(); })
       .then(m => {
-        if (m.status === 'approved') { location.replace('perfil.html'); return; }
+        if (m.status === 'approved') { location.replace('profil.html'); return; }
         $('who').textContent = '@' + m.username;
         if (m.status === 'rejected') {
           $('eyebrow').textContent = 'Demande refusée';
           $('title').textContent = 'Désolé';
-          $('lead').innerHTML = "Ta demande n'a pas été retenue par la familia. Si tu penses qu'il y a une erreur, vois ça avec le Jefe sur Discord.";
+          $('lead').innerHTML = "Ta demande n'a pas été retenue. Si tu penses qu'il y a une erreur, vois ça avec un responsable sur Discord.";
           $('refresh').hidden = true;
         }
       }).catch(() => {});

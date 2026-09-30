@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Le Classement — {{espace}} · {{nom}}</title>
+<meta name="application-name" content="{{nom}}">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="../assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../theme.css">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="espace.css">
+<script src="espace.js"></script>
+</head>
+<body class="espace-body">
+
+<script>espaceShell()</script>
+
+<main class="espace-page espace-page--wide">
+  <div class="section__head">
+    <span class="numeral">✦</span>
+    <h2>Le Classement</h2>
+    <p class="sub" id="period">La semaine de {{groupe}}</p>
+  </div>
+  <div class="espace-loading" id="loading">Chargement…</div>
+  <div id="botGate" hidden></div>
+
+  <div id="page" hidden>
+    <div class="tiles tiles--3">
+      <div class="tile"><span>Ventes du groupe</span><b id="tVente">0</b><small id="tVenteNote"></small></div>
+      <div class="tile"><span>Quotas atteints</span><b id="tQuota">0 / 0</b><small>membres ayant rempli tous leurs objectifs</small></div>
+      <div class="tile"><span>Membres actifs</span><b id="tActifs">0</b><small>ont déclaré au moins une activité</small></div>
+    </div>
+
+    <section class="admin-block">
+      <div class="podium" id="podium"></div>
+      <div class="palmares" id="palmares" role="table" aria-label="Classement de la semaine"></div>
+      <p class="admin-block__hint">Classement par points du bot (voir /config classement sur Discord), puis par paie ; paie estimée selon ses taux, hors primes.</p>
+    </section>
+  </div>
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const money = n => Math.round(n).toLocaleString('fr-FR') + ' $';
+  const dlong = ms => new Date(ms).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('attente.html'); throw 0; } return r.json(); });
+  let me;
+
+  // jauge d'une catégorie : verte si l'objectif est rempli, ambre en cours, un simple tiret si rien n'est déclaré
+  function jauge(v, t, label) {
+    const etat = !v ? 'is-vide' : t && v >= t ? 'is-done' : 'is-cours';
+    const pct = t ? Math.min(100, Math.round(v / t * 100)) : (v ? 100 : 0);
+    return `<div class="jauge ${etat}" role="cell" data-label="${esc(label)}">
+      <span class="jauge__val">${v ? `<b>${v}</b>${t ? `<small> / ${t}</small>` : ''}` : '<small>—</small>'}</span>
+      <i class="jauge__barre"><b style="width:${pct}%"></b></i></div>`;
+  }
+  async function load() {
+    const [cfg, pay, ranking, ventes, users, annuaire] = await Promise.all([espaceBot.get('quotas/config'), espaceBot.get('quotas/pay'), espaceBot.get('quotas/ranking'), espaceBot.get('ventes'), espaceBot.get('users'),
+      fetch('../api/membres', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []).catch(() => [])]);
+    const name = await espaceBot.names(users);
+    const avatars = Object.fromEntries(annuaire.map(m => [m.discordId, m.avatarUrl]));
+    const points = Object.fromEntries(ranking.map(r => [r.userId, r.points]));
+    const cats = [...new Set([...Object.keys(cfg.targets), ...Object.keys(cfg.salaryRates), ...pay.flatMap(p => Object.keys(p.byQuotaType))])];
+    const targets = cfg.targets, withTargets = cats.filter(k => targets[k]);
+    const rows = pay.filter(p => p.salaire > 0 || points[p.userId] || Object.values(p.byQuotaType).some(Boolean))
+      .map(p => ({ ...p, points: points[p.userId] || 0 }))
+      .sort((a, b) => b.points - a.points || b.salaire - a.salaire);
+    $('period').textContent = cfg.range.since ? `Depuis ${dlong(cfg.range.since)} · remise à zéro chaque dimanche` : 'La semaine en cours';
+    $('tVente').textContent = ventes.groupTotal; $('tVenteNote').textContent = targets.vente ? `objectif ${targets.vente} par membre` : '';
+    $('tQuota').textContent = `${rows.filter(r => withTargets.length && withTargets.every(k => (r.byQuotaType[k] || 0) >= targets[k])).length} / ${rows.length}`;
+    $('tActifs').textContent = rows.length;
+    const avecPoints = rows.some(r => r.points > 0);   // colonne des points seulement si le bot en attribue
+    const faits = r => withTargets.filter(k => (r.byQuotaType[k] || 0) >= targets[k]).length;
+    const toi = r => r.userId === me.discordId ? ' <span class="tag tag--accent">toi</span>' : '';
+    const rang = i => String(i + 1).padStart(2, '0');
+    // podium : les trois premiers, en fiches
+    $('podium').innerHTML = rows.slice(0, 3).map((r, i) => `
+      <article class="podium__carte${r.userId === me.discordId ? ' is-me' : ''}">
+        <span class="podium__rang" aria-label="Rang ${i + 1}">${rang(i)}</span>
+        <div class="podium__qui">${espaceAvatar(avatars[r.userId], i === 0 ? 58 : 48)}<div><b>${esc(name(r.userId))}${toi(r)}</b>
+          <small>${withTargets.length ? `${faits(r)} / ${withTargets.length} objectif${withTargets.length > 1 ? 's' : ''} rempli${faits(r) > 1 ? 's' : ''}` : ''}${avecPoints ? ` · ${r.points} pts` : ''}</small></div></div>
+        <p class="podium__paie"><span>Paie estimée</span><b>${money(r.salaire)}</b></p>
+        <div class="podium__jauges">${withTargets.map(k => jauge(r.byQuotaType[k] || 0, targets[k], espaceBot.label(k))).join('')}</div>
+      </article>`).join('');
+    // palmarès complet : une ligne par membre, mêmes colonnes pour tous (--n catégories)
+    const pal = $('palmares');
+    pal.style.setProperty('--n', cats.length);
+    pal.classList.toggle('has-points', avecPoints);
+    pal.innerHTML = !rows.length ? `<p class="admin-empty">Personne n'a encore déclaré d'activité cette semaine.</p>` : `
+      <div class="palmares__tete" role="row"><span role="columnheader">#</span><span role="columnheader">Membre</span>
+        ${cats.map(k => `<span role="columnheader">${esc(espaceBot.label(k))}${targets[k] ? ` <small>/ ${targets[k]}</small>` : ''}</span>`).join('')}
+        ${avecPoints ? '<span role="columnheader">Points</span>' : ''}<span role="columnheader">Paie</span></div>
+      ${rows.map((r, i) => `<div class="palmares__ligne${r.userId === me.discordId ? ' is-me' : ''}${i < 3 ? ' is-podium' : ''}" role="row">
+        <span class="palmares__rang" role="cell">${rang(i)}</span>
+        <span class="palmares__qui" role="cell">${espaceAvatar(avatars[r.userId])}<b>${esc(name(r.userId))}</b>${toi(r)}</span>
+        ${cats.map(k => jauge(r.byQuotaType[k] || 0, targets[k], espaceBot.label(k))).join('')}
+        ${avecPoints ? `<span class="palmares__points" role="cell">${r.points}</span>` : ''}
+        <span class="palmares__paie" role="cell">${money(r.salaire)}</span></div>`).join('')}`;
+    $('page').hidden = false;
+  }
+  async function start() {
+    me = await api('../api/me');
+    if (me.status !== 'approved') { location.replace('attente.html'); return; }
+    espaceNav(me);
+    const st = await espaceBot.gate($('botGate'));
+    $('loading').hidden = true;
+    if (!st.linked) return;
+    try { await load(); setInterval(() => load().catch(() => {}), 5 * 60000); }   // 5 min : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(espaceBot.error(e))}</p>`; }
+  }
+  $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
+  start().catch(() => {});
+</script>
+</body>
+</html>

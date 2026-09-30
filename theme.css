@@ -1,0 +1,36 @@
+/* ==========================================================
+   THÈME DU SITE — La Maja 13 : direction artistique blason (noir · bronze · or).
+   Chargé par toutes les pages (vitrine ET La Casa) avant les autres feuilles :
+   changer une valeur ici change tout le site, espace membre compris.
+   La couleur d'accent (l'or) vient de site.json (« couleur »).
+   ========================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Pirata+One&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap');
+
+:root{
+  /* fonds, du plus sombre au plus clair */
+  --bg:#08070a;
+  --bg2:#0e0c0d;
+  --bg3:#15110f;
+  /* textes : principal, secondaire */
+  --ink:#e9dcc2;
+  --ink2:#b9a98a;
+  /* accent (site.json) et ses nuances : or sombre, or clair */
+  --accent:{{couleur}};
+  --accent-dark:#8a6a34;
+  --accent-light:#f0d79a;
+  /* noms historiques de la vitrine (styles.css) */
+  --gold:var(--accent);
+  --gold2:var(--accent-dark);
+  --gold3:var(--accent-light);
+  /* divers */
+  --bronze:#5a3f2b;
+  --red:#7a1f1f;
+  --line:rgba(201,164,92,.28);
+  /* polices : titres, petits libellés, texte courant */
+  --display:'Pirata One',Georgia,serif;
+  --serif:'Cinzel',Georgia,serif;
+  --body:'EB Garamond',Georgia,'Times New Roman',serif;
+  /* largeur maximale du contenu */
+  --wrap:1180px;
+}

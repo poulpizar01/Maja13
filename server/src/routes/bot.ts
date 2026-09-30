@@ -1,7 +1,7 @@
-// Bot Discord (géré à part) : La Casa lit ses données via son API REST, en lecture seule.
+// Bot Discord (géré à part) : l'espace membre lit ses données via son API REST, en lecture seule.
 // Le bot n'accepte que des jetons personnels, obtenus par sa propre connexion Discord :
 //   /auth/bot → <bot>/auth/login?guild=… → Discord → <bot>/auth/callback
-//   → site externe configuré dans Discord (/config site-externe set …/casa/bot-callback.html) avec #token=…
+//   → site externe configuré dans Discord (/config site-externe set …/espace/bot-callback.html) avec #token=…
 //   → POST /api/bot/link : jeton vérifié puis gardé dans la session (jamais exposé au navigateur ensuite).
 // Les droits (admin) sont décidés par le bot à chaque requête, d'après les rôles Discord.
 import { Router, type Request } from 'express';
@@ -42,32 +42,25 @@ async function botGet(req: Request, path: string): Promise<{ status: number; dat
   if (r.status === 401) { delete req.session.botToken; forget(req); }
   return { status: r.status, data: await r.json().catch(() => ({ error: `bot ${r.status}` })) };
 }
-// lecture avec cache (réponses 200 uniquement) ; une même lecture déjà en cours (autre onglet, requêtes simultanées)
-// est partagée au lieu de partir une seconde fois vers le bot
-const inflight = new Map<string, Promise<{ status: number; data: unknown }>>();
+// lecture avec cache (réponses 200 uniquement)
 async function botRead(req: Request, path: string): Promise<{ status: number; data: unknown }> {
   const hit = cached(req, path);
   if (hit !== undefined) return { status: 200, data: hit };
-  const key = cacheKey(req, path);
-  let pending = inflight.get(key);
-  if (!pending) {
-    pending = botGet(req, path).then(res => { if (res.status === 200) remember(req, path, res.data); return res; })
-      .finally(() => inflight.delete(key));
-    inflight.set(key, pending);
-  }
-  return pending;
+  const res = await botGet(req, path);
+  if (res.status === 200) remember(req, path, res.data);
+  return res;
 }
 
-// retour après connexion : une page de La Casa uniquement
-const safeReturn = (v: unknown) => (typeof v === 'string' && /^\/casa\/[\w.-]*$/.test(v) ? v : '/casa/perfil.html');
+// retour après connexion : une page de l'espace membre uniquement
+const safeReturn = (v: unknown) => (typeof v === 'string' && /^\/espace\/[\w.-]*$/.test(v) ? v : '/espace/profil.html');
 
 bot.get('/auth/bot', ...member, (req, res) => {
-  if (!config.botApiUrl) { res.redirect('/casa/perfil.html'); return; }
+  if (!config.botApiUrl) { res.redirect('/espace/profil.html'); return; }
   req.session.botReturn = safeReturn(req.query.next);
   res.redirect(`${config.botApiUrl}/auth/login?guild=${encodeURIComponent(config.discord.guildId)}`);
 });
 
-// jeton reçu par bot-callback.html : il doit être celui du membre connecté, pour le serveur Discord de La Maja
+// jeton reçu par bot-callback.html : il doit être celui du membre connecté, pour le serveur Discord du site
 bot.post('/api/bot/link', ...member, async (req, res) => {
   const token = body(req).token;
   if (!config.botApiUrl || typeof token !== 'string' || !token) { res.status(400).json({ error: 'jeton manquant' }); return; }
@@ -78,10 +71,10 @@ bot.post('/api/bot/link', ...member, async (req, res) => {
   if (status !== 200 || me.id !== req.member.discordId || me.guildId !== config.discord.guildId) {
     console.warn(`[bot] liaison refusée pour le membre ${req.member.id} : bot HTTP ${status}, compte bot ${me.id ?? '?'} / attendu ${req.member.discordId}, serveur ${me.guildId ?? '?'} / attendu ${config.discord.guildId}`);
     delete req.session.botToken;
-    res.status(403).json({ error: 'Ce jeton ne correspond pas à ton compte Discord sur le serveur de la familia.' });
+    res.status(403).json({ error: 'Ce jeton ne correspond pas à ton compte Discord sur le serveur Discord du groupe.' });
     return;
   }
-  const next = req.session.botReturn ?? '/casa/perfil.html';
+  const next = req.session.botReturn ?? '/espace/profil.html';
   delete req.session.botReturn;
   res.json({ ok: true, next });
 });
@@ -110,7 +103,7 @@ const SECTIONS = ['me', 'users', 'stocks', 'quotas', 'taxes', 'armurerie', 'vent
 function dataPath(req: Request): string | null {
   const segments = (req.params as { path: string[] }).path;
   if (!SECTIONS.includes(segments[0]) || segments.some(s => !s || s === '.' || s.includes('..') || s.includes('/'))) return null;
-  return segments.map(encodeURIComponent).join('/') + new URL(req.originalUrl, 'http://casa').search;
+  return segments.map(encodeURIComponent).join('/') + new URL(req.originalUrl, 'http://site').search;
 }
 // chaque membre a sa part des 300 requêtes / 15 min du bot ; les réponses servies par le cache ne comptent pas
 const botLimit = limiter(15, 150, 'Trop de lectures vers le bot, réessaie dans quelques minutes.', byMember, req => {

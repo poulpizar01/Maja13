@@ -1,4 +1,4 @@
-/* La Maja 13 — stockage des fichiers envoyés (galerie)
+/* Stockage des fichiers envoyés (galerie)
    - avec STORAGE_URL + STORAGE_TOKEN : service de stockage distant (CDN), utilisé en production
    - sans : disque local (UPLOAD_DIR), servi par le site sous /uploads — environnement de dev */
 import { mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
@@ -21,7 +21,7 @@ async function cdn(method: 'PUT' | 'DELETE', key: string, body?: Buffer, mimeTyp
   return r;
 }
 
-// verrou : seules des images WebP (réencodées par La Casa) sont stockées — signature RIFF….WEBP et extension .webp
+// verrou : seules des images WebP (réencodées par le serveur) sont stockées — signature RIFF….WEBP et extension .webp
 const isWebp = (key: string, data: Buffer) =>
   key.endsWith('.webp') && data.length > 12 && data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP';
 

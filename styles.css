@@ -1,23 +1,7 @@
 /* ==========================================================
    LA MAJA 13 — direction artistique blason (noir · bronze · or)
    ========================================================== */
-:root{
-  --bg:#08070a;
-  --bg2:#0e0c0d;
-  --bg3:#15110f;
-  --ink:#e9dcc2;
-  --ink2:#b9a98a;
-  --gold:#c9a45c;
-  --gold2:#8a6a34;
-  --gold3:#f0d79a;
-  --bronze:#5a3f2b;
-  --red:#7a1f1f;
-  --line:rgba(201,164,92,.28);
-  --display:'Pirata One',Georgia,serif;
-  --serif:'Cinzel',Georgia,serif;
-  --body:'EB Garamond',Georgia,'Times New Roman',serif;
-  --wrap:1180px;
-}
+/* couleurs, polices et largeur : theme.css (chargé avant cette feuille, partagé avec La Casa) */
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:18px;line-height:1.65;overflow-x:hidden}
@@ -64,12 +48,17 @@ p{margin:0 0 1em}
 .nav__burger span{display:block;height:2px;background:var(--gold);transition:.3s}
 
 /* ---------- BUTTONS ---------- */
-.btn{display:inline-block;background:none;color:var(--gold);font-family:var(--serif);font-size:12px;letter-spacing:.26em;text-transform:uppercase;padding:15px 30px;border:1px solid var(--gold);transition:.3s;position:relative}
-.btn--gold{background:linear-gradient(135deg,var(--gold3),var(--gold) 45%,var(--gold2));color:#120e08;font-weight:700;box-shadow:0 0 30px rgba(201,164,92,.25)}
-.btn--gold:hover{box-shadow:0 0 45px rgba(201,164,92,.5);transform:translateY(-2px)}
+.btn{display:inline-block;background:none;color:var(--gold);font-family:var(--serif);font-size:12px;letter-spacing:.26em;text-transform:uppercase;padding:15px 30px;border:1px solid var(--gold);transition:.3s;position:relative;cursor:pointer}
+/* btn--accent : nom utilisé par La Casa (espace membre commun à tous les sites) */
+.btn--gold,.btn--accent{background:linear-gradient(135deg,var(--gold3),var(--gold) 45%,var(--gold2));color:#120e08;font-weight:700;box-shadow:0 0 30px rgba(201,164,92,.25)}
+.btn--gold:hover,.btn--accent:hover{box-shadow:0 0 45px rgba(201,164,92,.5);transform:translateY(-2px)}
 .btn--ghost{color:var(--gold)}
 .btn--ghost:hover{background:rgba(201,164,92,.1)}
 .btn--lg{padding:18px 40px;font-size:13px}
+/* animations attendues par La Casa (espace.css) : transitions de page, pastilles « en direct » */
+@keyframes vtRecule{to{opacity:0;transform:translateY(-2.5%) scale(.985)}}
+@keyframes vtVoletBas{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0)}}
+@keyframes pastille{50%{opacity:.15}}
 
 /* ---------- HERO ---------- */
 .hero{position:relative;min-height:100vh;display:flex;align-items:center;overflow:hidden;

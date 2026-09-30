@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L'Armurerie — {{espace}} · {{nom}}</title>
+<meta name="application-name" content="{{nom}}">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="../assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../theme.css">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="espace.css">
+<script src="espace.js"></script>
+</head>
+<body class="espace-body">
+
+<script>espaceShell()</script>
+
+<main class="espace-page espace-page--wide">
+  <div class="section__head">
+    <span class="numeral">✦</span>
+    <h2>L'Armurerie</h2>
+    <p class="sub">Les armes de {{groupe}} et qui les tient</p>
+  </div>
+  <div class="espace-loading" id="loading">Chargement…</div>
+  <div id="botGate" hidden></div>
+
+  <div id="page" hidden>
+    <!-- la situation en un coup d'œil ; chaque compteur filtre la liste -->
+    <div class="tax-etat arm-etat" id="etat" role="group" aria-label="Filtrer par statut"></div>
+
+    <section class="admin-block">
+      <div class="tax-barre">
+        <div class="tax-types" id="types" aria-label="Type d'arme"></div>
+        <input class="admin-input tax-search" id="search" type="search" placeholder="Arme, modèle, référence, détenteur…" aria-label="Rechercher une arme">
+      </div>
+      <p class="tax-compte" id="compte" aria-live="polite"></p>
+      <!-- prêtées : une fiche par détenteur ; sinon, les armes regroupées par type -->
+      <div class="arm-liste" id="rows"></div>
+    </section>
+
+    <section class="admin-block">
+      <h3 class="admin-block__title">Munitions</h3>
+      <div class="arm-mun" id="mun"></div>
+      <div class="bloc-tete"><h4 class="viz__title">Ventes de la semaine</h4><p class="tax-compte" id="munTotal"></p></div>
+      <div class="journal" id="munVentes"></div>
+      <p class="admin-block__hint">Prêts, retours, pertes et déclarations de munitions se font depuis le panneau armurerie du bot dans Discord ; cette page reflète l'état en direct.</p>
+    </section>
+  </div>
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const money = n => Math.round(n).toLocaleString('fr-FR') + ' $';
+  const units = n => Math.round(n).toLocaleString('fr-FR');
+  const STATUT = { en_stock: ['En stock', 'status--approved'], pretee: ['Prêtée', 'status--pending'], perdue: ['Perdue', 'status--rejected'] };
+  // compteurs = filtres ; « Prêtées » par défaut : la question de l'armurerie, c'est « qui a quoi ? »
+  const COMPTEURS = [
+    { k: 'all', label: 'Toutes', ton: 'tous' }, { k: 'pretee', label: 'Prêtées', ton: 'warn' },
+    { k: 'en_stock', label: 'En stock', ton: 'ok' }, { k: 'perdue', label: 'Perdues', ton: 'err' },
+  ];
+  const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('profil.html'); throw 0; } return r.json(); });
+  let armes = [], filter = 'pretee', type = '';
+  // Modèles d'armes du bot (ARME_TYPES de modules/armurerie.ts du bot) : le champ « type » d'une arme est la CLÉ du modèle.
+  // Pastilles = les 4 catégories du bot ; un modèle inconnu du site (ajouté depuis dans le bot) va dans « Autres ».
+  const CATALOGUE = {
+    'Armes de poing': [['pistolet_artisanal', 'Pistolet artisanal'], ['sns', 'SNS'], ['sns_pico', 'SNS PICO'], ['colt', 'Colt'], ['p88', 'P88'], ['beretta', 'Beretta'],
+      ['glock', 'Glock'], ['glock_17', 'Glock 17'], ['pistolet_en_ceramique', 'Pistolet en céramique'], ['calibre_50', 'Calibre 50'], ['berreta_mk2', 'Berreta (Pistolet MK2)'],
+      ['pistolet_lourd', 'Pistolet Lourd'], ['revolver', 'Revolver']],
+    'Fusils à pompe': [['fusil_a_canon_scie', 'Fusil à canon scié'], ['fusil_a_pompe', 'Fusil à pompe'], ['striker_12', 'Striker 12'], ['fusil_a_pompe_dassaut', "Fusil à pompe d'assaut"],
+      ['fusil_a_double_canon', 'Fusil à double canon']],
+    'Armes automatiques': [['mini_smg', 'Mini SMG'], ['micro_smg', 'Micro SMG'], ['tec9', 'TEC9'], ['mini_uzi_tactic', 'Mini Uzi Tactic'], ['mac_10', 'MAC-10'], ['mp5k', 'Mp5k'],
+      ['mitraillette_tactique', 'Mitraillette Tactique'], ['vesper_9', 'Vesper 9'], ['vortex_smg', 'Vortex SMG']],
+    'Armes lourdes': [['fusil_compact', 'Fusil compact'], ['ump_45', 'UMP 45'], ['sg552', 'SG552'], ['fusil_lourd', 'Fusil Lourd'], ['thompson', 'Thompson'], ['ak47', 'AK47'],
+      ['ump_45_chr', 'UMP 45 CHR'], ['mk_priss', 'Mk Priss'], ['ar_7', 'AR 7']],
+  };
+  const ORDRE = [...Object.keys(CATALOGUE), 'Autres'];
+  const MODELE = {}, CATEGORIE = {};
+  for (const [cat, modeles] of Object.entries(CATALOGUE)) for (const [k, l] of modeles) { MODELE[k] = l; CATEGORIE[k] = cat; }
+  const modele = a => !a.type ? 'Modèle non renseigné' : MODELE[a.type] || a.type.split('_').map(m => m.charAt(0).toUpperCase() + m.slice(1)).join(' ');
+  const typeDe = a => CATEGORIE[a.type] || 'Autres';   // la catégorie (pastilles)
+  const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+
+  // une carte par arme : l'état d'abord (bandeau de couleur + libellé), puis l'arme, puis où elle est
+  const OU = { en_stock: () => 'À l’armurerie', pretee: a => `Chez <b>${esc(a.preteeA || '?')}</b>`, perdue: () => 'Déclarée perdue' };
+  const RANG = { en_stock: 0, pretee: 1, perdue: 2 };   // dans une catégorie : dispo d'abord, perdues en dernier
+  const arme = a => { const [lbl] = STATUT[a.statut] || [a.statut], m = modele(a);
+    return `<article class="arm-carte arm-carte--${esc(a.statut)}">
+      <header><span class="arm-carte__etat">${esc(lbl)}</span><code>${esc(a.reference)}</code></header>
+      <b class="arm-carte__nom">${esc(a.nom)}</b>${m.toLowerCase() !== a.nom.trim().toLowerCase() ? `<small class="arm-carte__modele">${esc(m)}</small>` : ''}
+      <p class="arm-carte__ou">${(OU[a.statut] || (() => ''))(a)}</p></article>`; };
+  // en-tête de catégorie : le bilan en toutes lettres (« 3 en stock · 4 prêtées · 1 perdue »)
+  const bilan = l => [['en_stock', 'en stock', 'en stock'], ['pretee', 'prêtée', 'prêtées'], ['perdue', 'perdue', 'perdues']]
+    .map(([k, un, plus]) => { const n = l.filter(a => a.statut === k).length; return n ? `<span class="arm-bilan--${k}">${n} ${n > 1 ? plus : un}</span>` : ''; }).filter(Boolean).join('');
+
+  function render() {
+    // compteurs : sur le type choisi
+    const duType = armes.filter(a => !type || typeDe(a) === type);
+    $('etat').innerHTML = COMPTEURS.map(c => { const n = c.k === 'all' ? duType.length : duType.filter(a => a.statut === c.k).length;
+      return `<button type="button" class="tax-compteur tax-compteur--${c.ton}${filter === c.k ? ' is-on' : ''}${n ? '' : ' is-vide'}" data-f="${c.k}" aria-pressed="${filter === c.k}"><b>${n}</b><span>${c.label}</span></button>`; }).join('');
+    // types en pastilles
+    const types = [...new Set(armes.map(typeDe))].sort((x, y) => ORDRE.indexOf(x) - ORDRE.indexOf(y));
+    $('types').innerHTML = [['', 'Toutes', armes], ...types.map(t => [t, t, armes.filter(a => typeDe(a) === t)])]
+      .map(([k, label, l]) => `<button type="button" class="tax-type${k === type ? ' is-on' : ''}" data-type="${esc(k)}" aria-pressed="${k === type}">${esc(label)}<i>${l.length}</i></button>`).join('');
+    const q = $('search').value.trim().toLowerCase();
+    const list = duType.filter(a => (filter === 'all' || a.statut === filter) && (!q || [a.nom, a.reference, modele(a), typeDe(a), a.preteeA].some(v => v && v.toLowerCase().includes(q))))
+      .sort((x, y) => x.nom.localeCompare(y.nom));
+    $('compte').textContent = pluriel(list.length, 'arme') + (q ? ` pour « ${$('search').value.trim()} »` : '');
+    if (!list.length) { $('rows').innerHTML = `<p class="admin-empty">${q ? 'Aucune arme ne correspond à la recherche.' : filter === 'pretee' ? 'Aucune arme prêtée en ce moment.' : filter === 'perdue' ? 'Aucune arme perdue.' : 'Rien ici.'}</p>`; return; }
+    // prêtées : qui a quoi (le détenteur qui en a le plus en premier)
+    if (filter === 'pretee') {
+      const parQui = new Map(); for (const a of list) { const k = a.preteeA || '?'; parQui.set(k, [...(parQui.get(k) || []), a]); }
+      $('rows').innerHTML = `<div class="arm-qui">${[...parQui].sort((x, y) => y[1].length - x[1].length || x[0].localeCompare(y[0])).map(([qui, l]) => `
+        <article class="arm-porteur"><header><b>${esc(qui)}</b><span>${pluriel(l.length, 'arme')}</span></header>
+          <ul>${l.map(a => `<li><span><b>${esc(a.nom)}</b><small>${esc(modele(a))}</small></span><code>${esc(a.reference)}</code></li>`).join('')}</ul></article>`).join('')}</div>`;
+      return;
+    }
+    // sinon : un râtelier par catégorie (dans l'ordre du bot) ; dedans, par état puis par modèle
+    const parCat = new Map(); for (const a of list) parCat.set(typeDe(a), [...(parCat.get(typeDe(a)) || []), a]);
+    $('rows').innerHTML = [...parCat].sort((x, y) => ORDRE.indexOf(x[0]) - ORDRE.indexOf(y[0])).map(([c, l]) => `<section class="arm-rack">
+      <header class="arm-rack__tete"><h4>${esc(c)}<i>${l.length}</i></h4>${filter === 'all' ? `<p class="arm-bilan">${bilan(l)}</p>` : ''}</header>
+      <div class="arm-rack__grille">${l.sort((x, y) => (RANG[x.statut] ?? 3) - (RANG[y.statut] ?? 3) || modele(x).localeCompare(modele(y)) || x.nom.localeCompare(y.nom)).map(arme).join('')}</div></section>`).join('');
+  }
+
+  // munitions : une case par calibre, fabrication en jauge, ventes par jour
+  function renderMunitions(ammo, ventes) {
+    const q = ammo.fabricationQuotaHebdo, fab = ammo.fabriqueesCetteSemaine, pct = q ? Math.min(100, Math.round(fab / q * 100)) : 0;
+    const ca = ventes.reduce((t, v) => t + v.prix, 0);
+    $('mun').innerHTML = `
+      <div class="arm-mun__case"><span>Balles de pistolet</span><b>${units(ammo.stock)}</b><small>en stock</small></div>
+      <div class="arm-mun__case"><span>Balles de SMG</span><b>${units(ammo.stockSmg)}</b><small>en stock</small></div>
+      <div class="arm-mun__case arm-mun__case--large"><span>Fabriquées cette semaine</span><b>${units(fab)}${q ? `<small> / ${units(q)}</small>` : ''}</b>
+        ${q ? `<i class="jauge__barre arm-mun__jauge${fab >= q ? ' is-done' : ''}"><b style="width:${pct}%"></b></i><small>${fab >= q ? 'Objectif atteint' : `${units(q - fab)} encore à fabriquer`}</small>` : '<small>pas d’objectif fixé</small>'}</div>
+      <div class="arm-mun__case"><span>Vendues cette semaine</span><b>${units(ammo.vendusCetteSemaine)}</b><small>${pluriel(ventes.length, 'vente')}</small></div>`;
+    $('munTotal').textContent = ventes.length ? `${money(ca)} encaissés` : '';
+    const jour = ms => { const d = new Date(ms), auj = new Date(), hier = new Date(Date.now() - 864e5);
+      return d.toDateString() === auj.toDateString() ? "Aujourd'hui" : d.toDateString() === hier.toDateString() ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); };
+    let courant = '';
+    $('munVentes').innerHTML = ventes.length ? ventes.map(v => { const j = jour(v.timestamp), tete = j !== courant ? `<p class="journal__jour">${esc(j)}</p>` : ''; courant = j;
+      return `${tete}<div class="journal__ligne"><time>${new Date(v.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</time>
+        <span class="journal__quoi"><b>${units(v.quantite)} balles</b> <span class="muted">vendues à</span> ${esc(v.acheteur_id)}</span>
+        <span class="journal__delta pos">${money(v.prix)}</span><small class="journal__stock">${money(v.prix / Math.max(1, v.quantite))} la balle</small></div>`; }).join('')
+      : '<p class="admin-empty">Aucune vente déclarée cette semaine.</p>';
+  }
+  async function load() {
+    const [enCours, perdues, ammo, ventes] = await Promise.all([espaceBot.get('armurerie'), espaceBot.get('armurerie?status=lost'), espaceBot.get('armurerie/ammo'), espaceBot.get('armurerie/ammo/history')]);
+    armes = [...enCours, ...perdues];
+    render(); renderMunitions(ammo, ventes);
+    $('page').hidden = false;
+  }
+  async function start() {
+    const me = await api('../api/me');
+    if (me.status !== 'approved') { location.replace('attente.html'); return; }
+    if (!me.isAdmin) { location.replace('profil.html'); return; }
+    espaceNav(me);
+    const st = await espaceBot.gate($('botGate'));
+    $('loading').hidden = true;
+    if (!st.linked) return;
+    try { await load(); setInterval(() => load().catch(() => {}), 5 * 60000); }   // 5 min : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(espaceBot.error(e))}</p>`; }
+  }
+  $('etat').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (!b) return; filter = b.dataset.f; render(); });
+  $('types').addEventListener('click', e => { const b = e.target.closest('[data-type]'); if (!b) return; type = b.dataset.type; render(); });
+  $('search').addEventListener('input', render);
+  $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
+  start().catch(() => {});
+</script>
+</body>
+</html>

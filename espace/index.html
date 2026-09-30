@@ -3,36 +3,35 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>La Casa — Espace membres · La Maja 13</title>
+<title>{{espace}} · {{nom}}</title>
+<meta name="application-name" content="{{nom}}">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../theme.css">
 <link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="casa.css">
+<link rel="stylesheet" href="espace.css">
 </head>
-<body class="casa-body">
-<div class="grain" aria-hidden="true"></div>
-<script src="casa-bg.js" defer></script>
+<body class="espace-body">
 
-<main class="casa-login">
-  <a class="casa-login__back" href="../accueil.html">← Retour au site</a>
-  <img class="casa-login__logo" src="../assets/logo.webp" alt="La Maja 13" width="200" height="200">
-  <p class="eyebrow">Espace membres de la familia</p>
-  <h1>La Casa</h1>
-  <p class="casa-login__lead">Réservé aux membres de la Maja 13. Connecte-toi avec le compte Discord qui est sur le serveur de la familia.</p>
-  <p class="casa-login__error" id="error" hidden></p>
-  <a class="btn btn--gold btn--lg casa-login__btn" href="../auth/discord">
+<main class="espace-login">
+  <a class="espace-login__back" href="../">← Retour au site</a>
+  <img class="espace-login__logo" src="../assets/logo.png" alt="{{nom}}" width="200" height="200">
+  <p class="eyebrow">{{nom}}</p>
+  <h1>{{espace}}</h1>
+  <p class="espace-login__lead">Réservé aux membres de {{nom}}. Connecte-toi avec le compte Discord qui est sur le serveur du groupe.</p>
+  <p class="espace-login__error" id="error" hidden></p>
+  <a class="btn btn--accent btn--lg espace-login__btn" href="../auth/discord">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.2.4a18.3 18.3 0 0 1 4.5 2.2 15.8 15.8 0 0 0-15.4 0A18 18 0 0 1 8.8 3.4L8.6 3a19.7 19.7 0 0 0-4.9 1.4C.5 9.3-.3 14 .1 18.7a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4a13 13 0 0 1-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3c.5-5.4-.8-10.1-3.6-14.3ZM8 15.9c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg>
     Se connecter avec Discord
   </a>
-  <p class="casa-login__small">Lealtad · Respeto · La familia es sagrada</p>
+  <p class="espace-login__small">{{devise}}</p>
 </main>
 
 <script>
   const msg = {
-    'not-member': "Ce compte Discord n'est pas sur le serveur de la Maja 13. Rejoins-le d'abord, puis reviens.",
+    'not-member': "Ce compte Discord n'est pas sur le serveur Discord du groupe. Rejoins-le d'abord, puis reviens.",
     'oauth': "Connexion Discord annulée ou invalide. Réessaie.",
     'token': "Discord n'a pas validé la connexion. Réessaie dans un instant.",
     'server': "Petit souci côté serveur. Réessaie dans un instant.",
@@ -40,7 +39,7 @@
   const e = new URLSearchParams(location.search).get('error');
   if (e && msg[e]) { const el = document.getElementById('error'); el.textContent = msg[e]; el.hidden = false; }
   // déjà connecté ? -> profil
-  fetch('../api/me', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).then(m => { if (m) location.replace(m.status === 'approved' ? 'perfil.html' : 'espera.html'); }).catch(() => {});
+  fetch('../api/me', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).then(m => { if (m) location.replace(m.status === 'approved' ? 'profil.html' : 'attente.html'); }).catch(() => {});
 </script>
 </body>
 </html>

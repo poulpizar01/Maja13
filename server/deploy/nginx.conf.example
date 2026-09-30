@@ -1,4 +1,4 @@
-# La Maja 13 — site nginx. Copier dans /etc/nginx/sites-available/maja13, remplacer __DOMAIN__
+# Site nginx. Copier dans /etc/nginx/sites-available/<SITE_ID> (voir .env), remplacer __DOMAIN__
 # (domaine) et __PORT__ (HOST_PORT du .env), activer (lien dans sites-enabled), nginx -t, recharger.
 # HTTPS : ensuite `certbot --nginx -d __DOMAIN__`, qui ajoute le certificat et la redirection.
 server {
@@ -7,14 +7,6 @@ server {
     server_name __DOMAIN__;
 
     client_max_body_size 16m;          # photos de la galerie : 15 Mo max côté site
-
-    # compression : par défaut nginx ne compresse que le HTML ; CSS, JS et réponses de l'API (JSON) en profitent
-    # aussi (≈ 4× moins lourds). Pas text/event-stream : le flux du Salon doit partir sans attendre.
-    gzip on;
-    gzip_vary on;
-    gzip_comp_level 5;
-    gzip_min_length 1024;
-    gzip_types text/css application/javascript text/javascript application/json image/svg+xml text/plain application/xml;
 
     location / {
         proxy_pass http://127.0.0.1:__PORT__;
@@ -25,7 +17,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Le Salon (chat) : flux temps réel (SSE), ni mise en tampon ni coupure au bout de 60 s
+    # Le chat : flux temps réel (SSE), ni mise en tampon ni coupure au bout de 60 s
     location = /api/chat/stream {
         proxy_pass http://127.0.0.1:__PORT__;
         proxy_http_version 1.1;

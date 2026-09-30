@@ -3,51 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Le Salon — La Casa · La Maja 13</title>
+<title>Chat — {{espace}} · {{nom}}</title>
+<meta name="application-name" content="{{nom}}">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../theme.css">
 <link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="casa.css">
-<script src="casa.js"></script>
+<link rel="stylesheet" href="espace.css">
+<script src="espace.js"></script>
 </head>
-<body class="casa-body casa-body--chat" data-fx="soft">
-<div class="grain" aria-hidden="true"></div>
-<script src="casa-bg.js" defer></script>
+<body class="espace-body espace-body--chat" data-fx="soft">
 
-<header class="nav is-scrolled">
-  <a class="nav__brand" href="../index.html#entrada"><img src="../assets/logo-nav.webp" alt="" width="40" height="40"><span>La Maja <em>13</em></span></a>
-  <nav class="nav__links casa-nav">
-    <a href="perfil.html">Mon profil</a>
-    <a href="familia.html">La Famille</a>
-    <a href="classement.html">Classement</a>
-    <a href="chat.html" class="is-active" id="chatLink">Le Salon<span class="nav__badge" id="chatBadge" hidden></span></a>
-    <a href="galerie.html">Galerie</a>
-    <div class="nav__group" id="gestion" hidden>
-      <button class="nav__group-btn" type="button" aria-expanded="false">Gestion <i>▾</i></button>
-      <div class="nav__menu">
-        <a href="admin.html">Administration</a>
-        <a href="tableau.html">Tableau de bord</a>
-        <a href="stats.html">Statistiques</a>
-        <a href="taxes.html">Taxes</a>
-        <a href="armurerie.html">Armurerie</a>
-        <a href="organigramme.html" id="orgLink" hidden>Hiérarchie</a>
-      </div>
-    </div>
-    <a href="../accueil.html">Le site</a>
-    <button class="nav__cta casa-logout" id="logout">Déconnexion</button>
-  </nav>
-</header>
+<script>espaceShell()</script>
 
 <main class="chat">
   <aside class="chat__side">
-    <h2 class="chat__title">Le Salon</h2>
-    <p class="chat__sub">La discussion de la familia</p>
-    <h3 class="chat__side-title">En ligne <span class="badge badge--gold" id="onlineCount">0</span></h3>
+    <h2 class="chat__title">Chat</h2>
+    <p class="chat__sub">La discussion de {{groupe}}</p>
+    <h3 class="chat__side-title">En ligne <span class="badge badge--accent" id="onlineCount">0</span></h3>
     <ul class="chat__online" id="online"></ul>
-    <p class="chat__rules">Lealtad · Respeto. Ce qui se dit ici reste dans la familia.</p>
+    <p class="chat__rules">Ce qui se dit ici reste entre membres.</p>
   </aside>
 
   <section class="chat__main">
@@ -56,8 +33,9 @@
       <button class="chat__more" id="more" hidden>Messages plus anciens</button>
     </div>
     <form class="chat__form" id="form" autocomplete="off">
-      <textarea id="input" rows="1" maxlength="1000" placeholder="Écris à la familia… (Entrée pour envoyer, Maj+Entrée pour une nouvelle ligne)" required></textarea>
-      <button class="btn btn--gold" type="submit">Envoyer</button>
+      <textarea id="input" rows="1" maxlength="1000" placeholder="Écrire un message…" aria-describedby="chatAide" required></textarea>
+      <button class="chat__envoi" type="submit" aria-label="Envoyer"><span>Envoyer</span><i aria-hidden="true">↵</i></button>
+      <p class="chat__aide" id="chatAide"><kbd>Entrée</kbd> envoyer <kbd>Maj</kbd>+<kbd>Entrée</kbd> nouvelle ligne <kbd>@</kbd> mentionner</p>
     </form>
   </section>
 </main>
@@ -74,7 +52,7 @@
   const log = $('log');
 
   const api = (url, opt = {}) => fetch(url, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, ...opt })
-    .then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('espera.html'); throw 0; } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
+    .then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('attente.html'); throw 0; } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
 
   const atBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 80;
   const scrollDown = () => { log.scrollTop = log.scrollHeight; };
@@ -142,8 +120,8 @@
 
   async function init() {
     me = await api('../api/me');
-    if (me.status !== 'approved') { location.replace('espera.html'); return; }
-    casaNav(me);
+    if (me.status !== 'approved') { location.replace('attente.html'); return; }
+    espaceNav(me);
     members = await api('../api/chat/mentions').catch(() => []);
     mentionable = new Set(members.flatMap(u => [u.name.toLowerCase(), u.username.toLowerCase()]));
     const first = await api('../api/chat/messages');
@@ -195,7 +173,7 @@
   $('more').addEventListener('click', async () => { const list = await api('../api/chat/messages?before=' + oldest); prepend(list); });
   log.addEventListener('click', async e => {
     const b = e.target.closest('[data-del]'); if (!b) return;
-    if (await casaConfirm('Ce message sera retiré du Salon pour tout le monde.', { title: 'Supprimer ce message ?', ok: 'Supprimer', danger: true }))
+    if (await espaceConfirm('Ce message sera retiré du chat pour tout le monde.', { title: 'Supprimer ce message ?', ok: 'Supprimer', danger: true }))
       await api('../api/chat/messages/' + b.dataset.del, { method: 'DELETE' }).catch(() => {});
   });
   $('logout').addEventListener('click', async () => { es && es.close(); await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });

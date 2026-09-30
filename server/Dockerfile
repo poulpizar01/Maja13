@@ -1,4 +1,4 @@
-# La Maja 13 — image du site (contexte = racine du dépôt, voir compose.yaml)
+# Image du site (contexte = racine du dépôt, voir compose.yaml)
 
 # 1. construction : dépendances complètes, client Prisma, compilation TypeScript
 FROM node:22-alpine AS build
@@ -16,7 +16,7 @@ COPY server/package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY . /app
 COPY --from=build /app/server/dist ./dist
-# utilisateur sans privilèges ; seul le dossier des photos (volume maja13-uploads) lui est inscriptible
+# utilisateur sans privilèges ; seul le dossier des photos (volume uploads) lui est inscriptible
 RUN mkdir -p /app/uploads && chown node:node /app/uploads
 USER node
 EXPOSE 3000

@@ -1,0 +1,74 @@
+# Contexte projet — Modèle de site de famille RP (Roxwood Network)
+
+Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce dépôt **ou sur un site créé à partir de lui** (bouton « Use this template »). Le modèle vient du site de La Maja 13, rendu générique.
+
+- **Toujours répondre en français à l'utilisateur.** Tout le site, les messages d'erreur, les commentaires du code et les commits sont en français.
+- Style du code : dense, commentaires courts qui disent *pourquoi*, pas de framework front (HTML / CSS / JS natif), TypeScript côté serveur. Imiter le code voisin.
+
+## La règle qui structure tout : personnalisable / mutualisé
+
+| Personnalisable par site | Mutualisé (identique partout) |
+|---|---|
+| `site.json`, `theme.css`, `index.html`, `styles.css`, `assets/`, `galerie.js` (liste `EXEMPLES`), `pellicule.js` | `espace/` (pages, `espace.js`, `espace.css`), `server/`, `org.js`, `main.js`, `404.html`, `compose*.yaml`, `docs/` |
+
+- La **vitrine** et la **direction artistique** sont libres dans chaque site.
+- La **partie gestion** (espace membre + serveur) ne se modifie **pas** dans un site : on corrige dans le modèle, puis chaque site fait `git fetch modele && git merge modele/main` (voir README). Un site qui modifie un fichier mutualisé se crée des conflits à chaque mise à jour.
+- La DA **s'applique** à la partie gestion sans la modifier : l'espace membre ne contient aucune couleur de marque ni police en dur, tout passe par les variables de `theme.css` (`--bg`, `--ink`, `--accent`, `--display`…). Seules les couleurs d'état (succès, alerte, erreur) sont fixes dans `espace.css`.
+- Dans le dépôt **modèle** : ne jamais réintroduire de contenu propre à un groupe (noms, lieux, termes espagnols « familia », « casa », etc.). Les textes de l'espace membre sont neutres ; le nom et le vocabulaire du groupe viennent de `site.json`.
+
+## Identité du site : `site.json` et `server/src/site.ts`
+
+- `site.json` (racine) : `nom`, `espace`, `groupe`, `devise`, `serveur`, `couleur` (facultative, `#rrggbb`), `discord`, `description`. Le serveur refuse de démarrer si une clé obligatoire manque ou si `couleur` n'est pas un hexadécimal.
+- `site.ts` remplace `{{cle}}` au moment de servir les fichiers `.html`, `.css`, `.txt`, `.xml` (vitrine, `espace/`, `robots.txt`, `sitemap.xml`, `theme.css`). `{{Cle}}` = même valeur avec majuscule initiale. `{{url}}` = `BASE_URL` (le domaine n'est écrit nulle part en dur). Les valeurs sont échappées pour le HTML. Rendu mis en cache en production, relu à chaque requête en dev.
+- **Piège** : ne jamais placer un `{{…}}` dans une **chaîne JavaScript** d'un `<script>` en ligne. Une valeur contenant une apostrophe (« l'organisation ») casserait le script. En JS, lire le nom du site via `SITE_NAME` / `SITE_NAME_HTML` (`espace.js`, tiré de `<meta name="application-name" content="{{nom}}">`), ou tourner la phrase sans le nom.
+- Chaque nouvelle page de `espace/` doit reprendre l'en-tête des autres : `<meta name="application-name" content="{{nom}}">`, `../theme.css` **avant** `../styles.css` puis `espace.css`, la barre de navigation commune, `espace.js`.
+
+## Stack et commandes
+
+- Serveur : Node 22, Express 5, TypeScript (ESM), Prisma 7 + PostgreSQL 17, sessions `connect-pg-simple`, `sharp` (images), `helmet`, `express-rate-limit`.
+- Dev (Docker Desktop) : `docker compose up` → http://localhost:3000. `compose.override.yaml` monte le code, lance `tsx`, active `DEV_LOGIN` (connexion sans Discord). Après modification de `server/src` : `docker compose restart app`.
+- Vérifier le typage : `docker exec -w /app/server <SITE_ID ou site>-app npx tsc -p . --noEmit` (sous Git Bash Windows, préfixer `MSYS_NO_PATHCONV=1`).
+- Migration : modifier `server/prisma/schema.prisma`, puis `docker compose exec app npx prisma migrate dev --name <description>` et **committer le dossier créé** (la prod applique les migrations au démarrage, `prisma migrate deploy`). Une migration ne s'annule pas : retour arrière = restauration d'une sauvegarde.
+- Prod : voir `server/README.md` (VPS, nginx, certbot, `.env` avec `COMPOSE_FILE=compose.yaml` qui écarte l'override de dev).
+
+## Espace membre (mutualisé)
+
+- Pages dans `espace/` : `index` (connexion), `attente`, `profil`, `membres`, `galerie`, `chat` (flux SSE), `classement`, puis sous « Gestion » : `admin`, `tableau`, `stats`, `taxes`, `armurerie`, `organigramme` ; `bot-callback` pour la liaison au bot.
+- Droits par grade (espace membre → Gestion → Hiérarchie) : Membre / Gestion (`canAdmin`) / Pouvoirs complets (`canManage`). Le **propriétaire du serveur Discord** a toujours tout (`isOwner`, revérifié à chaque connexion). Gardes serveur : `member`, `admin`, `manager` dans `server/src/http.ts` ; toute route ajoutée en utilise une.
+- Détail des routes, droits et limites de requêtes : `docs/api.md`.
+
+## Bot Discord Roxwood (API relayée)
+
+- Code : `server/src/routes/bot.ts`. Le site relaie **en lecture seule** l'API REST du bot ([roxwood-network-famille](https://github.com/poulpizar01/roxwood-network-famille)) : `/api/bot/data/<rubrique>/…` → `<BOT_API_URL>/api/<rubrique>/…` avec le jeton personnel du membre (gardé en session, jamais renvoyé au navigateur). Rubriques autorisées : `me`, `users`, `stocks`, `quotas`, `taxes`, `armurerie`, `ventes`.
+- Le bot limite **tout le site** à 300 requêtes par quart d'heure : cache mémoire par membre (5 min, 24 h pour `?week=` passé) et limite de 150 lectures par membre. Toute nouvelle page qui lit le bot passe par `espaceBot.get()` et ne se rafraîchit pas plus souvent que toutes les 5 minutes.
+- Un serveur Discord n'a **qu'un seul site externe** déclaré (`/config site-externe set`) : tester le bot en dev sur un serveur Discord de test.
+- Quand le bot change son API, vérifier la compatibilité : cloner son dépôt, comparer `src/api/` aux adresses appelées par `espace/*.html` et aux champs lus (voir le tableau des rubriques dans `docs/api.md`).
+
+## Photos et mémoire
+
+- Envoi : 15 Mo, 25 mégapixels maximum, réencodage WebP (1 800 px + miniature 600 px) ; disque local ou CDN (`STORAGE_URL`/`STORAGE_TOKEN`/`STORAGE_PREFIX`, un préfixe par site). Contrat du service : `docs/stockage.md`.
+- Plafonds Docker par défaut : site 512 Mo (Node : 320 Mo de tas, `NODE_OPTIONS`), base 256 Mo, sauvegardes 128 Mo — réglables dans `.env`. La limite de 25 mégapixels est calée sur le plafond du site (pic mesuré : ~210 Mo pour une photo de 25 Mpx) : ne pas la relever sans relever `APP_MEMORY`.
+- `assets/exemples/` : photos d'exemple de la galerie, fichiers du projet, **jamais** envoyés au stockage.
+
+## Sécurité (à préserver)
+
+- `helmet` avec une CSP stricte (`server/src/security.ts`) : scripts depuis le site et cdnjs uniquement, images depuis le site, Discord et l'origine de `STORAGE_URL`, polices Google. Ajouter une ressource externe impose de l'y déclarer.
+- Seuls `espace/`, `assets/` et les fichiers de premier niveau (`*.html|css|js|txt|xml`) sont servis : jamais `server/`, `site.json`, `compose.yaml`, `.env`. Vérifier avec `curl` qu'un nouveau fichier sensible reste en 404.
+- Sessions : cookie `site.sid` `HttpOnly`, `SameSite=Lax`, `Secure` en HTTPS ; nouvelle session à chaque connexion. `DEV_LOGIN=1` est refusé si `BASE_URL` n'est pas `http://localhost`.
+
+## Déploiement : pièges connus
+
+- `SITE_ID` et `HOST_PORT` uniques par VPS (conteneurs `<SITE_ID>-app/-db/-backup`, volumes préfixés).
+- Ne pas tester la connexion avant certbot : cookie `Secure` → la connexion échoue en `http://`.
+- nginx doit transmettre `X-Forwarded-Proto` et garder le bloc `location = /api/chat/stream` (SSE) : voir `docs/nginx.md`.
+- Ne jamais copier `.env.example` en dev (sa ligne `COMPOSE_FILE` désactive l'override de dev).
+- En dev, les `assets/` ne sont pas mis en cache (`maxAge` 0) ; en prod, 7 jours : un visuel remplacé peut rester en cache chez les visiteurs.
+
+## Vérifier un changement visuel
+
+Le site doit rester propre de 360 px à l'écran large : aucun débordement horizontal, menu burger sous 1 180 px, hero empilé sous 1 000 px. Après un changement de mise en page, contrôler au minimum 375, 768, 1 024 et 1 280 px (vitrine, profil, admin, chat), menu burger ouvert compris.
+
+## Git
+
+- Commits en français, préfixés par le domaine (`Espace membre : …`, `Vitrine : …`, `Docker : …`, `Docs : …`), corps expliquant le pourquoi.
+- Ne pas committer : `.env`, `uploads/`, `backups/`, `node_modules/`, `server/src/generated/`, `server/dist/` (déjà ignorés).

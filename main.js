@@ -1,4 +1,4 @@
-/* La Maja 13 — interactions du site */
+/* Interactions du site vitrine */
 (function () {
   const nav = document.getElementById('nav');
   const burger = document.getElementById('burger');
@@ -11,7 +11,13 @@
   // menu mobile
   const toggle = open => { nav.classList.toggle('is-open', open); document.body.classList.toggle('nav-lock', open); burger.setAttribute('aria-expanded', open); };
   burger.addEventListener('click', () => toggle(!nav.classList.contains('is-open')));
-  links.querySelectorAll('a').forEach(a => a.addEventListener('click', () => toggle(false)));
+  // on ne referme que pour rester sur la page (ancre) ou ouvrir un onglet : vers une autre page (espace membre), le menu
+  // reste ouvert, sinon la transition capturerait le rideau à moitié refermé, mélangé au hero
+  links.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+    if (a.target === '_blank' || (a.hash && a.pathname === location.pathname)) toggle(false);
+  }));
+  // retour arrière (page restaurée depuis le cache) : on retrouve la page, pas le menu
+  addEventListener('pageshow', e => { if (e.persisted) toggle(false); });
   addEventListener('keydown', e => { if (e.key === 'Escape') toggle(false); });
   matchMedia('(min-width:1181px)').addEventListener('change', e => { if (e.matches) toggle(false); });
 

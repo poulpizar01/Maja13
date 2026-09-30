@@ -9,7 +9,7 @@ declare module 'express-session' {
     memberId: number;
     oauthState: string;
     botToken: string;    // jeton personnel de l'API du bot (connexion via le bot)
-    botReturn: string;   // page de La Casa où revenir après cette connexion
+    botReturn: string;   // page de l'espace membre où revenir après cette connexion
   }
 }
 declare module 'express-serve-static-core' {

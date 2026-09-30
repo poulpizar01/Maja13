@@ -1,7 +1,7 @@
 {
-  "name": "maja13-casa",
+  "name": "roxwood-site-famille",
   "version": "1.0.0",
-  "description": "La Maja 13 — site + espace membre (La Casa) : Express + PostgreSQL (Prisma) + Discord OAuth",
+  "description": "Site de famille RP (vitrine + espace membre) : Express + PostgreSQL (Prisma) + Discord OAuth",
   "private": true,
   "type": "module",
   "scripts": {

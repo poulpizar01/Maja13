@@ -16,7 +16,7 @@ if (devLogin && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(baseUrl)) fai
 
 const required = (name: string): string => env[name] || (devLogin ? '' : fail(`Variable manquante dans .env : ${name}`));
 
-// racine du dépôt (index.html, styles.css, casa/…) : dist/ ou src/ → server/ → racine
+// racine du dépôt (index.html, styles.css, espace/…) : dist/ ou src/ → server/ → racine
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 export const config = {
@@ -35,7 +35,7 @@ export const config = {
   storage: {
     url: env.STORAGE_URL || '',
     token: env.STORAGE_TOKEN || '',
-    prefix: env.STORAGE_PREFIX ?? 'maja13/',
+    prefix: env.STORAGE_PREFIX ?? 'site/',
     dir: env.UPLOAD_DIR || join(root, 'uploads'),
   },
   // API REST du bot Discord (géré à part) ; vide = pages liées au bot désactivées

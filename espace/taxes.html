@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Taxes & Racket — {{espace}} · {{nom}}</title>
+<meta name="application-name" content="{{nom}}">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="../assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../theme.css">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="espace.css">
+<script src="espace.js"></script>
+</head>
+<body class="espace-body">
+
+<script>espaceShell()</script>
+
+<main class="espace-page espace-page--wide">
+  <div class="section__head">
+    <span class="numeral">✦</span>
+    <h2>Taxes &amp; Racket</h2>
+    <p class="sub">Ce que la ville doit à {{groupe}}</p>
+  </div>
+  <div class="espace-loading" id="loading">Chargement…</div>
+  <div id="botGate" hidden></div>
+
+  <div id="page" hidden>
+    <!-- la situation en un coup d'œil ; chaque compteur filtre la liste (second clic : tout) -->
+    <div class="tax-etat" id="etat" role="group" aria-label="Filtrer par situation"></div>
+
+    <section class="admin-block">
+      <div class="tax-barre">
+        <div class="tax-types" id="types" role="tablist" aria-label="Type de taxe"></div>
+        <input class="admin-input tax-search" id="search" type="search" placeholder="Rechercher un groupe…" aria-label="Rechercher une taxe">
+      </div>
+      <!-- onglet « Zones de vente » : une pastille par zone pour cibler l'une d'elles -->
+      <div class="tax-zones" id="zones" hidden></div>
+      <div class="tax-outils">
+        <p class="tax-compte" id="compte" aria-live="polite"></p>
+      </div>
+      <!-- échéancier : groupé par urgence ; une ligne = une taxe, cliquable pour ses coordonnées -->
+      <div class="echeancier" id="rows"></div>
+      <p class="admin-block__hint">L'encaissement et la création de taxes se font depuis le panneau du bot dans Discord (salon taxes) ; cette page reflète l'état en direct. <span id="maj"></span></p>
+    </section>
+  </div>
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const date = ms => new Date(ms).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('profil.html'); throw 0; } return r.json(); });
+  // Types de taxe du bot (voir modules/taxes.ts du bot) : types fixes, sinon le type EST la clé d'une zone de vente
+  // (ex. « sandy_shores »). Les zones sont regroupées sous un seul onglet ; leurs libellés reprennent ceux du bot.
+  const TYPES_FIXES = { sporex: 'Spore X', heroine: 'Héroïne', vente: 'Vente', fertilisant: 'Fertilisant', cannabis: 'Cannabis', mexicana: 'Mexicana', cocaine: 'Cocaïne', salvia: 'Salvia' };
+  const cleZone = z => z.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '_');   // même règle que le bot
+  const ZONES = Object.fromEntries(['New Cayo Perico', 'Paleto', 'Sandy Shores', 'Grapeseed', 'Vinewood', 'Aéroport', 'Wardog', 'Mirror Park', 'Fête Foraine',
+    'Barillo Plage', 'Del Perro', 'Roxwood Est', 'Eclypse Tower', 'Vespucci', 'Roxwood Ouest', 'Terrain de cross', "Champ d'éolienne", 'Cayo Perico',
+    'Roxwood Village', 'Grapeseed Valley', 'Richman', 'Cinéma', 'Hawick', 'Carson', 'Plage Cayo'].map(z => [cleZone(z), z]));
+  const estZone = type => !(type in TYPES_FIXES);
+  // zone inconnue du site (ajoutée depuis dans le bot) : clé remise en forme, « roxwood_nord » → « Roxwood Nord »
+  const libelle = type => TYPES_FIXES[type] || ZONES[type] || type.split('_').map(m => m.charAt(0).toUpperCase() + m.slice(1)).join(' ');
+  const sousTitre = type => estZone(type) ? `Zone de vente · ${libelle(type)}` : `Taxe ${libelle(type)}`;
+  // fin de la semaine en cours : lundi 0 h, juste après dimanche (heure du navigateur)
+  const finSemaine = () => { const d = new Date(), j = d.getDay(); d.setHours(24, 0, 0, 0); d.setDate(d.getDate() + (7 - j) % 7); return d.getTime(); };
+  // situation d'une taxe. Pour le bot, une taxe est « expirée » dès que son échéance est passée (payée ou non) : elle attend
+  // d'être renouvelée ou supprimée ; renouveler repousse l'échéance et la remet non payée. Une active a donc toujours
+  // une échéance à venir : pas d'état « en retard » à part, c'est l'expiration.
+  // non payée : « à venir » si l'échéance tombe dans la semaine en cours, sinon « semaines suivantes » (sans compteur, rien d'urgent)
+  const etat = t => t.echeance <= Date.now() ? 'expired' : t.paye ? 'paid' : t.echeance < finSemaine() ? 'soon' : 'later';
+  const GROUPES = [
+    { k: 'expired', titre: 'Expirées — à renouveler ou supprimer', statut: 'status--rejected', court: 'Expirée' },
+    { k: 'soon', titre: 'À venir — cette semaine', statut: 'status--pending', court: 'À encaisser' },
+    { k: 'later', titre: 'Semaines suivantes', statut: '', court: 'À encaisser' },
+    { k: 'paid', titre: 'Payées', statut: 'status--approved', court: 'Payée' },
+  ];
+  // compteurs (filtres) : « Tous » (actif par défaut) ramène tous les états, semaines suivantes comprises
+  const COMPTEURS = [
+    { k: '', label: 'Tous', ton: 'tous', de: ['expired', 'soon', 'later', 'paid'] },
+    { k: 'expired', label: 'Expirées', ton: 'err', de: ['expired'] },
+    { k: 'soon', label: 'À venir', ton: 'warn', de: ['soon'] },
+    { k: 'paid', label: 'Payées', ton: 'ok', de: ['paid'] },
+  ];
+  // temps restant, lisible d'un coup d'œil
+  const reste = ms => { const d = ms - Date.now(), a = Math.abs(d), min = Math.round(a / 6e4), h = Math.floor(a / 3.6e6), j = Math.floor(a / 864e5);
+    const t = j >= 1 ? `${j} j${h % 24 && j < 3 ? ` ${h % 24} h` : ''}` : h >= 1 ? `${h} h` : `${min} min`; return d < 0 ? `il y a ${t}` : `dans ${t}`; };
+  let taxes = [], cat = 'all', zone = '', filtre = '', majA = 0;   // taxes : actives et expirées réunies   // cat : 'all', un type fixe ou 'zones'
+  const dansCat = t => cat === 'all' || (cat === 'zones' ? estZone(t.type) && (!zone || t.type === zone) : t.type === cat);
+
+  function renderEtat() {
+    const base = taxes.filter(dansCat);
+    $('etat').innerHTML = COMPTEURS.map(c => { const n = base.filter(t => c.de.includes(etat(t))).length;
+      return `<button type="button" class="tax-compteur${c.ton ? ` tax-compteur--${c.ton}` : ''}${filtre === c.k ? ' is-on' : ''}${n ? '' : ' is-vide'}" data-filtre="${c.k}" aria-pressed="${filtre === c.k}">
+        <b>${n}</b><span>${c.label}</span></button>`; }).join('');
+  }
+  function renderTypes() {
+    const fixes = [...new Set(taxes.map(t => t.type))].filter(k => !estZone(k)).sort((a, b) => libelle(a).localeCompare(libelle(b)));
+    const deZone = taxes.filter(t => estZone(t.type));
+    const expire = list => list.some(t => etat(t) === 'expired') ? '<em title="Au moins une taxe expirée"></em>' : '';
+    const onglet = (k, label, list) => `<button type="button" role="tab" aria-selected="${k === cat}" class="tax-type${k === cat ? ' is-on' : ''}" data-cat="${esc(k)}">${esc(label)}<i>${list.length}</i>${expire(list)}</button>`;
+    $('types').innerHTML = onglet('all', 'Toutes', taxes) + fixes.map(k => onglet(k, libelle(k), taxes.filter(t => t.type === k))).join('')
+      + (deZone.length ? onglet('zones', 'Zones de vente', deZone) : '');
+    const zones = [...new Set(deZone.map(t => t.type))].sort((a, b) => libelle(a).localeCompare(libelle(b)));
+    $('zones').hidden = cat !== 'zones';
+    $('zones').innerHTML = cat !== 'zones' ? '' : [['', 'Toutes les zones', deZone], ...zones.map(z => [z, libelle(z), deZone.filter(t => t.type === z)])]
+      .map(([k, label, list]) => `<button type="button" class="tax-zone${k === zone ? ' is-on' : ''}" data-zone="${esc(k)}" aria-pressed="${k === zone}">${esc(label)}<i>${list.length}</i>${expire(list)}</button>`).join('');
+  }
+  const ligne = (t, g) => `<button type="button" class="ech ech--${g.k}" data-detail="${t.id}">
+      <span class="ech__quand"><b>${g.k === 'paid' ? 'Payée' : reste(t.echeance)}</b><small>${date(t.echeance)}</small></span>
+      <span class="ech__nom"><b>${esc(t.nom)}</b><small>${esc(sousTitre(t.type))}</small></span>
+      <span class="status ${g.statut}">${g.k === 'expired' && t.paye ? 'Expirée · payée' : g.court}</span>
+      <span class="ech__voir" aria-hidden="true">Coordonnées →</span></button>`;
+  function renderRows() {
+    const q = $('search').value.trim().toLowerCase();
+    const list = taxes.filter(t => dansCat(t) && (!q || t.nom.toLowerCase().includes(q) || sousTitre(t.type).toLowerCase().includes(q)))
+      .sort((a, b) => a.echeance - b.echeance);
+    const garde = list.filter(t => !filtre || COMPTEURS.find(c => c.k === filtre).de.includes(etat(t)));
+    $('compte').textContent = `${garde.length} taxe${garde.length > 1 ? 's' : ''}${q ? ` pour « ${$('search').value.trim()} »` : ''}`;
+    if (!garde.length) { $('rows').innerHTML = `<p class="admin-empty">${q ? 'Aucune taxe ne correspond à la recherche.' : filtre === 'expired' ? 'Aucune taxe expirée.' : 'Rien ici.'}</p>`; return; }
+    $('rows').innerHTML = GROUPES.map(g => { const l = garde.filter(t => etat(t) === g.k); if (!l.length) return '';
+      return `<div class="ech__groupe ech__groupe--${g.k}"><p class="ech__titre">${g.titre}<i>${l.length}</i></p>${l.map(t => ligne(t, g)).join('')}</div>`; }).join('');
+  }
+  const tout = () => { renderEtat(); renderTypes(); renderRows(); };
+  async function load() {
+    const [actives, expirees] = await Promise.all([espaceBot.get('taxes?status=active'), espaceBot.get('taxes?status=expired')]);
+    taxes = [...expirees, ...actives];
+    majA = Date.now(); tout(); $('page').hidden = false;
+  }
+  // « mis à jour il y a … » : l'API du bot n'est relue que toutes les 5 minutes
+  setInterval(() => { if (majA) { const m = Math.round((Date.now() - majA) / 6e4); $('maj').textContent = `Mis à jour ${m ? `il y a ${m} min` : 'à l’instant'} · actualisé toutes les 5 min.`; } tout(); }, 30000);
+  async function start() {
+    const me = await api('../api/me');
+    if (me.status !== 'approved') { location.replace('attente.html'); return; }
+    if (!me.isAdmin) { location.replace('profil.html'); return; }
+    espaceNav(me);
+    const st = await espaceBot.gate($('botGate'));
+    $('loading').hidden = true;
+    if (!st.linked) return;
+    try { await load(); setInterval(() => load().catch(() => {}), 5 * 60000); }   // 5 min : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(espaceBot.error(e))}</p>`; }
+  }
+  // téléphone et mot de passe : seulement dans la fiche détaillée d'une taxe, demandée au bot à l'ouverture (rien n'est gardé)
+  // une ligne ouvre la fiche : téléphone et mot de passe demandés au bot à l'ouverture seulement (rien n'est gardé)
+  $('rows').addEventListener('click', async e => {
+    const b = e.target.closest('[data-detail]'); if (!b || b.classList.contains('is-ouvre')) return;
+    b.classList.add('is-ouvre');   // évite la double ouverture pendant la lecture
+    try {
+      const t = await espaceBot.get('taxes/' + b.dataset.detail);
+      espaceInfo(t.nom, [{ label: 'Type', value: sousTitre(t.type) }, { label: 'Échéance', value: date(t.echeance) }, { label: 'Téléphone', value: t.telephone }, { label: 'Mot de passe', value: t.motDePasse }]);
+    } catch (err) { espaceToast(espaceBot.error(err), false); }
+    finally { b.classList.remove('is-ouvre'); }
+  });
+  $('search').addEventListener('input', renderRows);
+  $('types').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (!b) return; cat = b.dataset.cat; zone = ''; tout(); });
+  $('zones').addEventListener('click', e => { const b = e.target.closest('[data-zone]'); if (!b) return; zone = b.dataset.zone; tout(); });
+  $('etat').addEventListener('click', e => { const b = e.target.closest('[data-filtre]'); if (!b) return;
+    filtre = b.dataset.filtre;   // « Tous » (valeur vide) remet tous les états ; plus de bascule cachée au second clic
+    renderEtat(); renderRows(); });
+  $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
+  start().catch(() => {});
+</script>
+</body>
+</html>

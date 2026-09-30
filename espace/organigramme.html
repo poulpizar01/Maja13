@@ -3,57 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hiérarchie — La Casa · La Maja 13</title>
+<title>Hiérarchie — {{espace}} · {{nom}}</title>
+<meta name="application-name" content="{{nom}}">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../theme.css">
 <link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="casa.css">
-<script src="casa.js"></script>
+<link rel="stylesheet" href="espace.css">
+<script src="espace.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" integrity="sha512-TelkP3PCMJv+viMWynjKcvLsQzx6dJHvIGhfqzFtZKgAjKM1YPqcwzzDEoTc/BHjf43PcPzTQOjuTr4YdE8lNQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
-<body class="casa-body">
-<div class="grain" aria-hidden="true"></div>
-<script src="casa-bg.js" defer></script>
+<body class="espace-body">
 
-<header class="nav is-scrolled">
-  <a class="nav__brand" href="../index.html#entrada"><img src="../assets/logo-nav.webp" alt="" width="40" height="40"><span>La Maja <em>13</em></span></a>
-  <nav class="nav__links casa-nav">
-    <a href="perfil.html">Mon profil</a>
-    <a href="familia.html">La Famille</a>
-    <a href="classement.html">Classement</a>
-    <a href="chat.html" id="chatLink">Le Salon<span class="nav__badge" id="chatBadge" hidden></span></a>
-    <a href="galerie.html">Galerie</a>
-    <div class="nav__group" id="gestion" hidden>
-      <button class="nav__group-btn is-active" type="button" aria-expanded="false">Gestion <i>▾</i></button>
-      <div class="nav__menu">
-        <a href="admin.html">Administration</a>
-        <a href="tableau.html">Tableau de bord</a>
-        <a href="stats.html">Statistiques</a>
-        <a href="taxes.html">Taxes</a>
-        <a href="armurerie.html">Armurerie</a>
-        <a href="organigramme.html" class="is-active" id="orgLink" hidden>Hiérarchie</a>
-      </div>
-    </div>
-    <a href="../accueil.html">Le site</a>
-    <button class="nav__cta casa-logout" id="logout">Déconnexion</button>
-  </nav>
-</header>
+<script>espaceShell()</script>
 
-<main class="casa-page casa-page--wide">
+<main class="espace-page espace-page--wide">
   <div class="section__head">
     <span class="numeral">✦</span>
     <h2>Hiérarchie</h2>
-    <p class="sub">Les grades de la familia et l'organigramme du site public</p>
+    <p class="sub">Les grades de {{groupe}} et l'organigramme du site public</p>
   </div>
-  <div class="casa-loading" id="loading">Chargement…</div>
+  <div class="espace-loading" id="loading">Chargement…</div>
 
   <section class="admin-block" id="ranksBlock" hidden>
     <div class="hier-head">
       <h3 class="admin-block__title">Grades</h3>
-      <button class="btn btn--gold btn--sm" type="button" id="newRank">+ Nouveau grade</button>
+      <button class="btn btn--accent btn--sm" type="button" id="newRank">+ Nouveau grade</button>
     </div>
     <p class="admin-block__hint">Du plus haut au plus bas. Glisse <span class="grade__handle-demo">⠿</span> pour changer l'ordre, clique sur un grade pour le modifier.</p>
     <ol class="grades" id="ranks"></ol>
@@ -61,7 +38,7 @@
 
   <section class="admin-block" id="orgBlock" hidden>
     <h3 class="admin-block__title">Organigramme public</h3>
-    <p class="admin-block__hint">Ce que voient les visiteurs dans « La Familia ». Glisse une case pour la déplacer, même vers un autre grade ; clique dessus pour la modifier. Les noms sont libres, sans lien avec les comptes.</p>
+    <p class="admin-block__hint">Ce que voient les visiteurs sur la page d’accueil. Glisse une case pour la déplacer, même vers un autre grade ; clique dessus pour la modifier. Les noms sont libres, sans lien avec les comptes.</p>
     <div class="tiers" id="tiers"></div>
   </section>
 </main>
@@ -71,11 +48,11 @@
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let data;
   const api = (url, opt = {}) => fetch(url, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, ...opt })
-    .then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('perfil.html'); throw 0; } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
+    .then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('profil.html'); throw 0; } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
   const reload = async () => { data = await api('../api/admin/org'); render(); };
   // exécute une modification puis recharge ; en cas d'erreur, recharge aussi (annule un glisser-déposer refusé)
   const save = async (call, msg) => {
-    try { await call(); if (msg) casaToast(msg); } catch (err) { if (err) casaToast(err.message, false); }
+    try { await call(); if (msg) espaceToast(msg); } catch (err) { if (err) espaceToast(err.message, false); }
     await reload();
   };
   const json = (method, body) => ({ method, body: JSON.stringify(body) });
@@ -88,7 +65,7 @@
   ];
   const rightsOf = r => r.canManage ? 'complet' : r.canAdmin ? 'gestion' : 'membre';
   const tags = r => [
-    r.canManage ? '<span class="tag tag--gold">Pouvoirs complets</span>' : r.canAdmin ? '<span class="tag tag--gold">Gestion</span>' : '',
+    r.canManage ? '<span class="tag tag--accent">Pouvoirs complets</span>' : r.canAdmin ? '<span class="tag tag--accent">Gestion</span>' : '',
     r.isDefault ? '<span class="tag">Nouveaux comptes</span>' : '',
     r.featured ? '<span class="tag">Mis en avant</span>' : '',
     r.discordRoleId ? '<span class="tag">Rôle Discord</span>' : '',
@@ -109,10 +86,10 @@
   }
 
   async function editRank(r) {
-    const f = await casaForm([
-      { name: 'label', label: 'Nom du grade', required: true, value: r?.label, placeholder: 'Ex : Capitán', half: true },
+    const f = await espaceForm([
+      { name: 'label', label: 'Nom du grade', required: true, value: r?.label, placeholder: 'Ex : Capitaine', half: true },
       { name: 'color', label: 'Couleur', type: 'color', value: r?.color, half: true },
-      { name: 'rights', label: 'Droits dans La Casa', type: 'radio', options: RIGHTS, value: r ? rightsOf(r) : 'membre' },
+      { name: 'rights', label: 'Droits', type: 'radio', options: RIGHTS, value: r ? rightsOf(r) : 'membre' },
       { name: 'isDefault', type: 'checkbox', value: r?.isDefault, text: 'Grade donné automatiquement aux nouveaux comptes' },
       { name: 'featured', type: 'checkbox', value: r?.featured, text: 'Mettre en avant sur l\'organigramme public (grande carte)' },
       { name: 'description', label: 'Texte public sous la rangée', type: 'textarea', rows: 2, value: r?.description, placeholder: 'Optionnel' },
@@ -121,8 +98,8 @@
     ], { title: r ? r.label : 'Nouveau grade', ok: r ? 'Enregistrer' : 'Créer', del: r ? 'Supprimer' : '' });
     if (!f) return;
     if (f._delete) {
-      if (r.memberCount) return casaToast(`Impossible : ${r.memberCount} membre${r.memberCount > 1 ? 's ont' : ' a'} encore ce grade. Change leur grade dans Administration d'abord.`, false);
-      if (!await casaConfirm(`Le grade « ${r.label} » sera supprimé.`, { title: 'Supprimer ce grade ?', ok: 'Supprimer', danger: true })) return;
+      if (r.memberCount) return espaceToast(`Impossible : ${r.memberCount} membre${r.memberCount > 1 ? 's ont' : ' a'} encore ce grade. Change leur grade dans Administration d'abord.`, false);
+      if (!await espaceConfirm(`Le grade « ${r.label} » sera supprimé.`, { title: 'Supprimer ce grade ?', ok: 'Supprimer', danger: true })) return;
       return save(() => api('../api/admin/ranks/' + encodeURIComponent(r.key), { method: 'DELETE' }), 'Grade supprimé');
     }
     const body = { label: f.label, color: f.color, description: f.description, discordRoleId: f.discordRoleId,
@@ -151,16 +128,16 @@
 
   async function editEntry(e, rank) {
     const r = data.ranks.find(x => x.key === (e?.rank || rank));
-    const f = await casaForm([
+    const f = await espaceForm([
       { name: 'name', label: 'Nom affiché', required: true, value: e?.name, placeholder: 'Ex : Marisol', half: true },
-      { name: 'subtitle', label: 'Sous-titre (optionnel)', value: e?.subtitle, placeholder: 'Ex : 27 ans · Salvador', half: true },
+      { name: 'subtitle', label: 'Sous-titre (optionnel)', value: e?.subtitle, placeholder: 'Ex : 27 ans', half: true },
       { name: 'description', label: 'Description (optionnel)', type: 'textarea', value: e?.description,
         hint: r?.featured ? '' : 'Affichée seulement pour les grades mis en avant.' },
       { name: 'isOpen', type: 'checkbox', value: e?.is_open, text: 'Poste à pourvoir (case en pointillés)' },
     ], { title: e ? e.name : `Nouvelle case · ${r.label}`, ok: e ? 'Enregistrer' : 'Ajouter', del: e ? 'Supprimer' : '' });
     if (!f) return;
     if (f._delete) {
-      if (await casaConfirm(`« ${e.name} » disparaîtra de l'organigramme public.`, { title: 'Supprimer cette case ?', ok: 'Supprimer', danger: true }))
+      if (await espaceConfirm(`« ${e.name} » disparaîtra de l'organigramme public.`, { title: 'Supprimer cette case ?', ok: 'Supprimer', danger: true }))
         save(() => api('../api/admin/org/' + e.id, { method: 'DELETE' }), 'Case supprimée');
       return;
     }
@@ -190,8 +167,8 @@
 
   (async () => {
     const me = await api('../api/me');
-    if (!me.canManage) { location.replace('perfil.html'); return; }
-    casaNav(me);
+    if (!me.canManage) { location.replace('profil.html'); return; }
+    espaceNav(me);
     await reload();
     $('loading').hidden = true; $('ranksBlock').hidden = false;
   })().catch(() => {});
