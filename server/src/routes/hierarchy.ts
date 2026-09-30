@@ -2,23 +2,25 @@
 import { Router, type Response } from 'express';
 import { prisma } from '../db.js';
 import { Prisma } from '../generated/prisma/client.js';
-import { body, intParam, manager, text } from '../http.js';
-import { allRanks, loadRanks, publicRank, rankIndex, rankOf } from '../ranks.js';
+import { body, intParam, manager, member, text } from '../http.js';
+import { allRanks, loadRanks, publicRank, rankIndex, rankOf, vitrineRank } from '../ranks.js';
 
 export const hierarchy = Router();
 
-// grades + cases de l'organigramme, dans l'ordre de la hiérarchie
-async function orgPayload() {
+// grades + cases de l'organigramme, dans l'ordre de la hiérarchie. Vitrine (public) : grades sans leurs droits ni
+// rôle Discord ; gestion : grades complets.
+async function orgPayload(gestion = true) {
   const entries = await prisma.orgEntry.findMany({ orderBy: [{ position: 'asc' }, { id: 'asc' }] });
   entries.sort((a, b) => rankIndex(a.rankKey) - rankIndex(b.rankKey));   // tri stable : position conservée dans chaque grade
   return {
-    ranks: allRanks().map(publicRank),
+    ranks: allRanks().map(gestion ? publicRank : vitrineRank),
     entries: entries.map(e => ({ id: e.id, rank: e.rankKey, name: e.name, subtitle: e.subtitle, description: e.description, is_open: e.isOpen, position: e.position })),
   };
 }
 
-hierarchy.get('/api/ranks', (_req, res) => { res.json(allRanks().map(publicRank)); });
-hierarchy.get('/api/org', async (_req, res) => { res.json(await orgPayload()); });
+// grades complets (droits, rôle Discord) : membres validés seulement (page Administration)
+hierarchy.get('/api/ranks', ...member, (_req, res) => { res.json(allRanks().map(publicRank)); });
+hierarchy.get('/api/org', async (_req, res) => { res.json(await orgPayload(false)); });
 
 // version de gestion : + nombre de comptes par grade (un grade attribué ne peut pas être supprimé)
 hierarchy.get('/api/admin/org', ...manager, async (_req, res) => {

@@ -8,6 +8,14 @@ server {
 
     client_max_body_size 16m;          # photos de la galerie : 15 Mo max côté site
 
+    # compression : par défaut nginx ne compresse que le HTML ; CSS, JS et réponses de l'API (JSON) en profitent
+    # aussi (≈ 4× moins lourds). Pas text/event-stream : le flux du chat doit partir sans attendre.
+    gzip on;
+    gzip_vary on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types text/css application/javascript text/javascript application/json image/svg+xml text/plain application/xml;
+
     location / {
         proxy_pass http://127.0.0.1:__PORT__;
         proxy_http_version 1.1;

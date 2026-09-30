@@ -47,13 +47,18 @@ chat.delete('/api/chat/messages/:id', ...member, async (req, res) => {
 // non lus + mentions pour le badge du menu
 const mentionRegex = (m: Member) => new RegExp('@(' + [m.displayName, m.username].filter(Boolean)
   .map(s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![\\w-])', 'i');
+// Appelé toutes les 30 s par chaque onglet ouvert : le total est compté en base, et seuls les 300 derniers non lus
+// sont relus pour chercher les mentions (le badge affiche 99+ au-delà ; sans plafond, un membre absent des semaines
+// ferait relire tout l'historique à chaque rafraîchissement).
 chat.get('/api/chat/unread', ...member, async (req, res) => {
   const last = (await prisma.chatRead.findUnique({ where: { memberId: req.member.id } }))?.lastReadId ?? 0;
-  const unread = await prisma.message.findMany({
-    where: { id: { gt: last }, deletedAt: null, memberId: { not: req.member.id } }, select: { content: true }, orderBy: { id: 'asc' },
-  });
+  const where = { id: { gt: last }, deletedAt: null, memberId: { not: req.member.id } };
+  const [unread, recents] = await Promise.all([
+    prisma.message.count({ where }),
+    prisma.message.findMany({ where, select: { content: true }, orderBy: { id: 'desc' }, take: 300 }),
+  ]);
   const re = mentionRegex(req.member);
-  res.json({ unread: unread.length, mentions: unread.filter(m => re.test(m.content)).length, lastReadId: last });
+  res.json({ unread, mentions: recents.filter(m => re.test(m.content)).length, lastReadId: last });
 });
 chat.post('/api/chat/read', ...member, async (req, res) => {
   const id = Number(body(req).lastId) || 0;
@@ -68,9 +73,13 @@ chat.get('/api/chat/mentions', ...member, async (_req, res) => {
   res.json(list.map(m => ({ name: m.displayName, username: m.username })));
 });
 
+// flux ouverts par membre, au plus : au-delà (onglets oubliés, script qui boucle), le plus ancien est fermé
+const FLUX_PAR_MEMBRE = 5;
 chat.get('/api/chat/stream', ...member, (req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.write('retry: 3000\n\n');
+  const siens = [...clients].filter(([, m]) => m.id === req.member.id).map(([r]) => r);
+  for (const r of siens.slice(0, Math.max(0, siens.length - FLUX_PAR_MEMBRE + 1))) { clients.delete(r); r.end(); }
   clients.set(res, req.member);
   broadcast('presence', presence());
   const ping = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* flux fermé */ } }, 25000);

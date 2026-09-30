@@ -1,18 +1,24 @@
 // En-têtes de sécurité (helmet) et limites de requêtes (express-rate-limit).
-import type { Request } from 'express';
+import crypto from 'node:crypto';
+import type { Request, RequestHandler, Response } from 'express';
 import helmet from 'helmet';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { config } from './config.js';
 
 const https = config.baseUrl.startsWith('https');
 
-// Politique de contenu : uniquement ce que les pages chargent réellement (Google Fonts, cdnjs pour
-// SortableJS, avatars Discord, stockage d'images en prod). Scripts et styles en ligne autorisés : les pages en ont.
+// Jeton à usage unique (nonce) par réponse : seuls les <script> des pages du site, marqués par site.ts, s'exécutent.
+// Un script injecté (contenu d'un membre mal échappé, par exemple) n'a pas le jeton et reste inerte.
+export const cspNonce: RequestHandler = (_req, res, next) => { res.locals.cspNonce = crypto.randomBytes(16).toString('base64'); next(); };
+
+// Politique de contenu : uniquement ce que les pages chargent réellement (Google Fonts, cdnjs pour three.js et
+// SortableJS, avatars Discord, stockage d'images en prod). Scripts en ligne : seulement avec le jeton de la réponse ;
+// styles en ligne autorisés (attributs style des pages, sans risque d'exécution de code).
 export const securityHeaders = helmet({
   contentSecurityPolicy: {
     useDefaults: true,
     directives: {
-      'script-src': ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
+      'script-src': ["'self'", (_req, res) => `'nonce-${(res as Response).locals.cspNonce}'`, 'https://cdnjs.cloudflare.com'],
       'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       'font-src': ["'self'", 'https://fonts.gstatic.com'],
       'img-src': ["'self'", 'data:', 'blob:', 'https://cdn.discordapp.com', ...(config.storage.url ? [new URL(config.storage.url).origin] : [])],

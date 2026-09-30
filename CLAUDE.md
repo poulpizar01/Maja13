@@ -52,9 +52,10 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 
 ## Sécurité (à préserver)
 
-- `helmet` avec une CSP stricte (`server/src/security.ts`) : scripts depuis le site et cdnjs uniquement, images depuis le site, Discord et l'origine de `STORAGE_URL`, polices Google. Ajouter une ressource externe impose de l'y déclarer.
+- `helmet` avec une CSP stricte (`server/src/security.ts`) : scripts depuis le site et cdnjs uniquement, **scripts en ligne seulement avec le jeton (nonce) de la réponse**, que `site.ts` ajoute à chaque `<script>` des pages servies — un `<script>` écrit dans une page fonctionne donc tel quel, mais un attribut `onclick=…` ou un script inséré par `innerHTML` ne s'exécute jamais (écouteurs en JS uniquement) ; images depuis le site, Discord et l'origine de `STORAGE_URL`, polices Google. Ajouter une ressource externe impose de l'y déclarer.
 - Seuls `espace/`, `assets/` et les fichiers de premier niveau (`*.html|css|js|txt|xml`) sont servis : jamais `server/`, `site.json`, `compose.yaml`, `.env`. Vérifier avec `curl` qu'un nouveau fichier sensible reste en 404.
-- Sessions : cookie `site.sid` `HttpOnly`, `SameSite=Lax`, `Secure` en HTTPS ; nouvelle session à chaque connexion. `DEV_LOGIN=1` est refusé si `BASE_URL` n'est pas `http://localhost`.
+- Sessions : cookie `site.sid` `HttpOnly`, `SameSite=Lax`, `Secure` en HTTPS, 7 jours ; nouvelle session à chaque connexion. Le middleware de session ne tourne que sur `/api`, `/auth` et l'accueil de `/espace/` (jamais sur les fichiers statiques), sans écriture en base à chaque requête (`disableTouch`) : une route qui lit `req.session` doit vivre sous `/api` ou `/auth`.
+- Photos : en production, le stockage distant (`STORAGE_URL`/`STORAGE_TOKEN`) est obligatoire ; sans lui, les envois sont refusés (le disque local ne sert qu'en dev). Voir `docs/stockage.md`. `DEV_LOGIN=1` est refusé si `BASE_URL` n'est pas `http://localhost`.
 
 ## Déploiement : pièges connus
 

@@ -21,6 +21,10 @@ export const publicRank = (r: Rank) => ({
   key: r.key, label: r.label, position: r.position, color: r.color, description: r.description, featured: r.featured,
   canAdmin: r.canAdmin, canManage: r.canManage, isDefault: r.isDefault, discordRoleId: r.discordRoleId,
 });
+// grade tel qu'affiché sur la vitrine (organigramme public) : ni droits ni rôle Discord
+export const vitrineRank = (r: Rank) => ({
+  key: r.key, label: r.label, position: r.position, color: r.color, description: r.description, featured: r.featured,
+});
 // grade d'un membre tel qu'exposé aux pages (null = sans grade)
 export const rankInfo = (key: string | null | undefined) => {
   const r = rankOf(key);

@@ -33,7 +33,15 @@ services:
     ports:
       - "127.0.0.1:${HOST_PORT:-3000}:3000"
     volumes:
-      - uploads:/app/uploads   # photos de la galerie quand le stockage distant n'est pas configuré
+      - uploads:/app/uploads   # anciennes photos restées sur disque (les nouvelles vont au stockage distant, obligatoire en prod)
+    # santé : le serveur répond et joint la base (route /healthz). « unhealthy » apparaît dans `docker compose ps`
+    # et les journaux ; Docker ne redémarre pas seul un conteneur malade, seulement un conteneur arrêté (voir server/README.md)
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     depends_on:
       db:
         condition: service_healthy

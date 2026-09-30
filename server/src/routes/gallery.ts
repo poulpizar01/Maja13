@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 import express, { Router, type RequestHandler } from 'express';
 import multer from 'multer';
-import sharp from 'sharp';
+import sharp, { type Metadata, type OutputInfo } from 'sharp';
 import { prisma } from '../db.js';
 import type { Member, Photo } from '../generated/prisma/client.js';
 import { body, intParam, member, text } from '../http.js';
@@ -32,7 +32,7 @@ const receivePhoto: RequestHandler = (req, res, next) => upload.single('photo')(
 
 // format réel du fichier : null si accepté, sinon le message de refus
 async function refusImage(buffer: Buffer): Promise<string | null> {
-  let meta: sharp.Metadata;
+  let meta: Metadata;
   try { meta = await sharp(buffer, { limitInputPixels: MAX_PIXELS }).metadata(); } catch { return 'Image illisible'; }
   if (!meta.format || !FORMATS_ACCEPTES.includes(meta.format)) return 'Format refusé : jpg, png, webp ou heic uniquement (pas de gif)';
   if ((meta.pages ?? 1) > 1) return 'Les images animées ne sont pas acceptées';
@@ -40,26 +40,55 @@ async function refusImage(buffer: Buffer): Promise<string | null> {
   return null;
 }
 
+// Une photo à la fois : une image de 25 Mpx occupe ~210 Mo pendant son traitement ; deux en parallèle dépasseraient
+// le plafond mémoire du conteneur (512 Mo). Les envois simultanés attendent leur tour (quelques secondes au plus).
+let fileAttente: Promise<unknown> = Promise.resolve();
+const unParUn = <T>(travail: () => Promise<T>): Promise<T> => {
+  const tour = fileAttente.then(travail, travail);
+  fileAttente = tour.catch(() => {});
+  return tour;
+};
+
+// fichiers d'une photo (grande image et miniature) ; un échec du stockage laisse seulement un fichier orphelin
+export const retirerFichiers = async (p: Pick<Photo, 'file' | 'url' | 'thumb' | 'thumbUrl'>) => {
+  for (const [key, url] of [[p.file, p.url], [p.thumb, p.thumbUrl]]) await storage.remove(key, url).catch(e => console.error(e));
+};
+
 const withAuthor = { member: true } as const;
-const photoView = (p: Photo & { member: Member }) => ({
-  id: p.id, url: p.url, thumb: p.thumbUrl, width: p.width, height: p.height, caption: p.caption, createdAt: p.createdAt, author: author(p.member),
-});
+// auteur : nom RP et grade pour tout le monde (vitrine) ; pseudo Discord, avatar et identifiant seulement pour un membre connecté
+const photoView = (p: Photo & { member: Member }, complet: boolean) => {
+  const a = author(p.member);
+  return { id: p.id, url: p.url, thumb: p.thumbUrl, width: p.width, height: p.height, caption: p.caption, createdAt: p.createdAt,
+    author: complet ? a : { displayName: a.displayName, rankLabel: a.rankLabel, rankColor: a.rankColor } };
+};
 
 gallery.get('/api/gallery', async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 60, 200);
   const photos = await prisma.photo.findMany({ where: { deletedAt: null }, include: withAuthor, orderBy: { createdAt: 'desc' }, take: limit });
-  res.json(photos.map(photoView));
+  const complet = !!req.session.memberId;
+  res.json(photos.map(p => photoView(p, complet)));
 });
 
-gallery.post('/api/gallery', ...member, limits.upload, receivePhoto, async (req, res) => {
+// sans stockage configuré en production (storage.ts) : refus avant même de lire le fichier envoyé
+const stockagePret: RequestHandler = (_req, res, next) => {
+  if (storage.accepte) next();
+  else res.status(503).json({ error: 'L’envoi de photos n’est pas encore configuré sur ce site (stockage des images manquant).' });
+};
+
+gallery.post('/api/gallery', ...member, stockagePret, limits.upload, receivePhoto, async (req, res) => {
   if (!req.file) { res.status(400).json({ error: 'Aucune image (jpg, png, webp, heic — pas de gif)' }); return; }
-  const refus = await refusImage(req.file.buffer);
+  const buffer = req.file.buffer;
+  const refus = await refusImage(buffer);
   if (refus) { res.status(400).json({ error: refus }); return; }
-  let big: { data: Buffer; info: sharp.OutputInfo }, thumb: Buffer;
+  let big: { data: Buffer; info: OutputInfo }, thumb: Buffer;
   try {
-    const img = sharp(req.file.buffer, { animated: false, limitInputPixels: MAX_PIXELS }).rotate();
-    big = await img.clone().resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true }).webp({ quality: 84 }).toBuffer({ resolveWithObject: true });
-    thumb = await img.clone().resize({ width: 600, height: 600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 78 }).toBuffer();
+    ({ big, thumb } = await unParUn(async () => {
+      const img = sharp(buffer, { animated: false, limitInputPixels: MAX_PIXELS }).rotate();
+      return {
+        big: await img.clone().resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true }).webp({ quality: 84 }).toBuffer({ resolveWithObject: true }),
+        thumb: await img.clone().resize({ width: 600, height: 600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 78 }).toBuffer(),
+      };
+    }));
   } catch (e) { console.error(e); res.status(400).json({ error: 'Image illisible' }); return; }
 
   const base = `galerie/${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`;
@@ -78,7 +107,7 @@ gallery.post('/api/gallery', ...member, limits.upload, receivePhoto, async (req,
     data: { memberId: req.member.id, file, thumb: thumbKey, url, thumbUrl, width: big.info.width, height: big.info.height, caption: text(body(req).caption, 200) || null },
     include: withAuthor,
   });
-  res.status(201).json(photoView(photo));
+  res.status(201).json(photoView(photo, true));
 });
 
 gallery.delete('/api/gallery/:id', ...member, async (req, res) => {
@@ -86,7 +115,6 @@ gallery.delete('/api/gallery/:id', ...member, async (req, res) => {
   if (!p) { res.status(404).json({ error: 'not-found' }); return; }
   if (p.memberId !== req.member.id && !canAdmin(req.member)) { res.status(403).json({ error: 'forbidden' }); return; }
   await prisma.photo.update({ where: { id: p.id }, data: { deletedAt: new Date() } });
-  // la photo disparaît du site tout de suite ; un échec du stockage laisse seulement un fichier orphelin
-  for (const [key, url] of [[p.file, p.url], [p.thumb, p.thumbUrl]]) await storage.remove(key, url).catch(e => console.error(e));
+  await retirerFichiers(p);   // la photo disparaît du site tout de suite, puis du stockage
   res.json({ ok: true });
 });

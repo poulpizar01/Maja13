@@ -5,6 +5,7 @@ import type { MemberStatus, Prisma } from '../generated/prisma/client.js';
 import { admin, body, intParam, member, requireAuth, text } from '../http.js';
 import { avatarUrl, byRankThenName, publicMember } from '../members.js';
 import { canManage, managesRank, rankInfo, rankOf } from '../ranks.js';
+import { retirerFichiers } from './gallery.js';
 
 export const members = Router();
 
@@ -72,6 +73,9 @@ members.delete('/api/admin/members/:id', ...admin, async (req, res) => {
   if (id === req.member.id) { res.status(400).json({ error: 'self' }); return; }
   const target = await prisma.member.findUnique({ where: { id }, select: { rankKey: true } });
   if (managesRank(target?.rankKey) && !canManage(req.member)) { res.status(403).json({ error: 'manage-only' }); return; }
+  // ses photos partent avec lui (cascade en base) : leurs fichiers sont retirés du stockage, sinon ils y resteraient orphelins
+  const photos = await prisma.photo.findMany({ where: { memberId: id }, select: { file: true, url: true, thumb: true, thumbUrl: true } });
   await prisma.member.deleteMany({ where: { id } });
+  for (const p of photos) await retirerFichiers(p);
   res.json({ ok: true });
 });

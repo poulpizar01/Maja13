@@ -60,7 +60,7 @@ Le domaine n'est écrit nulle part dans les fichiers : `robots.txt`, `sitemap.xm
 - Changer la configuration : modifier `.env`, puis `docker compose up -d`
 - Logs : `docker logs -f <SITE_ID>-app` (limités à 3 × 10 Mo par service, voir `compose.yaml`)
 - Mémoire et processeur : chaque conteneur a un plafond (site 512 Mo et 1 processeur, base 256 Mo et 1 processeur, sauvegardes 128 Mo). `docker stats` montre la consommation réelle ; pour les ajuster, décommenter `APP_MEMORY`, `DB_MEMORY`… dans `.env`, puis `docker compose up -d`.
-- État : `docker compose ps`
+- État : `docker compose ps` — le site y apparaît `healthy` quand il répond et joint la base (contrôle toutes les 30 s sur `/healthz`). S'il reste `unhealthy`, le redémarrer : `docker compose restart app` (Docker redémarre seul un conteneur arrêté, pas un conteneur malade).
 
 Le `.env` contient `COMPOSE_FILE=compose.yaml` : les commandes ci-dessus ignorent ainsi les réglages de dev (`compose.override.yaml`).
 
@@ -81,7 +81,13 @@ Le service `backup` (dans `compose.yaml`) sauvegarde la base au démarrage puis 
   gunzip -c backups/site-AAAA-MM-JJ_HHhMM.sql.gz | docker exec -i <SITE_ID>-db psql -U site -d site
   docker compose start app
   ```
-- Ces copies restent sur la même machine : elles protègent des erreurs de manipulation, pas de la perte du serveur (pour ça : les sauvegardes de l'hébergeur).
+- Ces copies restent sur la même machine : elles protègent des erreurs de manipulation, **pas de la perte du serveur**. Il faut en garder une copie ailleurs, par exemple sur un stockage objet (S3, Backblaze B2, Scaleway…) avec [rclone](https://rclone.org), une fois `rclone config` fait (remote nommé `sauvegardes`) :
+  ```bash
+  # crontab -e : chaque nuit à 4 h, copie des sauvegardes du site hors du serveur (copy : n'efface rien là-bas)
+  0 4 * * * rclone copy ~/<dossier-du-site>/backups sauvegardes:<SITE_ID>/ --max-age 48h >> ~/rclone-<SITE_ID>.log 2>&1
+  ```
+  Côté stockage objet, une règle de cycle de vie (suppression après 30 jours, par exemple) évite que les copies s'accumulent. Les photos, elles, sont sur le CDN (voir « Images »).
+- Le `.env` contient les secrets (base, Discord, stockage) : il doit rester lisible par vous seul (`chmod 600 .env`, fait à l'installation — à vérifier sur un site installé avant cette consigne : `ls -l .env` doit afficher `-rw-------`).
 
 ### Bot Discord
 Géré à part ([roxwood-network-famille](https://github.com/poulpizar01/roxwood-network-famille)). Détail de la liaison, des rubriques lues, du cache et des limites : [docs/api.md](../docs/api.md#api-du-bot-discord-relayée). L'espace membre lit ses données via son **API REST, en lecture seule** : rien n'est écrit dans le bot ni stocké côté site.
@@ -101,6 +107,6 @@ Une par site.
 
 ## Images (galerie)
 - **Dev** : les photos sont écrites dans `uploads/` à la racine du dépôt, sur le poste.
-- **Prod** : avec `STORAGE_URL` et `STORAGE_TOKEN`, elles partent sur le service de stockage (CDN) sous le préfixe `STORAGE_PREFIX` (un par site) et la base garde leur URL publique. Sans eux, elles restent sur le serveur (volume Docker `uploads` du site). Fonctionnement complet et contrat attendu du service : [docs/stockage.md](../docs/stockage.md).
+- **Prod** : `STORAGE_URL`, `STORAGE_TOKEN` et `STORAGE_PREFIX` (un par site) sont **obligatoires** pour envoyer des photos : elles partent sur le service de stockage (CDN) et la base garde leur URL publique. Sans eux, le site fonctionne mais refuse tout envoi (jamais de photo sur le disque du VPS). Fonctionnement complet et contrat attendu du service : [docs/stockage.md](../docs/stockage.md).
 
 Toutes les variables : [`.env.example`](../.env.example).

@@ -4,7 +4,7 @@
    {{url}} vient de BASE_URL. Un nouveau site ne modifie que site.json, jamais les pages de l'espace membre. */
 import { readFileSync } from 'node:fs';
 import { extname, join, normalize, sep } from 'node:path';
-import type { RequestHandler } from 'express';
+import type { RequestHandler, Response } from 'express';
 import { config } from './config.js';
 
 const REQUIRED = ['nom', 'espace', 'groupe', 'devise', 'serveur', 'discord', 'description'] as const;
@@ -46,13 +46,16 @@ export function renderFile(file: string): string {
   if (process.env.NODE_ENV === 'production') cache.set(file, out);
   return out;
 }
+// page HTML prête à envoyer : chaque <script> reçoit le jeton de la réponse (politique de contenu, security.ts)
+export const withNonce = (html: string, res: Response): string => html.replace(/<script\b/g, `<script nonce="${res.locals.cspNonce}"`);
 
 // sert les pages d'un dossier (index.html, extension .html facultative) ; le reste passe au middleware suivant
 export function pages(dir: string): RequestHandler {
   const base = normalize(dir + sep);
   return (req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    let path = decodeURIComponent(req.path);
+    let path: string;
+    try { path = decodeURIComponent(req.path); } catch { return next(); }   // adresse mal encodée : simple 404
     if (path.endsWith('/')) path += 'index.html';
     else if (!extname(path)) path += '.html';
     const type = TYPES[extname(path)];
@@ -60,6 +63,6 @@ export function pages(dir: string): RequestHandler {
     if (!type || !file.startsWith(base) || /[\\/]\./.test(path)) return next();
     let body: string;
     try { body = renderFile(file); } catch { return next(); }
-    res.type(type).send(body);
+    res.type(type).send(type.startsWith('text/html') ? withNonce(body, res) : body);
   };
 }

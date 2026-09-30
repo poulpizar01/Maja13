@@ -1,9 +1,9 @@
 # Stockage des photos (CDN)
 
-Les photos de la galerie sont publiées par les membres depuis l'espace membre (Galerie). Le serveur ne garde **jamais** le fichier reçu : il le contrôle, le réencode en WebP et en fait deux versions, puis les enregistre soit sur un service de stockage distant (CDN), soit sur le disque du serveur.
+Les photos de la galerie sont publiées par les membres depuis l'espace membre (Galerie). Le serveur ne garde **jamais** le fichier reçu : il le contrôle, le réencode en WebP et en fait deux versions, puis les enregistre sur un service de stockage distant (CDN) — ou, **en dev uniquement**, sur le disque du poste.
 
 ## Parcours d'une photo
-1. **Réception** (`server/src/routes/gallery.ts`) : membre validé, 10 photos maximum par membre toutes les 10 minutes, 15 Mo maximum, une seule photo par envoi.
+1. **Réception** (`server/src/routes/gallery.ts`) : membre validé, 10 photos maximum par membre toutes les 10 minutes, 15 Mo maximum, une seule photo par envoi. Les photos sont traitées **une à la fois** (le traitement d'une photo de 25 Mpx occupe ~210 Mo ; deux en parallèle dépasseraient la mémoire du conteneur) : un envoi simultané attend son tour quelques secondes.
 2. **Contrôle du contenu réel** (pas seulement l'extension) : jpg, png, webp ou heic ; ni GIF ni image animée ; 25 mégapixels maximum (au-delà, le décodage demanderait trop de mémoire au conteneur).
 3. **Réencodage** : une grande version (1 800 px maximum, WebP qualité 84) et une miniature (600 px, qualité 78). L'orientation du téléphone est appliquée, les métadonnées (position GPS…) disparaissent.
 4. **Enregistrement** (`server/src/storage.ts`) des deux fichiers, puis de leur adresse publique en base.
@@ -11,14 +11,16 @@ Les photos de la galerie sont publiées par les membres depuis l'espace membre (
 La miniature sert au bandeau de l'accueil et aux listes ; la grande version n'est téléchargée que si l'on ouvre la photo.
 
 ## Deux modes
-| | Disque local (défaut) | CDN |
+| | CDN (production) | Disque local (dev uniquement) |
 |---|---|---|
-| Réglage `.env` | `STORAGE_URL` et `STORAGE_TOKEN` vides | `STORAGE_URL`, `STORAGE_TOKEN` et `STORAGE_PREFIX` remplis |
-| Emplacement | Dev : `uploads/` à la racine du dépôt. Prod : volume Docker `uploads` du site | Service de stockage distant, sous le dossier `STORAGE_PREFIX` |
-| Adresse publique | `/uploads/galerie/<id>.webp`, servie par le site | Celle renvoyée par le service |
-| Sauvegarde | Pas incluse dans les sauvegardes de la base : à sauvegarder à part (volume Docker) | Assurée par le service |
+| Réglage `.env` | `STORAGE_URL`, `STORAGE_TOKEN` et `STORAGE_PREFIX` remplis | `STORAGE_URL` et `STORAGE_TOKEN` vides |
+| Emplacement | Service de stockage distant, sous le dossier `STORAGE_PREFIX` | `uploads/` à la racine du dépôt, sur le poste |
+| Adresse publique | Celle renvoyée par le service | `/uploads/galerie/<id>.webp`, servie par le site |
+| Sauvegarde | Assurée par le service | Aucune (poste de dev) |
 
-Le mode se choisit au démarrage (les deux variables vont ensemble ; une seule remplie bloque le démarrage). Passer du disque au CDN en cours de route ne casse rien : les photos déjà enregistrées gardent leur adresse locale et restent servies par le site ; seules les nouvelles partent sur le CDN.
+**En production (`NODE_ENV=production`, c'est-à-dire l'image Docker), le CDN est obligatoire** : sans `STORAGE_URL` / `STORAGE_TOKEN`, le site démarre, la galerie reste visible, mais tout envoi est refusé (« L'envoi de photos n'est pas encore configuré sur ce site ») et un avertissement apparaît au démarrage. Le disque du VPS n'est ni sauvegardé ni fait pour garder les photos.
+
+Les deux variables vont ensemble (une seule remplie bloque le démarrage). Des photos plus anciennes restées sur le disque (volume Docker `uploads`, d'avant le CDN) gardent leur adresse et restent servies par le site.
 
 **Un préfixe par site** : plusieurs sites peuvent partager le même service de stockage, chacun dans son dossier (`STORAGE_PREFIX=monsite/`). Ne jamais réutiliser le préfixe d'un autre site.
 
@@ -36,6 +38,11 @@ L'adresse publique renvoyée doit être sur le même domaine que `STORAGE_URL` :
 
 ## Retrait d'une photo
 L'auteur ou un membre avec les droits de Gestion retire la photo : elle disparaît du site immédiatement (marquée supprimée en base), puis ses deux fichiers sont effacés du stockage. Si le stockage échoue à ce moment, il reste seulement un fichier orphelin, sans effet sur le site.
+
+La suppression d'un compte (Gestion → Administration) retire aussi du stockage les fichiers de toutes ses photos.
+
+## Auteur affiché
+Pour les visiteurs de la vitrine, `GET /api/gallery` ne donne que le nom RP et le grade de l'auteur. Le pseudo Discord, l'avatar et l'identifiant ne sont renvoyés qu'à un membre connecté.
 
 ## Photos d'exemple
 Les six images de `assets/exemples/` ne passent **jamais** par le stockage : ce sont des fichiers du projet, affichés par `galerie.js` tant qu'aucune vraie photo n'existe.

@@ -68,6 +68,11 @@ auth.get('/auth/discord/callback', async (req, res) => {
 
     // 4. compte : créé en attente de validation, validé d'office pour le propriétaire
     const existing = await prisma.member.findUnique({ where: { discordId: user.id } });
+    // grade actuel lié à un rôle Discord que le membre ne porte plus (rétrogradé ou retiré sur Discord) : il le perd
+    // et revient au grade par défaut. Un grade sans rôle Discord (attribué à la main dans Gestion) est conservé.
+    const gradeActuel = ranks.find(r => r.key === existing?.rankKey);
+    const roleRetire = !!gradeActuel?.discordRoleId && !guildMember.roles.includes(gradeActuel.discordRoleId);
+    const gradeConserve = roleRetire ? ranks.find(r => r.isDefault)?.key : existing?.rankKey;
     const m = await prisma.member.upsert({
       where: { discordId: user.id },
       create: {
@@ -78,7 +83,7 @@ auth.get('/auth/discord/callback', async (req, res) => {
       },
       update: {
         username: user.username, avatar: user.avatar, isOwner: owner, lastLogin: new Date(),
-        rankKey: rankFromRole ?? existing?.rankKey ?? (owner ? startRank ?? null : null),
+        rankKey: rankFromRole ?? gradeConserve ?? (owner ? startRank ?? null : null),
         ...(owner && { status: 'approved' as const }),
       },
     });
