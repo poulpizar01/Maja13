@@ -31,19 +31,25 @@ Déploiement, mises à jour, sauvegardes et retour en arrière : [server/README.
 ### Bascule depuis l'ancienne Casa (à faire une fois)
 Le passage au modèle renomme les conteneurs, les volumes et l'utilisateur de la base (`maja13` → `site`), et La Casa passe de `/casa/` à `/espace/`. Les données (membres, grades, photos, chat) se reprennent telles quelles : le schéma de la base est identique. Sur le VPS, dans le dossier du site :
 ```bash
-# 1. sauvegarde de la base actuelle (avant de mettre le code à jour)
+# 1. sauvegarde de la base actuelle (ancienne pile encore en marche)
 docker exec maja13-db-1 pg_dump -U maja13 -d maja13 --clean --if-exists --no-owner > ~/maja13-avant-modele.sql
-# 2. .env : ajouter SITE_ID=maja13 (garder HOST_PORT, secrets et Discord tels quels) ;
+# 2. arrêt de l'ancienne pile, AVANT de changer le code : elle libère le port ; ses volumes (base, photos) sont gardés
+docker compose down
+# 3. .env : ajouter SITE_ID=maja13 (garder HOST_PORT, secrets et Discord tels quels) ;
 #    si les photos sont sur le stockage distant (STORAGE_URL), ajouter aussi STORAGE_PREFIX=maja13/
-# 3. nouveau code, nouveaux conteneurs (les anciens sont retirés, leurs volumes gardés)
-git pull && docker compose up -d --build --remove-orphans
-# 4. reprise des données dans la nouvelle base
+# 4. nouveau code, nouveaux conteneurs (base neuve, vide, migrée au démarrage)
+git pull && docker compose up -d --build
+# 5. reprise des données dans la nouvelle base
 docker compose stop app
 docker exec -i maja13-db psql -q -U site -d site -v ON_ERROR_STOP=1 < ~/maja13-avant-modele.sql
-# 5. photos stockées sur le disque du serveur (sans STORAGE_URL) : copie vers le nouveau volume
+# 6. photos stockées sur le disque du serveur (sans STORAGE_URL) : copie vers le nouveau volume
 docker run --rm -v maja13_maja13-uploads:/from -v maja13_uploads:/to alpine cp -a /from/. /to/
 docker compose start app
+# 7. vérification : le site démarre sans erreur, les membres sont bien là
+docker compose logs app --tail 20
+docker exec maja13-db psql -U site -d site -tAc "select count(*) from members"
 ```
+**Retour arrière** (tant que les anciens volumes ne sont pas supprimés) : `docker compose down`, retirer `SITE_ID` du `.env`, `git checkout 16c46c1` (dernière version avant le modèle), `docker compose up -d --build` : l'ancienne Casa repart sur ses données d'origine, intactes.
 Puis :
 - **nginx** : rediriger les anciens liens de La Casa, dans le bloc `server` HTTPS, avant `location /` :
   `location /casa/ { rewrite ^/casa/(.*)$ /espace/$1 permanent; }`, puis `sudo nginx -t && sudo systemctl reload nginx`.
