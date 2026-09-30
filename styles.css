@@ -60,10 +60,40 @@ p{margin:0 0 1em}
 @keyframes vtVoletBas{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0)}}
 @keyframes pastille{50%{opacity:.15}}
 
+/* ---------- TRANSITIONS VITRINE ⇄ LA CASA (View Transitions natives ; sans prise en charge : navigation directe) ----------
+   Les deux pages doivent s'y inscrire : la vitrine ici (type « vers-site »), La Casa dans espace.css (« vers-espace »,
+   déclaré après et donc prioritaire sur ses pages). Ce fichier étant chargé aussi par La Casa, il fixe les deux sens
+   (html:root = priorité sur espace.css). Volontairement sobre, pour un rendu identique d'un navigateur à l'autre :
+   uniquement opacité et déplacement (les filtres et découpes sur les captures de page rendent mal selon les navigateurs,
+   et le blason 3D, en WebGL, n'apparaît pas toujours dans la capture). Fondu au noir, puis la page d'arrivée glisse
+   en place : vers le haut en entrant dans La Casa, vers le bas en revenant sur le site.
+   Les transitions internes à La Casa (type « interne ») ne sont pas touchées. */
+:root{--vt-fond:var(--bg)}
+@view-transition{navigation:auto;types:vers-site}
+@keyframes vtMajaSort{to{opacity:0}}
+@keyframes vtMajaMonte{from{opacity:0;transform:translateY(24px)}}
+@keyframes vtMajaDescend{from{opacity:0;transform:translateY(-24px)}}
+html:root:active-view-transition-type(vers-espace)::view-transition,
+html:root:active-view-transition-type(vers-site)::view-transition,
+html:root:active-view-transition-type(depuis-passage)::view-transition{background:var(--vt-fond)}
+html:root:active-view-transition-type(vers-espace)::view-transition-group(*),
+html:root:active-view-transition-type(vers-site)::view-transition-group(*),
+html:root:active-view-transition-type(depuis-passage)::view-transition-group(*){animation:none}
+html:root:active-view-transition-type(vers-espace)::view-transition-old(*),
+html:root:active-view-transition-type(vers-site)::view-transition-old(*){animation:vtMajaSort .2s ease-in both}
+html:root:active-view-transition-type(vers-espace)::view-transition-new(*){animation:vtMajaMonte .42s cubic-bezier(.2,.7,.1,1) .2s both}
+html:root:active-view-transition-type(vers-site)::view-transition-new(*){animation:vtMajaDescend .42s cubic-bezier(.2,.7,.1,1) .2s both}
+/* arrivée sur l'accueil depuis le passage de la page d'entrée (index.html, retour de La Casa) : le fondu au noir a déjà eu lieu */
+html:root:active-view-transition-type(depuis-passage)::view-transition-old(*){animation:none;opacity:0}
+html:root:active-view-transition-type(depuis-passage)::view-transition-new(*){animation:vtMajaDescend .42s cubic-bezier(.2,.7,.1,1) both}
+@media (prefers-reduced-motion:reduce){::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important}}
+
 /* ---------- HERO ---------- */
 .hero{position:relative;min-height:100vh;display:flex;align-items:center;overflow:hidden;
   background:radial-gradient(ellipse at 50% 35%,#1a140d 0%,#0b0909 55%,#050406 100%)}
-#hero3d{position:absolute;inset:0;width:100%;height:100%}
+/* le blason apparaît en fondu à sa première image (hero3d.js, chargé en différé) au lieu de surgir, en pleine transition notamment */
+#hero3d{position:absolute;inset:0;width:100%;height:100%;opacity:0;transition:opacity .7s ease}
+#hero3d.is-pret{opacity:1}
 .hero__skyline{position:absolute;left:0;right:0;bottom:0;height:34vh;pointer-events:none;opacity:.55;
   background:linear-gradient(to top,var(--bg) 0%,rgba(8,7,10,.7) 40%,transparent 100%)}
 .hero__content{position:relative;z-index:2;text-align:left;padding:130px 28px 110px;max-width:var(--wrap);width:100%;margin:0 auto;pointer-events:none}
@@ -301,3 +331,10 @@ p{margin:0 0 1em}
   .galeria__nav{display:none}.lightbox{padding:60px 10px}.lightbox__nav{display:none}
 }
 [hidden]{display:none!important}
+
+/* ---------- LA CASA : retouches de DA (espace.css est commun à tous les sites : on l'habille ici, sans le modifier) ----------
+   Pas de bord perforé façon pellicule (rail, et au-dessus des onglets sur mobile) : motif de la DA par défaut du modèle,
+   étranger au blason de la Maja. Le repère de la page active passe dans la surbrillance, au lieu de chevaucher le bord. */
+html .rail::before,html .onglets::before{display:none}
+html .rail{padding-left:22px}
+html .rail__lien.is-active::before{left:0;top:0;bottom:0}

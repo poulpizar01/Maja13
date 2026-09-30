@@ -5,7 +5,8 @@
   if (!canvas) return;
   const hero = canvas.parentElement;
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  // preserveDrawingBuffer : l'image reste dans le canvas après affichage, pour figurer dans la capture des transitions de page (styles.css)
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));   // au-delà, 2× plus de pixels à calculer pour une différence à peine visible
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -152,6 +153,7 @@
     dustGeo.attributes.position.needsUpdate = true;
     dust.rotation.y = t * 0.02;
     renderer.render(scene, camera);
+    if (!canvas.classList.contains('is-pret')) canvas.classList.add('is-pret');   // première image : le blason apparaît en fondu (styles.css)
   }
   tick();
 })();

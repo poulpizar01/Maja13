@@ -23,7 +23,28 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="theme.css">
 <link rel="stylesheet" href="styles.css">
+<script>
+  // Déjà entré dans cette session : on passe à l'accueil. La page devient un simple « passage » (noir :
+  // le fond des transitions de styles.css), pour qu'en venant de La Casa les deux transitions s'enchaînent sans rupture.
+  let passage = false;
+  try { passage = !!sessionStorage.getItem('maja13-entered') && !location.hash; } catch {}
+  if (passage) {
+    document.documentElement.classList.add('passage');
+    // on laisse la page quittée finir de s'effacer, puis l'accueil descend par-dessus le passage
+    let parti = false;
+    const suite = () => { if (!parti) { parti = true; try { sessionStorage.setItem('maja13-passage', '1'); } catch {} location.replace('accueil.html'); } };
+    addEventListener('pagereveal', e => setTimeout(suite, e.viewTransition ? 220 : 0));
+    setTimeout(suite, 1500);   // filet : navigateur sans pagereveal
+  }
+  // transitions animées seulement vers La Casa (et depuis le passage) : l'entrée vers l'accueil a sa propre animation
+  addEventListener('pageswap', e => {
+    try { if (e.viewTransition && !passage && !new URL(e.activation.entry.url).pathname.startsWith('/espace/')) e.viewTransition.skipTransition(); } catch {}
+  });
+</script>
+<link rel="prefetch" href="accueil.html">
 <style>
+  html.passage{background:var(--vt-fond)}
+  html.passage body{visibility:hidden}
   html,body{height:100%;overflow:hidden}
   .entry{position:relative;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 24px;
     background:radial-gradient(ellipse at 50% 42%,#1c150d 0%,#0b0909 55%,#050406 100%)}
@@ -61,8 +82,6 @@
   <p class="entry__small"><a href="espace/">Espace membres</a> · Roleplay sur Flashback FA</p>
 </main>
 <script>
-  // déjà entré dans cette session ? on passe directement
-  try { if (sessionStorage.getItem('maja13-entered') && !location.hash) location.replace('accueil.html'); } catch {}
   document.getElementById('enter').addEventListener('click', e => {
     e.preventDefault(); try { sessionStorage.setItem('maja13-entered', '1'); } catch {}
     document.getElementById('entry').classList.add('is-leaving');
