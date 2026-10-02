@@ -15,12 +15,18 @@ services:
       BASE_URL: http://localhost:3000
       SESSION_SECRET: dev-local
       POSTGRES_PASSWORD: dev
+      # en dev, le site garde le compte « site » : `prisma migrate dev` crée une base temporaire, ce que le compte
+      # restreint de la prod (site_app, voir compose.yaml) n'a pas le droit de faire
+      DATABASE_URL: postgres://site:dev@db:5432/site
       DEV_LOGIN: "1"
     volumes:
       - .:/app
       - ./uploads:/app/uploads
       - server-modules:/app/server/node_modules   # dépendances Linux, séparées de celles du poste
   db:
+    environment:
+      POSTGRES_PASSWORD: dev
+  db-roles:
     environment:
       POSTGRES_PASSWORD: dev
   # pas de sauvegarde automatique de la base de dev (à la main si besoin : docker compose run --rm backup)

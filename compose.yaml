@@ -45,6 +45,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-roles:
+        condition: service_completed_successfully
   db:
     container_name: ${SITE_ID:-site}-db
     mem_limit: ${DB_MEMORY:-256m}
@@ -66,8 +68,47 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  # Compte de base du site : « site » (créé par l'image postgres) est super-utilisateur ; le site se connecte donc
+  # avec « site_app », simple propriétaire des tables (il lui faut ce droit pour appliquer les migrations), sans accès
+  # aux fichiers ni aux commandes de la machine. Ce service passe avant chaque démarrage du site et ne fait rien
+  # s'il n'y a rien à faire : il crée le compte et lui donne les tables existantes (site installé avant ce réglage).
+  # Même mot de passe que « site » : la base n'est joignable que du réseau Docker du site, le risque couvert est
+  # une requête détournée à travers le site, pas une connexion directe.
+  db-roles:
+    container_name: ${SITE_ID:-site}-db-roles
+    mem_limit: 64m
+    pids_limit: 64
+    logging: *logs
+    image: postgres:17-alpine
+    restart: "no"
+    env_file:
+      - path: .env             # fournit POSTGRES_PASSWORD
+        required: false
+    environment:
+      PGHOST: db
+      PGUSER: site
+      PGDATABASE: site
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        export PGPASSWORD="$$POSTGRES_PASSWORD"
+        psql -q -v ON_ERROR_STOP=1 -v pw="$$POSTGRES_PASSWORD" <<'SQL'
+        SELECT 'CREATE ROLE site_app' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'site_app') \gexec
+        ALTER ROLE site_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'pw';
+        ALTER SCHEMA public OWNER TO site_app;
+        SELECT format('ALTER TABLE public.%I OWNER TO site_app', tablename) FROM pg_tables
+          WHERE schemaname = 'public' AND tableowner <> 'site_app' \gexec
+        SELECT format('ALTER TYPE public.%I OWNER TO site_app', t.typname) FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+          WHERE n.nspname = 'public' AND t.typtype = 'e' AND pg_get_userbyid(t.typowner) <> 'site_app' \gexec
+        SQL
   # Sauvegarde de la base : au démarrage puis toutes les 24 h, dans ./backups sur la machine
   # (un dossier, pas un volume Docker : il survit à un `docker compose down -v`), 7 jours conservés.
+  # Les sessions n'y sont pas (table vide dans la copie) : elles portent les jetons personnels du bot, et une
+  # restauration déconnecte simplement tout le monde. Fichiers lisibles par leur seul propriétaire, celui du dossier
+  # backups/ (créé à l'installation, voir server/README.md ; sinon root).
   # Restauration : voir server/README.md. Désactivé en dev (compose.override.yaml).
   backup:
     container_name: ${SITE_ID:-site}-backup
@@ -96,9 +137,13 @@ services:
     command:
       - |
         export PGPASSWORD="$$POSTGRES_PASSWORD"
+        umask 077
+        proprio="$$(stat -c %u:%g /backups)"
         while true; do
           f="/backups/site-$$(date +%Y-%m-%d_%Hh%M).sql.gz"
-          if pg_dump --clean --if-exists --no-owner | gzip > "$$f.tmp"; then mv "$$f.tmp" "$$f"; echo "sauvegarde : $$f"; else rm -f "$$f.tmp"; echo "ÉCHEC de la sauvegarde" >&2; fi
+          if pg_dump --clean --if-exists --no-owner --exclude-table-data=session | gzip > "$$f.tmp"; then mv "$$f.tmp" "$$f"; echo "sauvegarde : $$f"; else rm -f "$$f.tmp"; echo "ÉCHEC de la sauvegarde" >&2; fi
+          # copies d'avant ce réglage comprises : lisibles par le seul propriétaire du dossier
+          chown "$$proprio" /backups/site-*.sql.gz 2>/dev/null; chmod 600 /backups/site-*.sql.gz 2>/dev/null
           find /backups -name 'site-*.sql.gz' -mtime +$$BACKUP_KEEP_DAYS -delete
           sleep "$$BACKUP_INTERVAL"
         done

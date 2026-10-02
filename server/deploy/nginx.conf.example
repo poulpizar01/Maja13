@@ -1,11 +1,19 @@
-# Site nginx. Copier dans /etc/nginx/sites-available/<SITE_ID> (voir .env), remplacer __DOMAIN__
-# (domaine) et __PORT__ (HOST_PORT du .env), activer (lien dans sites-enabled), nginx -t, recharger.
+# Site nginx. Copier dans /etc/nginx/sites-available/<SITE_ID> (voir .env), remplacer __DOMAIN__ (domaine),
+# __PORT__ (HOST_PORT du .env) et __SITE_ID__ (SITE_ID du .env, tirets remplacés par des _), activer (lien dans
+# sites-enabled), nginx -t, recharger.
 # HTTPS : ensuite `certbot --nginx -d __DOMAIN__`, qui ajoute le certificat et la redirection.
+
+# Limite de débit par adresse IP, devant le site : 30 requêtes par seconde (une page charge une vingtaine de fichiers),
+# rafales absorbées plus bas par « burst ». Le site a ses propres limites sur l'API ; celle-ci couvre aussi les pages
+# et les fichiers, qu'il ne compte pas. Une zone par site : son nom doit être unique sur la machine.
+limit_req_zone $binary_remote_addr zone=__SITE_ID__:10m rate=30r/s;
+
 server {
     listen 80;
     listen [::]:80;
     server_name __DOMAIN__;
 
+    server_tokens off;                 # ne pas annoncer la version de nginx
     client_max_body_size 16m;          # photos de la galerie : 15 Mo max côté site
 
     # compression : par défaut nginx ne compresse que le HTML ; CSS, JS et réponses de l'API (JSON) en profitent
@@ -17,6 +25,8 @@ server {
     gzip_types text/css application/javascript text/javascript application/json image/svg+xml text/plain application/xml;
 
     location / {
+        limit_req zone=__SITE_ID__ burst=120 nodelay;
+        limit_req_status 429;
         proxy_pass http://127.0.0.1:__PORT__;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -24,6 +34,9 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+
+    # contrôle de santé : réservé à Docker, qui interroge le conteneur directement (chaque appel lit la base)
+    location = /healthz { return 404; }
 
     # Le chat : flux temps réel (SSE), ni mise en tampon ni coupure au bout de 60 s
     location = /api/chat/stream {
