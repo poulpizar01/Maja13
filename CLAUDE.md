@@ -9,7 +9,7 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 
 | Personnalisable par site | Mutualisé (identique partout) |
 |---|---|
-| `site.json`, `theme.css`, `index.html`, `styles.css`, `assets/`, `galerie.js` (liste `EXEMPLES`), `pellicule.js` | `espace/` (pages, `espace.js`, `espace.css`), `server/`, `org.js`, `main.js`, `404.html`, `compose*.yaml`, `docs/` |
+| `site.json`, `theme.css`, `index.html`, `styles.css`, `assets/`, `galerie.js` (liste `EXEMPLES`), `pellicule.js` | `espace/` (pages, `espace.js`, `espace.css`), `server/`, `org.js`, `main.js`, `404.html`, `compose*.yaml`, `docs/`, `.claude/skills/` |
 
 - La **vitrine** et la **direction artistique** sont libres dans chaque site.
 - La **partie gestion** (espace membre + serveur) ne se modifie **pas** dans un site : on corrige dans le modèle, puis chaque site fait `git fetch modele && git merge modele/main` (voir README). Un site qui modifie un fichier mutualisé se crée des conflits à chaque mise à jour.
@@ -71,6 +71,10 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 ## Vérifier un changement visuel
 
 Le site doit rester propre de 360 px à l'écran large : aucun débordement horizontal, menu burger sous 1 180 px, hero empilé sous 1 000 px. Après un changement de mise en page, contrôler au minimum 375, 768, 1 024 et 1 280 px (vitrine, profil, admin, chat), menu burger ouvert compris.
+
+## Audits
+
+`/audit [angle]` (`.claude/skills/audit/`) lance les prompts de `docs/audits.md` : accès et sessions, navigateur, relais du bot, fiabilité, modèle mutualisé — chacun dans un agent séparé, puis un rapport fusionné. À lancer avant une mise en prod ou après une grosse fonctionnalité. `docs/audits.md` reste la seule source des prompts. Dans un site créé depuis le modèle, un défaut trouvé dans un fichier mutualisé se corrige **dans le modèle**.
 
 ## Git
 
