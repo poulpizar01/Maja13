@@ -19,9 +19,9 @@
 <meta name="twitter:title" content="La Maja 13">
 <meta name="twitter:description" content="Lealtad · Respeto · La familia es sagrada">
 <meta name="twitter:image" content="https://poloveni.github.io/Maja13/assets/og-image.jpg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap">
+<link rel="preload" href="assets/fonts/pirata-one-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/cinzel-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/eb-garamond-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="theme.css">
 <link rel="stylesheet" href="styles.css">
 <script>
@@ -350,6 +350,7 @@
 <footer class="footer">
   <div class="wrap">
     <span>Lealtad · Respeto · La familia es sagrada</span>
+    <a href="confidentialite.html">Confidentialité</a>
   </div>
 </footer>
 <div class="signature">
@@ -368,7 +369,7 @@
 <script src="org.js"></script>
 <script src="galeria.js"></script>
 <!-- blason 3D : three.js (~600 Ko) en différé, pour que le menu et l'apparition des sections n'attendent pas son téléchargement -->
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script defer src="assets/vendor/three.min.js"></script>
 <script defer src="hero3d.js"></script>
 </body>
 </html>
