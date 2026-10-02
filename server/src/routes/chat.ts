@@ -73,6 +73,12 @@ chat.get('/api/chat/mentions', ...member, async (_req, res) => {
   res.json(list.map(m => ({ name: m.displayName, username: m.username })));
 });
 
+// Les droits ne sont vérifiés qu'à l'ouverture d'un flux : un compte refusé ou supprimé (routes/members.ts) voit donc
+// ses flux fermés aussitôt, sinon un onglet resté ouvert continuerait de recevoir le chat.
+export const fermerFlux = (memberId: number) => {
+  for (const [res, m] of clients) if (m.id === memberId) { clients.delete(res); res.end(); }
+};
+
 // flux ouverts par membre, au plus : au-delà (onglets oubliés, script qui boucle), le plus ancien est fermé
 const FLUX_PAR_MEMBRE = 5;
 chat.get('/api/chat/stream', ...member, (req, res) => {
@@ -82,6 +88,11 @@ chat.get('/api/chat/stream', ...member, (req, res) => {
   for (const r of siens.slice(0, Math.max(0, siens.length - FLUX_PAR_MEMBRE + 1))) { clients.delete(r); r.end(); }
   clients.set(res, req.member);
   broadcast('presence', presence());
-  const ping = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* flux fermé */ } }, 25000);
+  // le flux ne survit pas à la session : à son échéance, il est fermé (le navigateur se reconnecte et reçoit un 401)
+  const fin = req.session.cookie.expires?.getTime() ?? Infinity;
+  const ping = setInterval(() => {
+    if (Date.now() > fin) { res.end(); return; }
+    try { res.write(': ping\n\n'); } catch { /* flux fermé */ }
+  }, 25000);
   req.on('close', () => { clearInterval(ping); clients.delete(res); broadcast('presence', presence()); });
 });

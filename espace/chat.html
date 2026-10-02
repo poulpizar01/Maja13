@@ -7,8 +7,6 @@
 <meta name="application-name" content="{{nom}}">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="../theme.css">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="espace.css">
@@ -43,7 +41,10 @@
 <script>
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const linkify = s => esc(s).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/@([^\s@<][^@<]{0,40}?)(?=\s|$|[.,;:!?])/g, (m0, n) => mentionable.has(n.toLowerCase()) ? `<span class="mention">@${n}</span>` : m0);
+  // liens et mentions : le texte est découpé autour des adresses (morceaux impairs), les mentions ne sont cherchées
+  // que hors des liens — sinon un « @nom » dans une adresse insérerait une balise au milieu de l'attribut href
+  const linkify = s => esc(s).split(/(https?:\/\/[^\s<]+)/).map((t, i) => i % 2 ? `<a href="${t}" target="_blank" rel="noopener">${t}</a>`
+    : t.replace(/@([^\s@<][^@<]{0,40}?)(?=\s|$|[.,;:!?])/g, (m0, n) => mentionable.has(n.toLowerCase()) ? `<span class="mention">@${n}</span>` : m0)).join('');
   let mentionable = new Set(), members = [];
   const isMentioned = c => { const re = new RegExp('@(' + [me.displayName, me.username].filter(Boolean).map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![\\w-])', 'i'); return re.test(c); };
   const time = d => new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });

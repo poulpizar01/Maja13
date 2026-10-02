@@ -7,11 +7,10 @@
 <meta name="application-name" content="{{nom}}">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="../theme.css">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="espace.css">
+<script src="espace.js"></script>
 </head>
 <body class="espace-body">
 
@@ -24,8 +23,9 @@
   <div class="espace-login__actions">
     <button class="btn btn--ghost" id="refresh">Vérifier</button>
     <button class="btn btn--ghost espace-logout" id="logout">Déconnexion</button>
+    <button class="btn btn--ghost btn--danger" id="supprimer">Supprimer mon compte</button>
   </div>
-  <p class="espace-login__small">{{devise}}</p>
+  <p class="espace-login__small">{{devise}} · <a href="../confidentialite.html">Confidentialité</a></p>
 </main>
 
 <script>
@@ -46,6 +46,12 @@
   }
   check();
   $('refresh').addEventListener('click', check);
+  // retirer sa demande : le compte et ce qui lui est rattaché sont effacés
+  $('supprimer').addEventListener('click', async () => {
+    if (!await espaceConfirm('Ton compte sera effacé pour de bon. Pour revenir, il faudra refaire une demande.', { title: 'Supprimer mon compte ?', ok: 'Supprimer mon compte', danger: true })) return;
+    const r = await fetch('../api/me', { method: 'DELETE', credentials: 'same-origin' });
+    if (r.ok) location.href = '../'; else espaceToast('La suppression a échoué. Réessaie dans un instant.', false);
+  });
   $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
 </script>
 </body>

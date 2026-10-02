@@ -256,6 +256,7 @@ label.modal__label{cursor:pointer}
 .perfil__form input:focus,.perfil__form textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
 .perfil__form textarea{resize:vertical}
 .perfil__actions{display:flex;align-items:center;gap:16px}
+.perfil__suppr{margin:28px 0 0;padding-top:18px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;font-size:13px;color:var(--ink2)}
 .perfil__saved{font-family:var(--serif);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ok)}
 
 /* ma semaine / mes paies (profil) */

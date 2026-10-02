@@ -40,7 +40,8 @@ auth.get('/auth/discord', async (req, res) => {
 auth.get('/auth/discord/callback', async (req, res) => {
   try {
     const { code, state, error } = req.query;
-    if (error || typeof code !== 'string' || state !== req.session.oauthState) { res.redirect('/espace/?error=oauth'); return; }
+    // state obligatoire : sans connexion lancée depuis ce navigateur (rien en session), un retour forgé est refusé
+    if (error || typeof code !== 'string' || typeof state !== 'string' || !state || state !== req.session.oauthState) { res.redirect('/espace/?error=oauth'); return; }
     delete req.session.oauthState;
 
     // 1. code → jeton

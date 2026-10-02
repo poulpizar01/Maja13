@@ -6,6 +6,7 @@ import session from 'express-session';
 import connectPg from 'connect-pg-simple';
 import { config } from './config.js';
 import { pool, prisma } from './db.js';
+import { planifierPurge } from './purge.js';
 import { loadRanks } from './ranks.js';
 import { storage } from './storage.js';
 import { cspNonce, limits, securityHeaders } from './security.js';
@@ -18,6 +19,7 @@ import { chat } from './routes/chat.js';
 import { bot } from './routes/bot.js';
 
 await loadRanks();
+planifierPurge();
 
 const app = express();
 app.set('trust proxy', 1);                     // derrière nginx (adresse IP réelle pour les limites de requêtes)

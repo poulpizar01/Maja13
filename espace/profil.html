@@ -7,8 +7,6 @@
 <meta name="application-name" content="{{nom}}">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="../theme.css">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="espace.css">
@@ -47,6 +45,7 @@
         <button class="btn btn--accent" type="submit">Enregistrer</button>
         <span class="perfil__saved" id="saved" hidden>Enregistré ✦</span>
       </div>
+      <p class="perfil__suppr"><button class="btn btn--ghost btn--sm btn--danger" id="supprimer" type="button">Supprimer mon compte</button><a href="../confidentialite.html">Mes données</a></p>
     </form>
   </section>
 
@@ -167,6 +166,12 @@
     const body = { displayName: $('f-displayName').value, phoneRp: $('f-phoneRp').value, bio: $('f-bio').value };
     const r = await fetch('../api/me', { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (r.ok) { render(await r.json()); $('saved').hidden = false; setTimeout(() => $('saved').hidden = true, 2500); }
+  });
+  // suppression de son propre compte : profil, messages et photos, sans retour possible
+  $('supprimer').addEventListener('click', async () => {
+    if (!await espaceConfirm('Ton profil, tes messages et tes photos seront effacés pour de bon. Pour revenir, il faudra refaire une demande et attendre sa validation.', { title: 'Supprimer mon compte ?', ok: 'Supprimer mon compte', danger: true })) return;
+    const r = await fetch('../api/me', { method: 'DELETE', credentials: 'same-origin' });
+    if (r.ok) location.href = '../'; else espaceToast('La suppression a échoué. Réessaie dans un instant.', false);
   });
   $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
 </script>

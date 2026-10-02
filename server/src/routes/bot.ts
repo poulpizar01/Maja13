@@ -34,8 +34,18 @@ function forget(req: Request) {
   for (const key of cache.keys()) if (key.startsWith(prefix)) cache.delete(key);
 }
 
+// ---------- partage des 300 requêtes / 15 min que le bot accorde à tout le site ----------
+// Sans partage, deux membres à leur limite personnelle (150) privent tous les autres du bot. Une fois BUDGET appels
+// faits par le site dans le quart d'heure, ceux qui en ont déjà fait PART attendent : le reste va aux autres membres.
+const FENETRE = 15 * 60e3, BUDGET = 240, PART = 60;
+let debut = Date.now(), total = 0;
+const parMembre = new Map<number, number>();
+const fenetre = () => { if (Date.now() - debut > FENETRE) { debut = Date.now(); total = 0; parMembre.clear(); } };
+const partEpuisee = (req: Request) => { fenetre(); return total >= BUDGET && (parMembre.get(req.session.memberId!) ?? 0) >= PART; };
+
 // appel à l'API du bot avec le jeton du membre ; un jeton refusé est oublié, avec ce qui a été lu grâce à lui
 async function botGet(req: Request, path: string): Promise<{ status: number; data: unknown }> {
+  fenetre(); total++; parMembre.set(req.session.memberId!, (parMembre.get(req.session.memberId!) ?? 0) + 1);
   const r = await fetch(`${config.botApiUrl}/api/${path}`, {
     headers: { Authorization: `Bearer ${req.session.botToken}` }, signal: AbortSignal.timeout(15000),
   });
@@ -66,7 +76,8 @@ bot.post('/api/bot/link', ...member, async (req, res) => {
   if (!config.botApiUrl || typeof token !== 'string' || !token) { res.status(400).json({ error: 'jeton manquant' }); return; }
   req.session.botToken = token;
   forget(req);   // nouveau jeton : les droits ont pu changer
-  const { status, data } = await botGet(req, 'me');
+  // bot injoignable ou jeton illisible : le jeton, pas encore vérifié, ne reste pas en session
+  const { status, data } = await botGet(req, 'me').catch(() => ({ status: 502, data: {} }));
   const me = data as BotMe;
   if (status !== 200 || me.id !== req.member.discordId || me.guildId !== config.discord.guildId) {
     console.warn(`[bot] liaison refusée pour le membre ${req.member.id} : bot HTTP ${status}, compte bot ${me.id ?? '?'} / attendu ${req.member.discordId}, serveur ${me.guildId ?? '?'} / attendu ${config.discord.guildId}`);
@@ -115,6 +126,7 @@ bot.get('/api/bot/data/*path', ...member, botLimit, async (req, res) => {
   const path = dataPath(req);
   if (!path) { res.status(404).json({ error: 'not-found' }); return; }
   if (!req.session.botToken) { res.status(401).json({ error: 'bot-unlinked' }); return; }
+  if (cached(req, path) === undefined && partEpuisee(req)) { res.status(429).json({ error: 'Le bot est très sollicité en ce moment, réessaie dans quelques minutes.' }); return; }
   try {
     const { status, data } = await botRead(req, path);
     res.status(status).json(status === 401 ? { error: 'bot-unlinked' } : data);
