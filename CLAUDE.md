@@ -40,7 +40,7 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 ## Bot Discord Roxwood (API relayée)
 
 - Code : `server/src/routes/bot.ts`. Le site relaie **en lecture seule** l'API REST du bot ([roxwood-network-famille](https://github.com/poulpizar01/roxwood-network-famille)) : `/api/bot/data/<rubrique>/…` → `<BOT_API_URL>/api/<rubrique>/…` avec le jeton personnel du membre (gardé en session, jamais renvoyé au navigateur). Rubriques autorisées : `me`, `users`, `stocks`, `quotas`, `taxes`, `armurerie`, `ventes`, `garages`.
-- Le bot limite **tout le site** à 300 requêtes par quart d'heure : cache mémoire par membre (5 min, 24 h pour `?week=` passé) et limite de 150 lectures par membre. Toute nouvelle page qui lit le bot passe par `espaceBot.get()` et ne se rafraîchit pas plus souvent que toutes les 5 minutes.
+- Le bot limite **tout le site** à 300 requêtes par quart d'heure : cache mémoire par membre (5 min, 24 h pour `?week=` passé) limite de 150 lectures par membre, et part réservée aux autres quand le site approche du plafond (240 appels : ceux qui en ont fait 60 attendent). Toute nouvelle page qui lit le bot passe par `espaceBot.get()` et ne se rafraîchit pas plus souvent que toutes les 5 minutes.
 - Un serveur Discord n'a **qu'un seul site externe** déclaré (`/config site-externe set`) : tester le bot en dev sur un serveur Discord de test.
 - Quand le bot change son API, vérifier la compatibilité : cloner son dépôt, comparer `src/api/` aux adresses appelées par `espace/*.html` et aux champs lus (voir le tableau des rubriques dans `docs/api.md`).
 
@@ -59,7 +59,10 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 
 ## Déploiement : pièges connus
 
-- `SITE_ID` et `HOST_PORT` uniques par VPS (conteneurs `<SITE_ID>-app/-db/-backup`, volumes préfixés).
+- Base : en prod, le site se connecte avec `site_app` (propriétaire des tables, pas super-utilisateur), créé par le service `db-roles` ; en dev il garde `site` (`prisma migrate dev` crée une base temporaire). Une migration qui exige un super-utilisateur (`CREATE EXTENSION`…) passerait en dev et échouerait en prod. Restaurer une sauvegarde avec `psql -U site_app`.
+- Sauvegardes : sans les sessions (jetons du bot), fichiers en `600`. Ne stocker aucun secret en base hors de la table `session` sans l'exclure aussi de `pg_dump` (`compose.yaml`).
+- Aucune ressource tierce dans les pages (polices dans `assets/fonts/`, three.js dans `assets/vendor/`, SortableJS dans `espace/vendor/`) : la page `confidentialite.html` l'affirme, la garder vraie.
+- `SITE_ID` et `HOST_PORT` uniques par VPS (conteneurs `<SITE_ID>-app/-db/-backup` et `-db-roles`, qui ne tourne qu'au démarrage ; volumes préfixés).
 - Ne pas tester la connexion avant certbot : cookie `Secure` → la connexion échoue en `http://`.
 - nginx doit transmettre `X-Forwarded-Proto` et garder le bloc `location = /api/chat/stream` (SSE) : voir `docs/nginx.md`.
 - Ne jamais copier `.env.example` en dev (sa ligne `COMPOSE_FILE` désactive l'override de dev).

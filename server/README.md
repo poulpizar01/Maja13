@@ -29,19 +29,20 @@ sudo ufw allow OpenSSH && sudo ufw allow 'Nginx Full' && sudo ufw enable
 ```bash
 git clone -b main <depot> <SITE_ID> && cd <SITE_ID>
 cp .env.example .env && chmod 600 .env
+mkdir -m 700 backups                        # sauvegardes de la base : lisibles par vous seul
 nano .env                                   # remplir : tout est expliqué dans le fichier
 docker compose up -d --build
 ```
 - Le serveur suit la branche `main` : c'est elle qui est déployée.
-- `SITE_ID` et `HOST_PORT` doivent être **uniques sur la machine** : chaque site a ses propres conteneurs (`<SITE_ID>-app`, `<SITE_ID>-db`, `<SITE_ID>-backup`) et son propre port. `ss -ltnp` liste les ports déjà pris (autres sites, API du bot…).
+- `SITE_ID` et `HOST_PORT` doivent être **uniques sur la machine** : chaque site a ses propres conteneurs (`<SITE_ID>-app`, `<SITE_ID>-db`, `<SITE_ID>-backup`, et `<SITE_ID>-db-roles`, qui ne tourne qu'un instant à chaque démarrage) et son propre port. `ss -ltnp` liste les ports déjà pris (autres sites, API du bot…).
 - Générer `SESSION_SECRET` et `POSTGRES_PASSWORD` avec `openssl rand -hex 32` (le mot de passe de la base ne se change plus une fois la base créée).
 
-Vérifier : `docker compose ps` (les trois services `Up`, la base `healthy`) et `docker logs <SITE_ID>-app`, qui doit finir par `<nom du site> en écoute sur le port 3000 (https://<domaine>)`. Le premier démarrage crée les tables (migrations Prisma).
+Vérifier : `docker compose ps` (les trois services `Up`, la base `healthy` ; `db-roles`, qui prépare le compte de base du site puis s'arrête, n'y figure pas) et `docker logs <SITE_ID>-app`, qui doit finir par `<nom du site> en écoute sur le port 3000 (https://<domaine>)`. Le premier démarrage crée les tables (migrations Prisma).
 
 ### 4. nginx et HTTPS
 ```bash
 sudo cp server/deploy/nginx.conf.example /etc/nginx/sites-available/<SITE_ID>
-sudo nano /etc/nginx/sites-available/<SITE_ID>          # remplacer __DOMAIN__ et __PORT__ (= HOST_PORT)
+sudo nano /etc/nginx/sites-available/<SITE_ID>          # remplacer __DOMAIN__, __PORT__ (= HOST_PORT) et __SITE_ID__
 sudo ln -s /etc/nginx/sites-available/<SITE_ID> /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 sudo certbot --nginx -d <domaine>                      # certificat + redirection http → https, renouvelé automatiquement
@@ -73,15 +74,18 @@ Les migrations de la base ne s'annulent pas : revenir à un ancien commit ne suf
 Faire une sauvegarde juste avant une mise à jour qui touche la base : `docker compose restart backup`.
 
 ### Sauvegardes de la base
-Le service `backup` (dans `compose.yaml`) sauvegarde la base au démarrage puis toutes les 24 h, dans le dossier `backups/` du site sur la machine (7 jours conservés). C'est un dossier et non un volume Docker : il survit à un `docker compose down -v`. Les photos de la galerie n'y sont pas (elles sont sur le stockage d'images).
+Le service `backup` (dans `compose.yaml`) sauvegarde la base au démarrage puis toutes les 24 h, dans le dossier `backups/` du site sur la machine (7 jours conservés). C'est un dossier et non un volume Docker : il survit à un `docker compose down -v`. Les photos de la galerie n'y sont pas (elles sont sur le stockage d'images), les sessions non plus (elles portent les jetons personnels du bot) : après une restauration, chacun se reconnecte.
+
+Une sauvegarde contient tout le chat et les identifiants Discord des membres : les fichiers ne sont lisibles que par le propriétaire du dossier `backups/`. Sur un site installé avant cette consigne, le dossier appartient à root : `sudo chown -R $USER: backups && chmod 700 backups` (les fichiers suivent à la sauvegarde suivante).
 - Sauvegarde immédiate : `docker compose restart backup`
 - Restaurer (remplace le contenu actuel de la base) :
   ```bash
   docker compose stop app
-  gunzip -c backups/site-AAAA-MM-JJ_HHhMM.sql.gz | docker exec -i <SITE_ID>-db psql -U site -d site
+  gunzip -c backups/site-AAAA-MM-JJ_HHhMM.sql.gz | docker exec -i <SITE_ID>-db psql -U site_app -d site
   docker compose start app
   ```
-- Ces copies restent sur la même machine : elles protègent des erreurs de manipulation, **pas de la perte du serveur**. Il faut en garder une copie ailleurs, par exemple sur un stockage objet (S3, Backblaze B2, Scaleway…) avec [rclone](https://rclone.org), une fois `rclone config` fait (remote nommé `sauvegardes`) :
+  `-U site_app` et non `-U site` : les tables recréées doivent appartenir au compte du site. Restaurées par erreur avec `site`, le site ne peut plus les lire ; `docker compose up -d` (qui relance `db-roles`) les lui rend.
+- Ces copies restent sur la même machine : elles protègent des erreurs de manipulation, **pas de la perte du serveur**. Il faut en garder une copie ailleurs, par exemple sur un stockage objet (S3, Backblaze B2, Scaleway…) avec [rclone](https://rclone.org), une fois `rclone config` fait (remote nommé `sauvegardes`). **Chiffrer cette copie** : dans `rclone config`, créer le remote `sauvegardes` de type `crypt` par-dessus le remote du stockage objet, et garder son mot de passe ailleurs que sur le VPS (sans lui, les copies sont illisibles, pour vous aussi) :
   ```bash
   # crontab -e : chaque nuit à 4 h, copie des sauvegardes du site hors du serveur (copy : n'efface rien là-bas)
   0 4 * * * rclone copy ~/<dossier-du-site>/backups sauvegardes:<SITE_ID>/ --max-age 48h >> ~/rclone-<SITE_ID>.log 2>&1

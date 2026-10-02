@@ -10,7 +10,7 @@ Visiteur ──HTTPS 443──▶ nginx (VPS) ──HTTP──▶ 127.0.0.1:<HOS
 Modèle de configuration : [`server/deploy/nginx.conf.example`](../server/deploy/nginx.conf.example).
 ```bash
 sudo cp server/deploy/nginx.conf.example /etc/nginx/sites-available/<SITE_ID>
-sudo nano /etc/nginx/sites-available/<SITE_ID>          # remplacer __DOMAIN__ (domaine) et __PORT__ (HOST_PORT du .env)
+sudo nano /etc/nginx/sites-available/<SITE_ID>          # remplacer __DOMAIN__ (domaine), __PORT__ (HOST_PORT du .env) et __SITE_ID__ (SITE_ID, tirets en _)
 sudo ln -s /etc/nginx/sites-available/<SITE_ID> /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx            # nginx -t vérifie la syntaxe avant de recharger
 sudo certbot --nginx -d <domaine>                      # ajoute le certificat, le bloc 443 et la redirection http → https
@@ -20,6 +20,9 @@ Prérequis de certbot : le domaine pointe déjà sur le VPS (`dig +short <domain
 ## Ce que fait chaque réglage
 | Réglage | Pourquoi |
 |---|---|
+| `limit_req_zone …` (hors du bloc `server`) et `limit_req` | Limite de débit par adresse IP : 30 requêtes par seconde, rafales de 120 tolérées, `429` au-delà. Le site limite déjà son API ; nginx couvre aussi les pages et les fichiers. Le nom de la zone (`__SITE_ID__`) doit être unique sur la machine : une par site. |
+| `server_tokens off` | nginx n'annonce plus sa version dans ses réponses et ses pages d'erreur. |
+| `location = /healthz { return 404; }` | Le contrôle de santé (une lecture en base par appel) n'est pas joignable d'Internet : Docker interroge le conteneur directement. |
 | `client_max_body_size 16m` | Taille maximale d'une requête. Le site accepte des photos jusqu'à 15 Mo ; sans cette ligne, nginx refuse tout au-delà de 1 Mo (erreur 413). |
 | `proxy_pass http://127.0.0.1:__PORT__` | Transmet la requête au conteneur du site. |
 | `Host`, `X-Real-IP`, `X-Forwarded-For` | Donnent au site le vrai domaine et la vraie adresse IP du visiteur (le site fait confiance à un seul proxy : `trust proxy 1`). Sans eux, les limites de requêtes compteraient tous les visiteurs comme un seul. |
@@ -38,6 +41,8 @@ Chaque site a son `SITE_ID`, son `HOST_PORT`, son domaine et son fichier dans `s
 | `413 Request Entity Too Large` à l'envoi d'une photo | `client_max_body_size` absent ou trop bas. |
 | Connexion Discord qui « ne tient pas » (retour à la page de connexion) | Site testé en `http://`, ou `X-Forwarded-Proto` absent. |
 | Le chat ne reçoit plus les messages en direct | Bloc `location = /api/chat/stream` absent. |
+| `nginx -t` : « zone … is already bound » | Deux sites ont la même zone `limit_req_zone` : `__SITE_ID__` mal remplacé. |
+| `429` sur des pages normales | Beaucoup de visiteurs derrière la même adresse IP (réseau partagé) : relever `rate` ou `burst`. |
 | Mauvais site affiché | `server_name` erroné, ou lien manquant dans `sites-enabled`. |
 
 Journaux nginx : `/var/log/nginx/access.log` et `/var/log/nginx/error.log`.

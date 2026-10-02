@@ -25,8 +25,9 @@ Les droits se règlent par grade dans l'espace membre → Gestion → Hiérarchi
 | `GET /auth/discord/callback` | public | Retour de Discord : vérifie l'appartenance au serveur, crée ou met à jour le compte |
 | `POST /auth/logout` | public | Ferme la session |
 | `GET /api/me` / `PATCH /api/me` | connecté / membre | Mon compte (droits, statut) / modifier nom RP, téléphone RP, bio |
+| `DELETE /api/me` | connecté | Supprimer son propre compte, validé ou non : profil, messages et photos (fichiers compris), puis fin de session |
 | `GET /api/membres` | membre | Membres validés |
-| `GET /api/admin/members` · `PATCH`/`DELETE /api/admin/members/:id` | gestion | Comptes (en attente, validés, refusés) : valider, refuser, changer nom RP ou grade |
+| `GET /api/admin/members` · `PATCH`/`DELETE /api/admin/members/:id` | gestion | Comptes (en attente, validés, refusés) : valider, refuser, changer nom RP ou grade. Le grade, le statut et la suppression d'un membre à pouvoirs complets (ou du propriétaire) sont réservés au niveau « hiérarchie » (`403 manage-only`) |
 | `GET /api/ranks` | membre | Grades complets (nom, couleur, ordre, droits, rôle Discord) |
 | `POST /api/admin/ranks` · `PUT /api/admin/ranks/order` · `PATCH`/`DELETE /api/admin/ranks/:key` | hiérarchie | Créer, ordonner, modifier, supprimer des grades |
 | `GET /api/org` | public | Organigramme de la vitrine (grades sans leurs droits ni rôle Discord) |
@@ -35,7 +36,7 @@ Les droits se règlent par grade dans l'espace membre → Gestion → Hiérarchi
 | `POST /api/gallery` (formulaire, champ `photo` + `caption`) | membre | Publier une photo (voir [stockage.md](stockage.md)) ; `503` en production si le stockage (CDN) n'est pas configuré |
 | `DELETE /api/gallery/:id` | membre (auteur) ou gestion | Retirer une photo |
 | `GET`/`POST /api/chat/messages` · `DELETE /api/chat/messages/:id` | membre | Messages du chat (supprimer : auteur ou gestion) |
-| `GET /api/chat/stream` | membre | Flux temps réel des messages (Server-Sent Events, voir [nginx.md](nginx.md)) ; 5 flux ouverts au plus par membre, le plus ancien est fermé au-delà |
+| `GET /api/chat/stream` | membre | Flux temps réel des messages (Server-Sent Events, voir [nginx.md](nginx.md)) ; 5 flux ouverts au plus par membre, le plus ancien est fermé au-delà ; fermé aussi dès que le compte est refusé ou supprimé, et à l'échéance de la session |
 | `GET /healthz` | public | Santé du site (serveur et base) pour le contrôle Docker : `{ ok: true }` ou `503` |
 | `GET /api/chat/unread` · `POST /api/chat/read` · `GET /api/chat/mentions` | membre | Non lus, marquer comme lu, mentions `@` |
 | `GET /auth/bot` · `POST /api/bot/link` · `POST /api/bot/unlink` · `GET /api/bot/status` · `GET /api/bot/data/…` | membre | Liaison et lecture du bot (ci-dessous) |
@@ -47,9 +48,11 @@ Les droits se règlent par grade dans l'espace membre → Gestion → Hiérarchi
 | Connexion `/auth` | 30 tentatives par quart d'heure et par adresse IP |
 | Envoi de photos | 10 par membre toutes les 10 minutes |
 | Messages du chat | 20 par minute et par membre |
-| Lectures du bot | 150 par membre et par quart d'heure (les réponses servies depuis le cache ne comptent pas) |
+| Lectures du bot | 150 par membre et par quart d'heure (les réponses servies depuis le cache ne comptent pas). Partage entre membres : dès que le site a fait 240 appels au bot dans le quart d'heure, ceux qui en ont fait 60 ou plus attendent |
 
-Au-delà : `429` avec un message lisible. Les en-têtes `RateLimit` et `RateLimit-Policy` indiquent le quota restant.
+Au-delà : `429` avec un message lisible.
+
+**Conservation** : un message ou une photo retiré reste 30 jours en base (marqué supprimé, invisible), puis est effacé pour de bon (`server/src/purge.ts`, au démarrage puis chaque jour). Les en-têtes `RateLimit` et `RateLimit-Policy` indiquent le quota restant.
 
 ## API du bot Discord (relayée)
 Activée par `BOT_API_URL` dans `.env` (vide : les pages liées au bot affichent « Le bot Discord n'est pas relié au site »). Code : `server/src/routes/bot.ts`.
