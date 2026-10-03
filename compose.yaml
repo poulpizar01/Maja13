@@ -18,6 +18,7 @@ services:
     mem_limit: ${APP_MEMORY:-512m}
     cpus: ${APP_CPUS:-1}
     pids_limit: 256
+    init: true                 # relaie les signaux d'arrêt jusqu'au serveur, quel que soit ce qui le lance
     logging: *logs
     build:
       context: .
@@ -98,6 +99,8 @@ services:
         psql -q -v ON_ERROR_STOP=1 -v pw="$$POSTGRES_PASSWORD" <<'SQL'
         SELECT 'CREATE ROLE site_app' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'site_app') \gexec
         ALTER ROLE site_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'pw';
+        -- la première migration commence par CREATE SCHEMA IF NOT EXISTS "public", qui exige ce droit même si le schéma existe
+        GRANT CREATE ON DATABASE site TO site_app;
         ALTER SCHEMA public OWNER TO site_app;
         SELECT format('ALTER TABLE public.%I OWNER TO site_app', tablename) FROM pg_tables
           WHERE schemaname = 'public' AND tableowner <> 'site_app' \gexec
@@ -138,13 +141,22 @@ services:
       - |
         export PGPASSWORD="$$POSTGRES_PASSWORD"
         umask 077
+        # pipefail : sans lui, seul gzip serait jugé, et une sauvegarde vide (pg_dump en échec) passerait pour réussie
+        set -o pipefail
         proprio="$$(stat -c %u:%g /backups)"
         while true; do
           f="/backups/site-$$(date +%Y-%m-%d_%Hh%M).sql.gz"
-          if pg_dump --clean --if-exists --no-owner --exclude-table-data=session | gzip > "$$f.tmp"; then mv "$$f.tmp" "$$f"; echo "sauvegarde : $$f"; else rm -f "$$f.tmp"; echo "ÉCHEC de la sauvegarde" >&2; fi
+          # réussie = pg_dump sans erreur, archive lisible, et le marqueur de fin que pg_dump écrit en dernier
+          if pg_dump --clean --if-exists --no-owner --exclude-table-data=session | gzip > "$$f.tmp" \
+             && gzip -t "$$f.tmp" && gunzip -c "$$f.tmp" | tail -n 5 | grep -q 'PostgreSQL database dump complete'; then
+            mv "$$f.tmp" "$$f"; echo "sauvegarde : $$f"
+            # les anciennes ne partent que si celle du jour est bonne : une panne ne vide pas le dossier
+            find /backups -name 'site-*.sql.gz' -mtime +$$BACKUP_KEEP_DAYS -delete
+          else
+            rm -f "$$f.tmp"; echo "ÉCHEC de la sauvegarde : aucune copie écrite, les précédentes sont gardées" >&2
+          fi
           # copies d'avant ce réglage comprises : lisibles par le seul propriétaire du dossier
           chown "$$proprio" /backups/site-*.sql.gz 2>/dev/null; chmod 600 /backups/site-*.sql.gz 2>/dev/null
-          find /backups -name 'site-*.sql.gz' -mtime +$$BACKUP_KEEP_DAYS -delete
           sleep "$$BACKUP_INTERVAL"
         done
 volumes:
