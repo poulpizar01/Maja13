@@ -18,6 +18,8 @@ function load(): Record<string, string> {
   // couleur d'accent : facultative, forcément une couleur hexadécimale (elle est insérée telle quelle dans les feuilles de style)
   const couleur = raw.couleur ?? '#e5484d';
   if (typeof couleur !== 'string' || !/^#[0-9a-f]{6}$/i.test(couleur)) { console.error('site.json : « couleur » doit être une couleur du type #e5484d'); process.exit(1); }
+  // lien d'invitation : inséré dans des href, donc une adresse https et rien d'autre
+  if (!/^https:\/\/[^\s"'<>]+$/.test(raw.discord as string)) { console.error('site.json : « discord » doit être une adresse https:// (lien d’invitation)'); process.exit(1); }
   return { ...(raw as Record<string, string>), couleur, url: config.baseUrl };
 }
 export const site = load();

@@ -121,10 +121,10 @@
   const money = n => num(n) + ' $';
   const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('profil.html'); throw 0; } return r.json(); });
 
-  // palette catégorielle validée (fond noir du site) : or, rouge, bleu, vert, violet — ordre fixe, jamais recyclé ;
+  // palette catégorielle (variables --viz-* de espace.css) — ordre fixe, jamais recyclé ;
   // au-delà de 5 catégories, le reste est regroupé dans « Autres »
-  const PALETTE = ['#c98500', '#d0485a', '#3987e5', '#199e70', '#9085e9'];
-  const OTHER = '#6b6558';
+  const PALETTE = espaceCouleurs('--viz-1', '--viz-2', '--viz-3', '--viz-4', '--viz-5');
+  const [OTHER] = espaceCouleurs('--viz-autres');
 
   // ---------- semaines ----------
   const DAY = 86400e3;
@@ -158,7 +158,7 @@
   let cfg, name, cats = [], color = {}, annu = new Map();   // annu : membres du site par ID Discord (photo, grade)
   const state = { week: 0, sel: [] };   // week = index dans WEEKS ; sel = membres choisis (1 = sa vue, 2 à 4 = comparaison)
   const MAX_COMPARE = 4;
-  const COMP = ['#e5b453', '#6ea8fe', '#6fcf8e', '#c792ea'];   // une couleur par membre comparé (distinctes de l'accent et des états)
+  const COMP = espaceCouleurs('--warn', '--viz-6', '--ok', '--viz-7');   // une couleur par membre comparé
 
   // ---------- graphiques (SVG natif) ----------
   function niceMax(v) { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); const s = [1, 2, 2.5, 5, 10].find(m => m * p * 4 >= v) * p; return Math.ceil(v / s) * s; }

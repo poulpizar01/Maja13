@@ -97,7 +97,7 @@
   let vault = { total: [], coffres: [] }, vaultView = 'all';
   // catalogue du bot (/stocks/items) : ordre et groupes du Stock Général ; nom d'objet (minuscules) → { rang, groupe }
   let rangs = new Map();
-  const COULEURS = ['var(--accent)', '#6fcf8e', '#e5b453', '#6ea8fe', '#c792ea', '#9aa0a6', '#f28b82', '#80cbc4'];
+  const COULEURS = ['var(--accent)', 'var(--ok)', 'var(--warn)', 'var(--viz-6)', 'var(--viz-7)', 'var(--viz-8)', 'var(--viz-9)', 'var(--viz-10)'];   // séries : espace.css
   const itemName = s => s.charAt(0).toUpperCase() + s.slice(1);
   const coffreName = c => c.label || `Coffre ${String(c.channelId).slice(-4)}`;
   function renderVault() {
@@ -180,13 +180,13 @@
     const avatars = Object.fromEntries(annuaire.map(m => [m.discordId, m.avatarUrl]));
     const jauge = (v, t, label) => {
       const etat = !v ? 'is-vide' : t && v >= t ? 'is-done' : 'is-cours', pct = t ? Math.min(100, Math.round(v / t * 100)) : (v ? 100 : 0);
-      return `<div class="jauge ${etat}" role="cell" data-label="${esc(label)}"><span class="jauge__val">${v ? `<b>${v}</b>${t ? `<small> / ${t}</small>` : ''}` : '<small>—</small>'}</span><i class="jauge__barre"><b style="width:${pct}%"></b></i></div>`;
+      return `<div class="jauge ${etat}" role="cell" data-label="${esc(label)}"><span class="jauge__val">${v ? `<b>${esc(v)}</b>${t ? `<small> / ${esc(t)}</small>` : ''}` : '<small>—</small>'}</span><i class="jauge__barre"><b style="width:${pct}%"></b></i></div>`;
     };
     const rank = $('rank');
     rank.style.setProperty('--n', cats.length);
     rank.innerHTML = !actifs.length ? '<p class="admin-empty">Aucune déclaration cette semaine.</p>' : `
       <div class="palmares__tete" role="row"><span role="columnheader">#</span><span role="columnheader">Membre</span>
-        ${cats.map(k => `<span role="columnheader">${esc(espaceBot.label(k))}${cfg.targets[k] ? ` <small>/ ${cfg.targets[k]}</small>` : ''}</span>`).join('')}<span role="columnheader">Paie</span></div>
+        ${cats.map(k => `<span role="columnheader">${esc(espaceBot.label(k))}${cfg.targets[k] ? ` <small>/ ${esc(cfg.targets[k])}</small>` : ''}</span>`).join('')}<span role="columnheader">Paie</span></div>
       ${actifs.map((p, i) => `<div class="palmares__ligne${i < 3 ? ' is-podium' : ''}" role="row">
         <span class="palmares__rang" role="cell">${String(i + 1).padStart(2, '0')}</span>
         <span class="palmares__qui" role="cell">${espaceAvatar(avatars[p.userId])}<b>${esc(name(p.userId))}</b></span>
@@ -205,8 +205,8 @@
     $('braqBloc').hidden = !braqs.length;
     $('braquages').innerHTML = braqs.map(b => { const libres = Math.max(0, b.limit - b.used), complet = !libres;
       return `<div class="braq__carte${complet ? ' is-complet' : ''}"><span>${esc(b.label)}</span>
-        <b>${libres}<small> / ${b.limit} disponible${libres > 1 ? 's' : ''}</small></b><i class="jauge__barre"><b style="width:${Math.round(libres / b.limit * 100)}%"></b></i>
-        <small>${complet ? `Tous faits · prochain slot ${b.nextSlotAt ? `dans ${espaceDuree(b.nextSlotAt - Date.now())}` : 'bientôt'}` : b.used ? `${b.used} déjà fait${b.used > 1 ? 's' : ''} sur 7 jours` : 'Aucun fait sur 7 jours'}</small></div>`; }).join('');
+        <b>${libres}<small> / ${esc(b.limit)} disponible${libres > 1 ? 's' : ''}</small></b><i class="jauge__barre"><b style="width:${Math.round(libres / b.limit * 100)}%"></b></i>
+        <small>${complet ? `Tous faits · prochain slot ${b.nextSlotAt ? `dans ${espaceDuree(b.nextSlotAt - Date.now())}` : 'bientôt'}` : b.used ? `${esc(b.used)} déjà fait${b.used > 1 ? 's' : ''} sur 7 jours` : 'Aucun fait sur 7 jours'}</small></div>`; }).join('');
     // derniers mouvements : regroupés par jour, quantité en pastille (+ vert / − rouge), stock avant → après en discret
     const jour = ms => { const d = new Date(ms), auj = new Date(); const hier = new Date(Date.now() - 864e5);
       return d.toDateString() === auj.toDateString() ? "Aujourd'hui" : d.toDateString() === hier.toDateString() ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); };
@@ -233,7 +233,7 @@
     const st = await espaceBot.gate($('botGate'));
     $('loading').hidden = true;
     if (!st.linked) return;
-    try { await load(); setInterval(() => load().catch(() => {}), 5 * 60000); }   // 5 min : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    try { await load(); espaceBot.every(load); }   // toutes les 5 min, onglet visible seulement : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
     catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(espaceBot.error(e))}</p>`; }
   }
   $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });

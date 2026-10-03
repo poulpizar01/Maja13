@@ -4,6 +4,7 @@ import { Router, type Request } from 'express';
 import { config } from '../config.js';
 import { prisma } from '../db.js';
 import { allRanks } from '../ranks.js';
+import { memberRoleId } from '../settings.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 const REDIRECT_URI = `${config.baseUrl}/auth/discord/callback`;
@@ -21,6 +22,13 @@ const openSession = (req: Request, memberId: number) => new Promise<void>((ok, k
 
 auth.get('/auth/discord', async (req, res) => {
   if (config.devLogin) {
+    // dev : ?compte=<ID Discord> ouvre la session d'un compte existant, pour essayer chaque niveau d'accès
+    const autre = typeof req.query.compte === 'string' ? await prisma.member.findUnique({ where: { discordId: req.query.compte } }) : null;
+    if (autre) {
+      await openSession(req, autre.id);
+      res.redirect(autre.status === 'approved' ? '/espace/profil.html' : '/espace/attente.html');
+      return;
+    }
     const m = await prisma.member.upsert({
       where: { discordId: config.devDiscordId },
       create: { discordId: config.devDiscordId, username: 'dev', displayName: 'Dev local', isOwner: true, status: 'approved', approvedAt: new Date(), lastLogin: new Date() },
@@ -44,23 +52,30 @@ auth.get('/auth/discord/callback', async (req, res) => {
     if (error || typeof code !== 'string' || typeof state !== 'string' || !state || state !== req.session.oauthState) { res.redirect('/espace/?error=oauth'); return; }
     delete req.session.oauthState;
 
-    // 1. code → jeton
+    // 1. code → jeton (10 s au plus par appel : un Discord qui ne répond pas ne laisse pas la connexion pendue)
+    const delai = () => AbortSignal.timeout(10000);
     const tokenRes = await fetch(`${DISCORD_API}/oauth2/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ client_id: config.discord.clientId, client_secret: config.discord.clientSecret, grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI }),
+      signal: delai(),
     });
     if (!tokenRes.ok) { res.redirect('/espace/?error=token'); return; }
     const { access_token } = await tokenRes.json() as { access_token: string };
-    const discord = async <T>(path: string) => (await fetch(`${DISCORD_API}${path}`, { headers: { Authorization: `Bearer ${access_token}` } })).json() as Promise<T>;
+    const discord = (path: string) => fetch(`${DISCORD_API}${path}`, { headers: { Authorization: `Bearer ${access_token}` }, signal: delai() });
 
-    // 2. identité, appartenance au serveur (+ rôles), propriété du serveur
-    const user = await discord<DiscordUser>('/users/@me');
-    const memberRes = await fetch(`${DISCORD_API}/users/@me/guilds/${config.discord.guildId}/member`, { headers: { Authorization: `Bearer ${access_token}` } });
-    if (!memberRes.ok) { res.redirect('/espace/?error=not-member'); return; }
-    const guildMember = await memberRes.json() as GuildMember;
-    const guilds = await discord<UserGuild[]>('/users/@me/guilds');
-    const owner = Array.isArray(guilds) && guilds.some(g => g.id === config.discord.guildId && g.owner === true);
+    // 2. identité, appartenance au serveur (+ rôles), propriété du serveur. Une réponse en erreur de Discord (limite,
+    // panne) interrompt la connexion sans toucher au compte : la lire comme « pas propriétaire » ou « pas membre »
+    // retirerait ses droits à quelqu'un qui les a.
+    const [userRes, memberRes, guildsRes] = [await discord('/users/@me'), await discord(`/users/@me/guilds/${config.discord.guildId}/member`), await discord('/users/@me/guilds')];
+    if (memberRes.status === 404) { res.redirect('/espace/?error=not-member'); return; }
+    if (!userRes.ok || !memberRes.ok || !guildsRes.ok) { res.redirect('/espace/?error=server'); return; }
+    const user = await userRes.json() as DiscordUser, guildMember = await memberRes.json() as GuildMember, guilds = await guildsRes.json() as UserGuild[];
+    // formes attendues : ces valeurs servent à construire l'adresse de l'avatar, insérée dans les pages
+    if (!/^\d{5,32}$/.test(String(user.id)) || !Array.isArray(guildMember.roles) || !Array.isArray(guilds)) { res.redirect('/espace/?error=server'); return; }
+    if (user.avatar && !/^(a_)?[0-9a-f]{32}$/.test(user.avatar)) user.avatar = null;
+    const owner = guilds.some(g => g.id === config.discord.guildId && g.owner === true);
+    const roleMembre = memberRoleId(), hasMemberRole = !!roleMembre && guildMember.roles.includes(roleMembre);
 
     // 3. grade : le plus élevé dont le rôle Discord est porté ; nouveau compte = grade par défaut (propriétaire : premier grade à pouvoirs complets)
     const ranks = allRanks();
@@ -79,11 +94,11 @@ auth.get('/auth/discord/callback', async (req, res) => {
       create: {
         discordId: user.id, username: user.username, avatar: user.avatar,
         displayName: guildMember.nick || user.global_name || user.username,
-        rankKey: rankFromRole ?? startRank ?? null, isOwner: owner,
+        rankKey: rankFromRole ?? startRank ?? null, isOwner: owner, hasMemberRole,
         status: owner ? 'approved' : 'pending', approvedAt: owner ? new Date() : null, lastLogin: new Date(),
       },
       update: {
-        username: user.username, avatar: user.avatar, isOwner: owner, lastLogin: new Date(),
+        username: user.username, avatar: user.avatar, isOwner: owner, hasMemberRole, lastLogin: new Date(),
         rankKey: rankFromRole ?? gradeConserve ?? (owner ? startRank ?? null : null),
         ...(owner && { status: 'approved' as const }),
       },

@@ -27,6 +27,7 @@ model Member {
   phoneRp      String?      @map("phone_rp") @db.VarChar(32)
   status       MemberStatus @default(pending)
   isOwner      Boolean      @default(false) @map("is_owner") // propriétaire du serveur Discord
+  hasMemberRole Boolean     @default(false) @map("has_member_role") // porte le rôle Discord membre (relu à chaque connexion)
   joinedAt     DateTime     @default(now()) @map("joined_at") @db.Timestamptz(6)
   lastLogin    DateTime?    @map("last_login") @db.Timestamptz(6)
   approvedAt   DateTime?    @map("approved_at") @db.Timestamptz(6)
@@ -88,7 +89,6 @@ model Message {
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
-  @@index([createdAt(sort: Desc)])
   @@index([memberId])
   @@map("messages")
 }
@@ -123,6 +123,14 @@ model Photo {
   @@index([createdAt(sort: Desc)])
   @@index([memberId])
   @@map("photos")
+}
+
+// Réglages du site modifiables depuis l'espace membre (Gestion → Hiérarchie), clé → valeur
+model Setting {
+  key   String @id @db.VarChar(40)
+  value String
+
+  @@map("settings")
 }
 
 // Sessions de connexion (gérées par connect-pg-simple, déclarées ici pour les migrations)

@@ -25,6 +25,15 @@
   </div>
   <div class="espace-loading" id="loading">Chargement…</div>
 
+  <section class="admin-block" id="accesBlock" hidden>
+    <h3 class="admin-block__title">Accès à l'espace membre</h3>
+    <p class="admin-block__hint">Rôle Discord « membre » : sans lui, un compte validé n'a accès qu'à son profil ; la Gestion a toujours tout. Aucun rôle choisi : seule la Gestion a accès au-delà du profil. Le rôle est relu à chaque connexion d'un membre. <span id="aideRoles">Pour choisir le rôle par son nom, connecte ton compte au bot Discord (page Mon profil) ; sinon, colle son identifiant (mode développeur de Discord → clic droit sur le rôle → Copier l'identifiant).</span></p>
+    <form class="hier-acces" id="accesForm">
+      <input class="admin-input" id="memberRoleId" inputmode="numeric" maxlength="32" placeholder="ex. 1234567890123456789" autocomplete="off">
+      <button class="btn btn--accent btn--sm" type="submit">Enregistrer</button>
+    </form>
+  </section>
+
   <section class="admin-block" id="ranksBlock" hidden>
     <div class="hier-head">
       <h3 class="admin-block__title">Grades</h3>
@@ -45,6 +54,12 @@
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let data;
+  // rôles du serveur Discord, lus par le bot : choisis par leur nom dans les formulaires ; null si le bot n'est pas
+  // joignable ou le compte pas relié (on colle alors l'identifiant à la main)
+  let roles = null;
+  const nomRole = id => roles?.find(r => r.id === id)?.name;
+  const choixRoles = courant => [{ value: '', label: '— Aucun —' }, ...roles.map(r => ({ value: r.id, label: r.name })),
+    ...(courant && !nomRole(courant) ? [{ value: courant, label: `Rôle introuvable sur le serveur (${courant})` }] : [])];
   const api = (url, opt = {}) => fetch(url, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, ...opt })
     .then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('profil.html'); throw 0; } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
   const reload = async () => { data = await api('../api/admin/org'); render(); };
@@ -57,16 +72,16 @@
 
   // ---------- Grades ----------
   const RIGHTS = [
-    { value: 'membre', label: 'Membre', hint: 'Espace membre seul.' },
-    { value: 'gestion', label: 'Gestion', hint: '+ membres, tableau, taxes, armurerie.' },
-    { value: 'complet', label: 'Pouvoirs complets', hint: '+ grades et hiérarchie.' },
+    { value: 'membre', label: 'Membre', hint: 'Espace membre (avec le rôle Discord membre).' },
+    { value: 'gestion', label: 'Gestion', hint: '+ membres, tableau de bord, statistiques, garage.' },
+    { value: 'complet', label: 'Pouvoirs complets', hint: '+ administration (validation des comptes, grades des membres) et hiérarchie.' },
   ];
   const rightsOf = r => r.canManage ? 'complet' : r.canAdmin ? 'gestion' : 'membre';
   const tags = r => [
     r.canManage ? '<span class="tag tag--accent">Pouvoirs complets</span>' : r.canAdmin ? '<span class="tag tag--accent">Gestion</span>' : '',
     r.isDefault ? '<span class="tag">Nouveaux comptes</span>' : '',
     r.featured ? '<span class="tag">Mis en avant</span>' : '',
-    r.discordRoleId ? '<span class="tag">Rôle Discord</span>' : '',
+    r.discordRoleId ? `<span class="tag">${esc(nomRole(r.discordRoleId) ? '@' + nomRole(r.discordRoleId) : 'Rôle Discord')}</span>` : '',
   ].join('');
 
   function renderRanks() {
@@ -91,8 +106,11 @@
       { name: 'isDefault', type: 'checkbox', value: r?.isDefault, text: 'Grade donné automatiquement aux nouveaux comptes' },
       { name: 'featured', type: 'checkbox', value: r?.featured, text: 'Mettre en avant sur l\'organigramme public (grande carte)' },
       { name: 'description', label: 'Texte public sous la rangée', type: 'textarea', rows: 2, value: r?.description, placeholder: 'Optionnel' },
-      { name: 'discordRoleId', label: 'Rôle Discord (optionnel)', value: r?.discordRoleId, placeholder: 'Ex : 1234567890123456',
-        hint: 'Donne ce grade automatiquement à la connexion (Discord : clic droit sur le rôle → Copier l\'identifiant).' },
+      roles
+        ? { name: 'discordRoleId', label: 'Rôle Discord (optionnel)', type: 'select', options: choixRoles(r?.discordRoleId), value: r?.discordRoleId || '',
+          hint: 'Donne ce grade automatiquement à la connexion.' }
+        : { name: 'discordRoleId', label: 'Rôle Discord (optionnel)', value: r?.discordRoleId, placeholder: 'Ex : 1234567890123456',
+          hint: 'Donne ce grade automatiquement à la connexion (Discord : clic droit sur le rôle → Copier l\'identifiant ; ou connecte ton compte au bot pour le choisir par son nom).' },
     ], { title: r ? r.label : 'Nouveau grade', ok: r ? 'Enregistrer' : 'Créer', del: r ? 'Supprimer' : '' });
     if (!f) return;
     if (f._delete) {
@@ -100,7 +118,8 @@
       if (!await espaceConfirm(`Le grade « ${r.label} » sera supprimé.`, { title: 'Supprimer ce grade ?', ok: 'Supprimer', danger: true })) return;
       return save(() => api('../api/admin/ranks/' + encodeURIComponent(r.key), { method: 'DELETE' }), 'Grade supprimé');
     }
-    const body = { label: f.label, color: f.color, description: f.description, discordRoleId: f.discordRoleId,
+    // grade sans couleur : le champ montre l'accent du site ; laissé tel quel, le grade reste sans couleur
+    const body = { label: f.label, color: !r?.color && f.color === espaceAccent() ? '' : f.color, description: f.description, discordRoleId: f.discordRoleId,
       isDefault: f.isDefault, featured: f.featured, canAdmin: f.rights !== 'membre', canManage: f.rights === 'complet' };
     save(() => r ? api('../api/admin/ranks/' + encodeURIComponent(r.key), json('PATCH', body)) : api('../api/admin/ranks', json('POST', body)),
       r ? 'Grade enregistré ✦' : 'Grade créé ✦');
@@ -153,6 +172,11 @@
   new Sortable($('ranks'), { handle: '.grade__handle', draggable: '.grade', animation: 150, ghostClass: 'is-ghost',
     onEnd: ev => { if (ev.oldIndex !== ev.newIndex) save(() => api('../api/admin/ranks/order', json('PUT', { keys: [...$('ranks').children].map(li => li.dataset.key) }))); } });
 
+  $('accesForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try { const r = await api('../api/admin/reglages', json('PUT', { memberRoleId: $('memberRoleId').value.trim() })); $('memberRoleId').value = r.memberRoleId || ''; espaceToast(r.memberRoleId ? 'Rôle membre enregistré ✦' : 'Rôle membre retiré : seule la Gestion a accès au-delà du profil'); }
+    catch (err) { if (err) espaceToast(err.message, false); }
+  });
   $('newRank').addEventListener('click', () => editRank(null));
   $('ranks').addEventListener('click', e => {
     const li = e.target.closest('[data-edit]')?.closest('.grade'); if (!li) return;
@@ -167,8 +191,16 @@
     const me = await api('../api/me');
     if (!me.canManage) { location.replace('profil.html'); return; }
     espaceNav(me);
+    roles = await espaceBot.get('roles').catch(() => null);
     await reload();
-    $('loading').hidden = true; $('ranksBlock').hidden = false;
+    const roleMembre = (await api('../api/admin/reglages')).memberRoleId || '';
+    if (roles) {
+      // le champ à remplir devient un menu des rôles du serveur (même identifiant, le formulaire ne change pas)
+      $('memberRoleId').outerHTML = `<select class="admin-select" id="memberRoleId">${choixRoles(roleMembre).map(o => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('')}</select>`;
+      $('aideRoles').hidden = true;
+    }
+    $('memberRoleId').value = roleMembre;
+    $('loading').hidden = true; $('accesBlock').hidden = false; $('ranksBlock').hidden = false;
   })().catch(() => {});
   $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
 </script>

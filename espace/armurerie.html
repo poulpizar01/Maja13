@@ -166,12 +166,12 @@
   async function start() {
     const me = await api('../api/me');
     if (me.status !== 'approved') { location.replace('attente.html'); return; }
-    if (!me.isAdmin) { location.replace('profil.html'); return; }
+    if (!me.isMember) { location.replace('profil.html'); return; }
     espaceNav(me);
     const st = await espaceBot.gate($('botGate'));
     $('loading').hidden = true;
     if (!st.linked) return;
-    try { await load(); setInterval(() => load().catch(() => {}), 5 * 60000); }   // 5 min : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    try { await load(); espaceBot.every(load); }   // toutes les 5 min, onglet visible seulement : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
     catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(espaceBot.error(e))}</p>`; }
   }
   $('etat').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (!b) return; filter = b.dataset.f; render(); });

@@ -29,9 +29,9 @@
     <h3 class="admin-block__title">Poster une photo</h3>
     <form class="upload" id="uploadForm">
       <label class="upload__drop" id="drop">
-        <input type="file" id="file" name="photo" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic" hidden>
+        <input type="file" id="file" name="photo" accept="image/jpeg,image/png,image/webp" hidden>
         <img id="preview" alt="" hidden>
-        <span id="dropText">Glisse une image ici ou clique pour choisir<br><small>jpg, png, webp, heic (pas de gif ni d’image animée) — 15 Mo max. Elle sera redimensionnée automatiquement.</small></span>
+        <span id="dropText">Glisse une image ici ou clique pour choisir<br><small>jpg, png, webp (pas de gif ni d’image animée) — 15 Mo max. Elle sera redimensionnée automatiquement.</small></span>
       </label>
       <div class="upload__side">
         <label>Légende <small>(optionnel)</small><input class="admin-input" id="caption" maxlength="200" placeholder="Ex : Réunion au QG"></label>
@@ -72,6 +72,7 @@
   async function load() {
     me = await api('../api/me');
     if (me.status !== 'approved') { location.replace('attente.html'); return; }
+    if (!me.isMember) { location.replace('profil.html'); return; }
     espaceNav(me);
     render(await api('../api/gallery?limit=200')); $('loading').hidden = true; $('uploadBlock').hidden = false;
   }
@@ -81,7 +82,7 @@
   function pick(f) {
     if (!f) return;
     // mêmes formats que le serveur (qui revérifie le contenu réel) : photos fixes uniquement, pas de gif
-    if (!/^image\/(jpeg|png|webp|heic|heif)$/.test(f.type) && !/\.heic$/i.test(f.name)) { toast('Format refusé : jpg, png, webp ou heic uniquement (pas de gif).', false); return; }
+    if (!/^image\/(jpeg|png|webp)$/.test(f.type)) { toast('Format refusé : jpg, png ou webp uniquement (pas de gif ni de heic).', false); return; }
     const dt = new DataTransfer(); dt.items.add(f); file.files = dt.files;
     $('preview').src = URL.createObjectURL(f); $('preview').hidden = false; $('dropText').hidden = true; $('send').disabled = false;
   }

@@ -1,6 +1,6 @@
 // Présentation des comptes pour les pages.
 import type { Member } from './generated/prisma/client.js';
-import { canAdmin, canManage, rankIndex, rankInfo } from './ranks.js';
+import { canAdmin, canManage, canMember, rankIndex, rankInfo } from './ranks.js';
 
 export const avatarUrl = (m: Pick<Member, 'discordId' | 'avatar'>): string | null =>
   m.avatar ? `https://cdn.discordapp.com/avatars/${m.discordId}/${m.avatar}.${m.avatar.startsWith('a_') ? 'gif' : 'png'}?size=256` : null;
@@ -8,7 +8,7 @@ export const avatarUrl = (m: Pick<Member, 'discordId' | 'avatar'>): string | nul
 export const publicMember = (m: Member) => ({
   id: m.id, discordId: m.discordId, username: m.username, avatarUrl: avatarUrl(m),
   displayName: m.displayName, ...rankInfo(m.rankKey), bio: m.bio, phoneRp: m.phoneRp,
-  isAdmin: canAdmin(m), canManage: canManage(m), status: m.status,
+  isMember: canMember(m), isAdmin: canAdmin(m), canManage: canManage(m), status: m.status,
   joinedAt: m.joinedAt, lastLogin: m.lastLogin, approvedAt: m.approvedAt,
 });
 

@@ -2,6 +2,7 @@
 // Les grades sont peu nombreux et lus à chaque requête : ils restent en mémoire, rechargés après chaque modification.
 import { prisma } from './db.js';
 import type { Member, Rank } from './generated/prisma/client.js';
+import { memberRoleId } from './settings.js';
 
 let ranks: Rank[] = [];   // du sommet à la base
 
@@ -36,5 +37,9 @@ type WithRank = Pick<Member, 'rankKey' | 'isOwner'>;
 // propriétaire du site = propriétaire du serveur Discord (vérifié à chaque connexion) : pouvoirs complets quel que soit le grade
 export const canManage = (m: WithRank): boolean => m.isOwner || !!rankOf(m.rankKey)?.canManage;
 export const canAdmin = (m: WithRank): boolean => canManage(m) || !!rankOf(m.rankKey)?.canAdmin;
+// Rôle membre : accès à l'espace membre au-delà de son profil (classement, chat, galerie, taxes, armurerie, bot).
+// Porté sur Discord (relu à chaque connexion), ou implicite pour la Gestion. Rôle non réglé : la Gestion seule.
+type WithMemberRole = WithRank & Pick<Member, 'hasMemberRole'>;
+export const canMember = (m: WithMemberRole): boolean => canAdmin(m) || (!!memberRoleId() && m.hasMemberRole);
 // un grade à pouvoirs complets ne s'attribue / ne se retire que par quelqu'un qui les a lui-même
 export const managesRank = (key: string | null | undefined): boolean => !!rankOf(key)?.canManage;

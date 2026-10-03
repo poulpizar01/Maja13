@@ -33,17 +33,17 @@
 
 <script>
   const $ = id => document.getElementById(id);
-  fetch('../api/me', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).then(m => { if (m) espaceNav(m); });
+  fetch('../api/me', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).then(m => { if (!m) return; if (!m.isAdmin) { location.replace('profil.html'); return; } espaceNav(m); });
   fetch('../api/membres', { credentials: 'same-origin' })
-    .then(r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('attente.html'); throw 0; } return r.json(); })
+    .then(r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('profil.html'); throw 0; } return r.json(); })
     .then(list => {
       $('loading').hidden = true; $('outils').hidden = false;
       $('grid').innerHTML = list.map(m => `
-        <article class="miembro" data-featured="${m.rankFeatured}" data-cherche="${espaceEsc(norm(`${m.displayName} ${m.username} ${m.rankLabel || ''}`))}">
-          <img src="${m.avatarUrl || '../assets/favicon.png'}" alt="" width="72" height="72">
+        <article class="membre" data-featured="${m.rankFeatured}" data-cherche="${espaceEsc(norm(`${m.displayName} ${m.username} ${m.rankLabel || ''}`))}">
+          <img src="${espaceEsc(m.avatarUrl || '../assets/favicon.png')}" alt="" width="72" height="72">
           <span class="rank__title">${espaceEsc(m.rankLabel || 'Sans grade')}</span>
-          <span class="miembro__name">${espaceEsc(m.displayName)}</span>
-          <span class="miembro__user">@${espaceEsc(m.username)}</span>
+          <span class="membre__name">${espaceEsc(m.displayName)}</span>
+          <span class="membre__user">@${espaceEsc(m.username)}</span>
         </article>`).join('');
       // recherche : champ de la page, pré-rempli par la palette (?q=)
       $('q').value = new URLSearchParams(location.search).get('q') || '';

@@ -103,7 +103,7 @@
     $('zones').innerHTML = cat !== 'zones' ? '' : [['', 'Toutes les zones', deZone], ...zones.map(z => [z, libelle(z), deZone.filter(t => t.type === z)])]
       .map(([k, label, list]) => `<button type="button" class="tax-zone${k === zone ? ' is-on' : ''}" data-zone="${esc(k)}" aria-pressed="${k === zone}">${esc(label)}<i>${list.length}</i>${expire(list)}</button>`).join('');
   }
-  const ligne = (t, g) => `<button type="button" class="ech ech--${g.k}" data-detail="${t.id}">
+  const ligne = (t, g) => `<button type="button" class="ech ech--${g.k}" data-detail="${esc(t.id)}">
       <span class="ech__quand"><b>${g.k === 'paid' ? 'Payée' : reste(t.echeance)}</b><small>${date(t.echeance)}</small></span>
       <span class="ech__nom"><b>${esc(t.nom)}</b><small>${esc(sousTitre(t.type))}</small></span>
       <span class="status ${g.statut}">${g.k === 'expired' && t.paye ? 'Expirée · payée' : g.court}</span>
@@ -130,12 +130,12 @@
   async function start() {
     const me = await api('../api/me');
     if (me.status !== 'approved') { location.replace('attente.html'); return; }
-    if (!me.isAdmin) { location.replace('profil.html'); return; }
+    if (!me.isMember) { location.replace('profil.html'); return; }
     espaceNav(me);
     const st = await espaceBot.gate($('botGate'));
     $('loading').hidden = true;
     if (!st.linked) return;
-    try { await load(); setInterval(() => load().catch(() => {}), 5 * 60000); }   // 5 min : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    try { await load(); espaceBot.every(load); }   // toutes les 5 min, onglet visible seulement : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
     catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(espaceBot.error(e))}</p>`; }
   }
   // téléphone et mot de passe : seulement dans la fiche détaillée d'une taxe, demandée au bot à l'ouverture (rien n'est gardé)

@@ -35,7 +35,7 @@ docker compose up -d --build
 ```
 - Le serveur suit la branche `main` : c'est elle qui est déployée.
 - `SITE_ID` et `HOST_PORT` doivent être **uniques sur la machine** : chaque site a ses propres conteneurs (`<SITE_ID>-app`, `<SITE_ID>-db`, `<SITE_ID>-backup`, et `<SITE_ID>-db-roles`, qui ne tourne qu'un instant à chaque démarrage) et son propre port. `ss -ltnp` liste les ports déjà pris (autres sites, API du bot…).
-- Générer `SESSION_SECRET` et `POSTGRES_PASSWORD` avec `openssl rand -hex 32` (le mot de passe de la base ne se change plus une fois la base créée).
+- Générer `SESSION_SECRET` (32 caractères au moins, sinon le site refuse de démarrer) et `POSTGRES_PASSWORD` avec `openssl rand -hex 32` (le mot de passe de la base ne se change plus une fois la base créée).
 
 Vérifier : `docker compose ps` (les trois services `Up`, la base `healthy` ; `db-roles`, qui prépare le compte de base du site puis s'arrête, n'y figure pas) et `docker logs <SITE_ID>-app`, qui doit finir par `<nom du site> en écoute sur le port 3000 (https://<domaine>)`. Le premier démarrage crée les tables (migrations Prisma).
 
@@ -50,7 +50,7 @@ sudo certbot --nginx -d <domaine>                      # certificat + redirectio
 **Ne pas tester la connexion avant certbot** : avec `BASE_URL` en `https://`, le cookie de session n'est envoyé qu'en HTTPS, la connexion Discord échoue donc en `http://`. Rôle de chaque réglage nginx, plusieurs sites, dépannage : [docs/nginx.md](../docs/nginx.md).
 
 ### 5. Première connexion
-La base de prod démarre **vide** (rien n'est repris du dev). Le **propriétaire du serveur Discord** se connecte le premier : il est validé d'office avec tous les droits et crée les grades dans l'espace membre → Gestion → Hiérarchie. Les autres membres qui se connectent attendent ensuite sa validation.
+La base de prod démarre **vide** (rien n'est repris du dev). Le **propriétaire du serveur Discord** se connecte le premier : il est validé d'office avec tous les droits et crée les grades dans l'espace membre → Gestion → Hiérarchie. Il renseigne aussi, dans Hiérarchie, l'identifiant du **rôle Discord membre** : sans lui, seule la Gestion a accès au-delà du profil. Les autres membres qui se connectent attendent ensuite sa validation, puis ont accès à l'espace s'ils portent ce rôle.
 
 Puis, si le bot est utilisé : voir [Bot Discord](#bot-discord).
 
@@ -81,10 +81,14 @@ Une sauvegarde contient tout le chat et les identifiants Discord des membres : l
 - Restaurer (remplace le contenu actuel de la base) :
   ```bash
   docker compose stop app
-  gunzip -c backups/site-AAAA-MM-JJ_HHhMM.sql.gz | docker exec -i <SITE_ID>-db psql -U site_app -d site
+  # 1. base vidée : une sauvegarde ne retire que ce qu'elle contient. Sans cette étape, une table créée depuis (par une
+  #    migration, lors d'une mise à jour ratée) resterait en place et bloquerait le démarrage suivant (« already exists »).
+  docker exec <SITE_ID>-db psql -U site -d site -v ON_ERROR_STOP=1 -c 'DROP SCHEMA public CASCADE' -c 'CREATE SCHEMA public AUTHORIZATION site_app'
+  # 2. restauration, en une seule transaction : à la première erreur, rien n'est écrit (pas de base à moitié restaurée)
+  gunzip -c backups/site-AAAA-MM-JJ_HHhMM.sql.gz | docker exec -i <SITE_ID>-db psql -U site_app -d site -v ON_ERROR_STOP=1 --single-transaction
   docker compose start app
   ```
-  `-U site_app` et non `-U site` : les tables recréées doivent appartenir au compte du site. Restaurées par erreur avec `site`, le site ne peut plus les lire ; `docker compose up -d` (qui relance `db-roles`) les lui rend.
+  `-U site_app` et non `-U site` pour la restauration : les tables recréées doivent appartenir au compte du site. Restaurées par erreur avec `site`, le site ne peut plus les lire ; `docker compose up -d` (qui relance `db-roles`) les lui rend. Une sauvegarde en échec n'écrit aucun fichier et le dit dans `docker logs <SITE_ID>-backup` ; les copies précédentes sont alors gardées au-delà de 7 jours.
 - Ces copies restent sur la même machine : elles protègent des erreurs de manipulation, **pas de la perte du serveur**. Il faut en garder une copie ailleurs, par exemple sur un stockage objet (S3, Backblaze B2, Scaleway…) avec [rclone](https://rclone.org), une fois `rclone config` fait (remote nommé `sauvegardes`). **Chiffrer cette copie** : dans `rclone config`, créer le remote `sauvegardes` de type `crypt` par-dessus le remote du stockage objet, et garder son mot de passe ailleurs que sur le VPS (sans lui, les copies sont illisibles, pour vous aussi) :
   ```bash
   # crontab -e : chaque nuit à 4 h, copie des sauvegardes du site hors du serveur (copy : n'efface rien là-bas)

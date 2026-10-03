@@ -39,7 +39,12 @@ export const storage = {
   async put(key: string, data: Buffer): Promise<string> {
     if (kind === 'aucun') throw new Error('stockage : aucun stockage configuré (STORAGE_URL / STORAGE_TOKEN) en production');
     if (!isWebp(key, data)) throw new Error(`stockage : ${key} refusé (seules les images WebP sont acceptées)`);
-    if (kind === 'cdn') return ((await (await cdn('PUT', key, data, 'image/webp')).json()) as { url: string }).url;
+    if (kind === 'cdn') {
+      // l'adresse publique vient du service : sans elle, la photo serait enregistrée sans pouvoir être affichée
+      const adresse = ((await (await cdn('PUT', key, data, 'image/webp')).json().catch(() => null)) as { url?: unknown } | null)?.url;
+      if (typeof adresse !== 'string' || !adresse) throw new Error(`stockage PUT ${key} : réponse sans adresse publique`);
+      return adresse;
+    }
     const file = join(dir, key);
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, data);

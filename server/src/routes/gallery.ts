@@ -5,9 +5,9 @@ import multer from 'multer';
 import sharp, { type Metadata, type OutputInfo } from 'sharp';
 import { prisma } from '../db.js';
 import type { Member, Photo } from '../generated/prisma/client.js';
-import { body, intParam, member, text } from '../http.js';
+import { body, entier, intParam, member, text } from '../http.js';
 import { author } from '../members.js';
-import { canAdmin } from '../ranks.js';
+import { canAdmin, canMember } from '../ranks.js';
 import { storage } from '../storage.js';
 import { limits } from '../security.js';
 
@@ -19,11 +19,13 @@ gallery.use('/uploads', express.static(storage.dir, { maxAge: '30d', immutable: 
 // Images acceptées : photos fixes uniquement (pas de GIF ni d'image animée). Deux contrôles :
 // 1. type annoncé par le navigateur (tri rapide, falsifiable) ; 2. format réel lu dans le contenu du fichier.
 // Ce qui part ensuite au stockage est toujours un WebP réencodé ici, jamais le fichier reçu.
-const FORMATS_ACCEPTES = ['jpeg', 'png', 'webp', 'heif'];   // heif = photos HEIC des téléphones
+// Pas de HEIC : sharp ne sait pas le décoder (ses binaires ne lisent que l'AVIF dans ce conteneur). Un iPhone convertit
+// de lui-même en JPEG quand le champ de la page n'annonce pas le HEIC (espace/galerie.html).
+const FORMATS_ACCEPTES = ['jpeg', 'png', 'webp'];
 const MAX_PIXELS = 25_000_000;                               // garde-fou contre les images piégées (décompression géante)
 const upload = multer({
   storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 1 },
-  fileFilter: (_req, f, cb) => cb(null, /^image\/(jpeg|png|webp|heic|heif)$/.test(f.mimetype)),
+  fileFilter: (_req, f, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(f.mimetype)),
 });
 const receivePhoto: RequestHandler = (req, res, next) => upload.single('photo')(req, res, err => {
   if (err) res.status(400).json({ error: (err as { code?: string }).code === 'LIMIT_FILE_SIZE' ? 'Image trop lourde (15 Mo max)' : 'Fichier refusé' });
@@ -34,7 +36,7 @@ const receivePhoto: RequestHandler = (req, res, next) => upload.single('photo')(
 async function refusImage(buffer: Buffer): Promise<string | null> {
   let meta: Metadata;
   try { meta = await sharp(buffer, { limitInputPixels: MAX_PIXELS }).metadata(); } catch { return 'Image illisible'; }
-  if (!meta.format || !FORMATS_ACCEPTES.includes(meta.format)) return 'Format refusé : jpg, png, webp ou heic uniquement (pas de gif)';
+  if (!meta.format || !FORMATS_ACCEPTES.includes(meta.format)) return 'Format refusé : jpg, png ou webp uniquement (pas de gif ni de heic)';
   if ((meta.pages ?? 1) > 1) return 'Les images animées ne sont pas acceptées';
   if ((meta.width ?? 0) * (meta.height ?? 0) > MAX_PIXELS) return 'Image trop grande (25 mégapixels max)';
   return null;
@@ -63,9 +65,11 @@ const photoView = (p: Photo & { member: Member }, complet: boolean) => {
 };
 
 gallery.get('/api/gallery', async (req, res) => {
-  const limit = Math.min(Number(req.query.limit) || 60, 200);
+  const limit = Math.min(entier(req.query.limit) ?? 60, 200);
   const photos = await prisma.photo.findMany({ where: { deletedAt: null }, include: withAuthor, orderBy: { createdAt: 'desc' }, take: limit });
-  const complet = !!req.session.memberId;
+  // vue complète : comptes validés avec le rôle membre (un compte en attente, refusé ou sans le rôle a une session, pas l'accès)
+  const moi = req.session.memberId ? await prisma.member.findUnique({ where: { id: req.session.memberId } }) : null;
+  const complet = moi?.status === 'approved' && canMember(moi);
   res.json(photos.map(p => photoView(p, complet)));
 });
 
@@ -75,8 +79,19 @@ const stockagePret: RequestHandler = (_req, res, next) => {
   else res.status(503).json({ error: 'L’envoi de photos n’est pas encore configuré sur ce site (stockage des images manquant).' });
 };
 
-gallery.post('/api/gallery', ...member, stockagePret, limits.upload, receivePhoto, async (req, res) => {
-  if (!req.file) { res.status(400).json({ error: 'Aucune image (jpg, png, webp, heic — pas de gif)' }); return; }
+// Chaque envoi reçu garde son fichier en mémoire (15 Mo au plus) jusqu'à son tour de traitement : au-delà de quelques
+// envois en même temps, tous membres confondus, le plafond mémoire du conteneur serait dépassé. Les suivants repassent.
+const ENVOIS_MAX = 3;
+let envois = 0;
+const envoisBornes: RequestHandler = (_req, res, next) => {
+  if (envois >= ENVOIS_MAX) { res.status(503).set('Retry-After', '10').json({ error: 'Trop de photos en cours d’envoi, réessaie dans quelques secondes.' }); return; }
+  envois++;
+  res.once('close', () => { envois--; });
+  next();
+};
+
+gallery.post('/api/gallery', ...member, stockagePret, limits.upload, envoisBornes, receivePhoto, async (req, res) => {
+  if (!req.file) { res.status(400).json({ error: 'Aucune image (jpg, png, webp — pas de gif ni de heic)' }); return; }
   const buffer = req.file.buffer;
   const refus = await refusImage(buffer);
   if (refus) { res.status(400).json({ error: refus }); return; }
@@ -103,11 +118,18 @@ gallery.post('/api/gallery', ...member, stockagePret, limits.upload, receivePhot
     res.status(502).json({ error: 'Le stockage des images ne répond pas, réessaie dans un instant' });
     return;
   }
-  const photo = await prisma.photo.create({
-    data: { memberId: req.member.id, file, thumb: thumbKey, url, thumbUrl, width: big.info.width, height: big.info.height, caption: text(body(req).caption, 200) || null },
-    include: withAuthor,
-  });
-  res.status(201).json(photoView(photo, true));
+  try {
+    const photo = await prisma.photo.create({
+      data: { memberId: req.member.id, file, thumb: thumbKey, url, thumbUrl, width: big.info.width, height: big.info.height, caption: text(body(req).caption, 200) || null },
+      include: withAuthor,
+    });
+    res.status(201).json(photoView(photo, true));
+  } catch (e) {
+    // fichiers déjà sur le stockage mais ligne non enregistrée : ils y resteraient sans que rien ne les référence
+    console.error(e);
+    await retirerFichiers({ file, url, thumb: thumbKey, thumbUrl });
+    res.status(500).json({ error: 'La photo n’a pas pu être enregistrée, réessaie dans un instant' });
+  }
 });
 
 gallery.delete('/api/gallery/:id', ...member, async (req, res) => {

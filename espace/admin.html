@@ -52,14 +52,12 @@
 
   const toast = (msg, ok = true) => { const t = $('toast'); t.textContent = msg; t.className = 'espace-toast' + (ok ? '' : ' is-error'); t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 3000); };
   const api = (url, opt = {}) => fetch(url, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, ...opt })
-    .then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('profil.html'); throw 0; } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
+    .then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { if ((await r.json().catch(() => ({}))).error === 'manage-only') throw new Error('réservé à un grade au-dessus du tien'); location.replace('profil.html'); throw 0; } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
 
-  // les grades à pouvoirs complets ne s'attribuent / ne se retirent que par quelqu'un qui les a
-  const managesRank = key => !!ranks.find(r => r.key === key)?.canManage;
-  const rankSelect = (m, id) => `<select class="admin-select" data-id="${id}" data-field="rank" ${managesRank(m.rank) && !me.canManage ? 'disabled' : ''}>` +
+  const rankSelect = (m, id) => `<select class="admin-select" data-id="${id}" data-field="rank">` +
     `<option value="" ${m.rank ? '' : 'selected'}>— Sans grade —</option>` +
-    ranks.filter(r => !r.canManage || me.canManage || r.key === m.rank).map(r => `<option value="${r.key}" ${r.key === m.rank ? 'selected' : ''}>${esc(r.label)}</option>`).join('') + '</select>';
-  const avatar = m => `<img class="admin-avatar" src="${m.avatarUrl || '../assets/favicon.png'}" alt="">`;
+    ranks.map(r => `<option value="${r.key}" ${r.key === m.rank ? 'selected' : ''}>${esc(r.label)}</option>`).join('') + '</select>';
+  const avatar = m => `<img class="admin-avatar" src="${esc(m.avatarUrl || '../assets/favicon.png')}" alt="">`;
 
   function render(list) {
     const pending = list.filter(m => m.status === 'pending');
@@ -71,7 +69,7 @@
       <article class="pending-card" data-row="${m.id}">
         ${avatar(m)}
         <div class="pending-card__body">
-          <span class="miembro__user">@${esc(m.username)} · demande du ${fmt(m.joinedAt)}</span>
+          <span class="membre__user">@${esc(m.username)} · demande du ${fmt(m.joinedAt)}</span>
           <label>Nom RP<input class="admin-input" data-id="${m.id}" data-field="displayName" value="${esc(m.displayName)}" maxlength="64"></label>
           <label>Grade${rankSelect(m, m.id)}</label>
         </div>
@@ -91,9 +89,10 @@
         <td class="muted">${fmt(m.approvedAt || m.joinedAt)}</td>
         <td class="admin-actions">
           <button class="btn btn--accent btn--sm" data-save="${m.id}">Enregistrer</button>
-          ${m.id !== me.id && (!m.canManage || me.canManage) ? (m.status === 'rejected'
+          ${m.id !== me.id ? (m.status === 'rejected'
             ? `<button class="btn btn--ghost btn--sm" data-approve="${m.id}">Approuver</button>`
             : `<button class="btn btn--ghost btn--sm btn--danger" data-reject="${m.id}" title="Retirer l'accès">Exclure</button>`) : ''}
+          ${m.id !== me.id ? `<button class="btn btn--ghost btn--sm btn--danger" data-delete="${m.id}" title="Effacer le compte">Supprimer</button>` : ''}
         </td>
       </tr>`).join('');
   }
@@ -101,7 +100,7 @@
   async function load() {
     const [meData, r, list] = await Promise.all([api('../api/me'), api('../api/ranks'), api('../api/admin/members')]);
     me = meData; ranks = r;
-    if (!me.isAdmin) { location.replace('profil.html'); return; }
+    if (!me.canManage) { location.replace('profil.html'); return; }
     espaceNav(me);
     render(list); $('loading').hidden = true;
   }
@@ -117,14 +116,26 @@
   }
 
   document.addEventListener('click', async e => {
-    const b = e.target.closest('button[data-save],button[data-approve],button[data-reject]');
+    const b = e.target.closest('button[data-save],button[data-approve],button[data-reject],button[data-delete]');
     if (!b) return;
     if (b.dataset.save) return patch(b.dataset.save, fieldsOf(b.dataset.save), 'Enregistré ✦');
     if (b.dataset.approve) return patch(b.dataset.approve, { ...fieldsOf(b.dataset.approve), status: 'approved' }, 'Membre validé ✦');
+    // suppression : définitive (profil, messages, photos), contrairement à l'exclusion
+    if (b.dataset.delete) {
+      const name = b.closest('[data-row]')?.querySelector('[data-field="displayName"]')?.value || 'Ce compte';
+      if (!await espaceConfirm(`Le compte de ${name} sera effacé pour de bon, avec ses messages et ses photos. Impossible de revenir en arrière : pour revenir, la personne devra refaire une demande. Pour seulement lui retirer l'accès, utilise plutôt « Exclure ».`, { title: 'Supprimer ce compte ?', ok: 'Supprimer définitivement', danger: true })) return;
+      try { await api(`../api/admin/members/${b.dataset.delete}`, { method: 'DELETE' }); toast('Compte supprimé'); load(); }
+      catch (err) { if (err) toast('Erreur : ' + err.message, false); }
+      return;
+    }
     if (b.dataset.reject) {
-      const row = b.closest('[data-row]'); const name = row?.querySelector('[data-field="displayName"]')?.value || 'ce membre';
-      if (await espaceConfirm(`${name} n'aura plus accès à l'espace membre. Tu pourras le réintégrer plus tard.`, { title: "Retirer l'accès ?", ok: "Retirer l'accès", danger: true }))
-        patch(b.dataset.reject, { status: 'rejected' }, 'Accès retiré');
+      // même action (statut « refusé ») pour une demande en attente et pour un membre déjà validé : textes distincts
+      const row = b.closest('[data-row]'); const name = row?.querySelector('[data-field="displayName"]')?.value || 'Ce compte';
+      const demande = !!row?.closest('#pending');
+      const ok = demande
+        ? await espaceConfirm(`${name} n'aura pas accès à l'espace membre. Tu pourras revenir sur ta décision depuis la liste des membres (bouton « Approuver »).`, { title: 'Refuser la demande ?', ok: 'Refuser', danger: true })
+        : await espaceConfirm(`${name} n'aura plus accès à l'espace membre. Tu pourras revenir sur ta décision depuis la liste des membres (bouton « Approuver »).`, { title: 'Exclure ce membre ?', ok: 'Exclure', danger: true });
+      if (ok) patch(b.dataset.reject, { status: 'rejected' }, demande ? 'Demande refusée' : 'Membre exclu');
     }
   });
 

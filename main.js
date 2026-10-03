@@ -19,7 +19,8 @@
   // retour arrière (page restaurée depuis le cache) : on retrouve la page, pas le menu
   addEventListener('pageshow', e => { if (e.persisted) toggle(false); });
   addEventListener('keydown', e => { if (e.key === 'Escape') toggle(false); });
-  matchMedia('(min-width:1181px)').addEventListener('change', e => { if (e.matches) toggle(false); });
+  // passage à l'écran large : le menu ouvert n'est refermé que si son bouton disparaît (une vitrine peut le garder à toutes les largeurs)
+  matchMedia('(min-width:1181px)').addEventListener('change', e => { if (e.matches && getComputedStyle(burger).display === 'none') toggle(false); });
 
   // apparition au scroll
   const els = document.querySelectorAll('.reveal');

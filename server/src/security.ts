@@ -11,16 +11,17 @@ const https = config.baseUrl.startsWith('https');
 // Un script injecté (contenu d'un membre mal échappé, par exemple) n'a pas le jeton et reste inerte.
 export const cspNonce: RequestHandler = (_req, res, next) => { res.locals.cspNonce = crypto.randomBytes(16).toString('base64'); next(); };
 
-// Politique de contenu : uniquement ce que les pages chargent réellement (Google Fonts, cdnjs pour three.js et
-// SortableJS, avatars Discord, stockage d'images en prod). Scripts en ligne : seulement avec le jeton de la réponse ;
-// styles en ligne autorisés (attributs style des pages, sans risque d'exécution de code).
+// Politique de contenu : uniquement ce que les pages chargent réellement. Scripts, feuilles de style et polices
+// viennent du site lui-même (aucun hébergeur tiers : un hôte de scripts autorisé en entier servirait de contournement
+// au jeton) ; images : le site, les avatars Discord, le stockage d'images en prod. Scripts en ligne : seulement avec
+// le jeton de la réponse ; styles en ligne autorisés (attributs style des pages, sans risque d'exécution de code).
 export const securityHeaders = helmet({
   contentSecurityPolicy: {
     useDefaults: true,
     directives: {
-      'script-src': ["'self'", (_req, res) => `'nonce-${(res as Response).locals.cspNonce}'`, 'https://cdnjs.cloudflare.com'],
-      'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-      'font-src': ["'self'", 'https://fonts.gstatic.com'],
+      'script-src': ["'self'", (_req, res) => `'nonce-${(res as Response).locals.cspNonce}'`],
+      'style-src': ["'self'", "'unsafe-inline'"],
+      'font-src': ["'self'"],
       'img-src': ["'self'", 'data:', 'blob:', 'https://cdn.discordapp.com', ...(config.storage.url ? [new URL(config.storage.url).origin] : [])],
       'connect-src': ["'self'"],
       'form-action': ["'self'"],

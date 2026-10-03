@@ -1,6 +1,6 @@
 /* Serveur du site : vitrine + espace membre.
    Express + PostgreSQL (Prisma) + Discord OAuth2. Les routes sont rangées par domaine dans routes/. */
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import express, { type ErrorRequestHandler } from 'express';
 import session from 'express-session';
 import connectPg from 'connect-pg-simple';
@@ -8,17 +8,19 @@ import { config } from './config.js';
 import { pool, prisma } from './db.js';
 import { planifierPurge } from './purge.js';
 import { loadRanks } from './ranks.js';
+import { loadSettings } from './settings.js';
 import { storage } from './storage.js';
 import { cspNonce, limits, securityHeaders } from './security.js';
 import { site, pages, renderFile, withNonce } from './site.js';
+import { canAdmin, canManage, canMember } from './ranks.js';
 import { auth } from './routes/auth.js';
 import { members } from './routes/members.js';
 import { hierarchy } from './routes/hierarchy.js';
 import { gallery } from './routes/gallery.js';
-import { chat } from './routes/chat.js';
+import { chat, fermerTousLesFlux } from './routes/chat.js';
 import { bot } from './routes/bot.js';
 
-await loadRanks();
+await Promise.all([loadRanks(), loadSettings()]);
 planifierPurge();
 
 const app = express();
@@ -45,6 +47,16 @@ const sessions = session({
 });
 app.use(['/api', '/auth'], sessions);
 
+// Requêtes qui modifient quelque chose : acceptées seulement depuis les pages du site. Le cookie SameSite=Lax arrête
+// les autres sites, pas un voisin du même domaine (a.exemple.fr → b.exemple.fr), qui pourrait sinon publier une photo
+// au nom d'un membre. Le navigateur joint toujours l'en-tête Origin à ces requêtes ; absent (curl, script), rien à craindre.
+const origine = new URL(config.baseUrl).origin;
+app.use(['/api', '/auth'], (req, res, next) => {
+  const recue = req.get('origin');
+  if (req.method === 'GET' || req.method === 'HEAD' || !recue || recue === origine) next();
+  else res.status(403).json({ error: 'origine refusée' });
+});
+
 app.use('/auth', limits.auth);
 app.use('/api', limits.api);
 app.use(auth, members, hierarchy, gallery, chat, bot);
@@ -53,15 +65,45 @@ app.use(auth, members, hierarchy, gallery, chat, bot);
 // espace/ et assets/, plus les fichiers de la racine du site (pages, css, js, robots.txt, sitemap.xml) ;
 // jamais le reste du dépôt (code du serveur, compose.yaml, README…), quelle que soit l'écriture de l'adresse.
 // Les pages (.html, .txt, .xml) passent par site.ts, qui y insère l'identité du site (site.json).
-const statics: Parameters<typeof express.static>[1] = { index: false, dotfiles: 'ignore' };
+// redirect: false — un dossier du dépôt (/server, /docs) répond 404 comme le reste, sans révéler qu'il existe
+const statics: Parameters<typeof express.static>[1] = { index: false, dotfiles: 'ignore', redirect: false };
 // session déjà ouverte : /espace/ mène droit au profil (ou à l'attente), sans afficher la page de connexion
-// qui redirigeait elle-même en JavaScript — un second chargement, visible, juste après l'arrivée
+// (elle garde la même redirection en JavaScript, en repli)
 app.get(['/espace', '/espace/', '/espace/index.html'], sessions, async (req, res, next) => {
   if (!req.session.memberId) return next();
   const m = await prisma.member.findUnique({ where: { id: req.session.memberId }, select: { status: true } });
   if (!m) return next();
   res.redirect(m.status === 'approved' ? '/espace/profil.html' : '/espace/attente.html');
 });
+// Pages de l'espace membre : envoyées seulement à qui y a droit, selon les mêmes règles que l'API (http.ts). Sinon, la
+// page n'est jamais envoyée : pas connecté → connexion ; compte pas encore validé → attente ; droits insuffisants →
+// « accès refusé » (403). Une lecture de session et de compte par page ouverte, jamais pour les css, js et images.
+const NIVEAU_PAGE: Record<string, 'connecte' | 'valide' | 'membre' | 'gestion' | 'complet'> = {
+  attente: 'connecte', profil: 'valide',
+  chat: 'membre', galerie: 'membre', classement: 'membre', taxes: 'membre', armurerie: 'membre',
+  tableau: 'gestion', stats: 'gestion', garages: 'gestion', membres: 'gestion',
+  admin: 'complet', organigramme: 'complet',
+};
+// La page est déduite du chemin tel que le serveur de fichiers le lira : décodé, normalisé, sans casse (adm%69n.html,
+// //admin.html, Admin.html sur un disque Windows désignent tous admin.html).
+const pageDemandee = (chemin: string): string | null => {
+  try { chemin = decodeURIComponent(chemin); } catch { return null; }
+  const nom = posix.basename(posix.normalize(chemin)).toLowerCase();
+  return /^[\w-]+(\.html)?$/.test(nom) ? nom.replace(/\.html$/, '') : null;
+};
+app.use('/espace', (req, res, next) => {
+  const niveau = req.method === 'GET' || req.method === 'HEAD' ? NIVEAU_PAGE[pageDemandee(req.path) ?? ''] : undefined;
+  if (!niveau) return next();
+  sessions(req, res, () => { accesPage(req, res, next, niveau).catch(next); });
+});
+async function accesPage(req: express.Request, res: express.Response, next: express.NextFunction, niveau: string) {
+  const m = req.session.memberId ? await prisma.member.findUnique({ where: { id: req.session.memberId } }) : null;
+  if (!m) return res.redirect('/espace/');
+  if (niveau !== 'connecte' && m.status !== 'approved') return res.redirect('/espace/attente.html');
+  const permis = niveau === 'connecte' || niveau === 'valide' || (niveau === 'membre' && canMember(m)) || (niveau === 'gestion' && canAdmin(m)) || (niveau === 'complet' && canManage(m));
+  if (permis) return next();
+  res.status(403).type('html').send(withNonce(renderFile(join(config.root, 'espace', 'refuse.html')), res));
+}
 app.use('/espace', pages(join(config.root, 'espace')), express.static(join(config.root, 'espace'), statics));
 // images gardées 7 jours par les navigateurs en production ; en dev, toujours revalidées (un visuel changé s'affiche aussitôt)
 app.use('/assets', express.static(join(config.root, 'assets'), { dotfiles: 'ignore', maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0 }));
@@ -82,4 +124,13 @@ const onError: ErrorRequestHandler = (err, _req, res, _next) => {
 app.use(onError);
 
 console.log(`Stockage des images : ${storage.kind === 'cdn' ? 'CDN' : storage.kind === 'local' ? `local, dev uniquement (${storage.dir})` : 'aucun (envoi désactivé)'}`);
-app.listen(config.port, '0.0.0.0', () => console.log(`${site.nom} en écoute sur le port ${config.port} (${config.baseUrl})`));
+const serveur = app.listen(config.port, '0.0.0.0', () => console.log(`${site.nom} en écoute sur le port ${config.port} (${config.baseUrl})`));
+
+// Arrêt demandé par Docker (mise à jour, redémarrage) : plus de nouvelle requête, celles en cours se terminent — un
+// envoi de photo ne reste pas à moitié fait —, puis la base est rendue. Après 8 s, on sort quand même (Docker coupe à 10).
+for (const signal of ['SIGTERM', 'SIGINT'] as const) process.once(signal, () => {
+  fermerTousLesFlux();
+  serveur.close(() => { pool.end().catch(() => {}).finally(() => process.exit(0)); });
+  serveur.closeIdleConnections();
+  setTimeout(() => process.exit(0), 8000).unref();
+});

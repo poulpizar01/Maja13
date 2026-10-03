@@ -2,8 +2,9 @@
 import { Router, type Response } from 'express';
 import { prisma } from '../db.js';
 import { Prisma } from '../generated/prisma/client.js';
-import { body, intParam, manager, member, text } from '../http.js';
+import { body, entier, intParam, manager, member, text } from '../http.js';
 import { allRanks, loadRanks, publicRank, rankIndex, rankOf, vitrineRank } from '../ranks.js';
+import { memberRoleId, setMemberRoleId } from '../settings.js';
 
 export const hierarchy = Router();
 
@@ -28,6 +29,16 @@ hierarchy.get('/api/admin/org', ...manager, async (_req, res) => {
   const byRank = Object.fromEntries(counts.map(c => [c.rankKey, c._count]));
   const data = await orgPayload();
   res.json({ ...data, ranks: data.ranks.map(r => ({ ...r, memberCount: byRank[r.key] ?? 0 })) });
+});
+
+// ---------- réglages d'accès ----------
+// rôle Discord membre : identifiant du rôle (chiffres) ; vide = aucun (la Gestion seule a accès au-delà du profil)
+hierarchy.get('/api/admin/reglages', ...manager, (_req, res) => { res.json({ memberRoleId: memberRoleId() }); });
+hierarchy.put('/api/admin/reglages', ...manager, async (req, res) => {
+  const id = text(body(req).memberRoleId, 32);
+  if (id && !/^\d{5,32}$/.test(id)) { res.status(400).json({ error: 'Identifiant de rôle Discord invalide (des chiffres uniquement)' }); return; }
+  await setMemberRoleId(id || null);
+  res.json({ memberRoleId: memberRoleId() });
 });
 
 // ---------- grades ----------
@@ -125,9 +136,9 @@ hierarchy.post('/api/admin/org', ...manager, async (req, res) => {
 // disposition des cases après glisser-déposer : { tiers: [{ rank, ids: [...] }] } — une case peut changer de grade
 hierarchy.put('/api/admin/org/order', ...manager, async (req, res) => {
   const tiers = body(req).tiers;
-  if (!Array.isArray(tiers) || tiers.some(t => !rankOf(t?.rank) || !Array.isArray(t?.ids))) { res.status(400).json({ error: 'grade inconnu, recharge la page' }); return; }
+  if (!Array.isArray(tiers) || tiers.some(t => !rankOf(t?.rank) || !Array.isArray(t?.ids) || t.ids.some((id: unknown) => entier(id) === null))) { res.status(400).json({ error: 'grade inconnu, recharge la page' }); return; }
   await prisma.$transaction((tiers as { rank: string; ids: unknown[] }[]).flatMap(t =>
-    t.ids.map((id, position) => prisma.orgEntry.updateMany({ where: { id: Number(id) }, data: { rankKey: t.rank, position } }))));
+    t.ids.map((id, position) => prisma.orgEntry.updateMany({ where: { id: entier(id)! }, data: { rankKey: t.rank, position } }))));
   res.json(await orgPayload());
 });
 

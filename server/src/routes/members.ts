@@ -2,9 +2,9 @@
 import { Router } from 'express';
 import { prisma } from '../db.js';
 import type { MemberStatus, Prisma } from '../generated/prisma/client.js';
-import { admin, body, intParam, member, requireAuth, text } from '../http.js';
+import { admin, approved, body, intParam, manager, member, requireAuth, text } from '../http.js';
 import { avatarUrl, byRankThenName, publicMember } from '../members.js';
-import { canManage, managesRank, rankInfo, rankOf } from '../ranks.js';
+import { rankInfo, rankOf } from '../ranks.js';
 import { fermerFlux } from './chat.js';
 import { retirerFichiers } from './gallery.js';
 
@@ -16,7 +16,7 @@ members.get('/api/me', requireAuth, async (req, res) => {
   res.json(publicMember(m));
 });
 
-members.patch('/api/me', ...member, async (req, res) => {
+members.patch('/api/me', ...approved, async (req, res) => {
   const b = body(req);
   const displayName = text(b.displayName, 64);
   if (!displayName) { res.status(400).json({ error: 'displayName requis' }); return; }
@@ -27,21 +27,27 @@ members.patch('/api/me', ...member, async (req, res) => {
   res.json(publicMember(m));
 });
 
-// membres validés, visibles par les membres connectés
-members.get('/api/membres', ...member, async (_req, res) => {
+// annuaire des membres validés (pseudo Discord, grade) : page Membres, réservée à la Gestion
+members.get('/api/membres', ...admin, async (_req, res) => {
   const list = (await prisma.member.findMany({ where: { status: 'approved' } })).sort(byRankThenName);
   res.json(list.map(m => ({ discordId: m.discordId, displayName: m.displayName, username: m.username, ...rankInfo(m.rankKey), avatarUrl: avatarUrl(m) })));
 });
 
-// ---------- administration (accès Gestion) ----------
-members.get('/api/admin/members', ...admin, async (_req, res) => {
+// noms RP et avatars seulement, pour afficher les joueurs dans les pages du rôle membre (classement) sans l'annuaire
+members.get('/api/membres/noms', ...member, async (_req, res) => {
+  const list = await prisma.member.findMany({ where: { status: 'approved' }, select: { discordId: true, displayName: true, avatar: true } });
+  res.json(list.map(m => ({ discordId: m.discordId, displayName: m.displayName, avatarUrl: avatarUrl(m) })));
+});
+
+// ---------- administration (pouvoirs complets : valider, refuser, nom RP, grade, suppression) ----------
+members.get('/api/admin/members', ...manager, async (_req, res) => {
   const list = await prisma.member.findMany({ include: { approvedBy: { select: { displayName: true } } } });
   list.sort((a, b) => Number(b.status === 'pending') - Number(a.status === 'pending') || byRankThenName(a, b));
   res.json(list.map(m => ({ ...publicMember(m), approvedByName: m.approvedBy?.displayName ?? null })));
 });
 
 const STATUSES: MemberStatus[] = ['pending', 'approved', 'rejected'];
-members.patch('/api/admin/members/:id', ...admin, async (req, res) => {
+members.patch('/api/admin/members/:id', ...manager, async (req, res) => {
   const target = await prisma.member.findUnique({ where: { id: intParam(req, 'id') } });
   if (!target) { res.status(404).json({ error: 'not-found' }); return; }
   const b = body(req);
@@ -54,15 +60,12 @@ members.patch('/api/admin/members/:id', ...admin, async (req, res) => {
   if (b.rank !== undefined) {
     const rank = typeof b.rank === 'string' && b.rank ? b.rank : null;
     if (rank && !rankOf(rank)) { res.status(400).json({ error: 'grade inconnu' }); return; }
-    if ((managesRank(rank) || managesRank(target.rankKey)) && !canManage(req.member)) { res.status(403).json({ error: 'manage-only' }); return; }
     data.rankKey = rank;
   }
   if (b.status !== undefined) {
     const status = STATUSES.find(s => s === b.status);
     if (!status) { res.status(400).json({ error: 'statut inconnu' }); return; }
     if (target.id === req.member.id) { res.status(400).json({ error: 'self' }); return; }
-    // même règle que pour le grade : l'accès d'un membre à pouvoirs complets (ou du propriétaire) ne se retire que par un pair
-    if (canManage(target) && !canManage(req.member)) { res.status(403).json({ error: 'manage-only' }); return; }
     data.status = status;
     data.approvedAt = status === 'approved' ? new Date() : null;
     data.approvedById = status === 'approved' ? req.member.id : null;
@@ -82,11 +85,9 @@ async function supprimerCompte(id: number) {
   for (const p of photos) await retirerFichiers(p);
 }
 
-members.delete('/api/admin/members/:id', ...admin, async (req, res) => {
+members.delete('/api/admin/members/:id', ...manager, async (req, res) => {
   const id = intParam(req, 'id');
   if (id === req.member.id) { res.status(400).json({ error: 'self' }); return; }
-  const target = await prisma.member.findUnique({ where: { id }, select: { rankKey: true, isOwner: true } });
-  if (target && canManage(target) && !canManage(req.member)) { res.status(403).json({ error: 'manage-only' }); return; }
   await supprimerCompte(id);
   res.json({ ok: true });
 });

@@ -19,35 +19,37 @@
 <main class="espace-page">
   <div class="espace-loading" id="loading">Chargement…</div>
 
-  <section class="perfil" id="perfil" hidden>
-    <div class="perfil__card">
-      <div class="perfil__avatar-wrap">
-        <img class="perfil__avatar" id="avatar" src="../assets/favicon.png" alt="" width="140" height="140">
-        <span class="perfil__rank" id="rank"></span>
+  <section class="profil" id="profil" hidden>
+    <div class="profil__card">
+      <div class="profil__avatar-wrap">
+        <img class="profil__avatar" id="avatar" src="../assets/favicon.png" alt="" width="140" height="140">
+        <span class="profil__rank" id="rank"></span>
       </div>
       <p class="eyebrow">Mon profil</p>
-      <h1 class="perfil__name" id="displayName">—</h1>
-      <p class="perfil__discord">Discord : <b id="username">—</b></p>
-      <dl class="perfil__meta">
+      <h1 class="profil__name" id="displayName">—</h1>
+      <p class="profil__discord">Discord : <b id="username">—</b></p>
+      <dl class="profil__meta">
         <div><dt>Membre depuis</dt><dd id="joinedAt">—</dd></div>
         <div><dt>Dernière connexion</dt><dd id="lastLogin">—</dd></div>
         <div><dt>Téléphone RP</dt><dd id="phoneRpView">—</dd></div>
       </dl>
-      <p class="perfil__bio" id="bioView"></p>
+      <p class="profil__bio" id="bioView"></p>
     </div>
 
-    <form class="perfil__form" id="form">
+    <form class="profil__form" id="form">
       <h2>Modifier</h2>
       <label>Nom RP<input name="displayName" id="f-displayName" maxlength="64" required></label>
       <label>Téléphone RP<input name="phoneRp" id="f-phoneRp" maxlength="32" placeholder="555-123-123"></label>
       <label>Bio<textarea name="bio" id="f-bio" rows="5" maxlength="600" placeholder="Qui tu es, d'où tu viens…"></textarea></label>
-      <div class="perfil__actions">
+      <div class="profil__actions">
         <button class="btn btn--accent" type="submit">Enregistrer</button>
-        <span class="perfil__saved" id="saved" hidden>Enregistré ✦</span>
+        <span class="profil__saved" id="saved" hidden>Enregistré ✦</span>
       </div>
-      <p class="perfil__suppr"><button class="btn btn--ghost btn--sm btn--danger" id="supprimer" type="button">Supprimer mon compte</button><a href="../confidentialite.html">Mes données</a></p>
+      <p class="profil__suppr"><button class="btn btn--ghost btn--sm btn--danger" id="supprimer" type="button">Supprimer mon compte</button><a href="../confidentialite.html">Mes données</a></p>
     </form>
   </section>
+
+  <p class="admin-empty profil__sans-role" id="sansRole" hidden>Ton compte est validé, mais il n'a pas le rôle membre sur le serveur Discord du groupe : pour l'instant, seul ton profil est accessible. Une fois le rôle attribué, déconnecte-toi puis reconnecte-toi pour ouvrir le reste de l'espace.</p>
 
   <section class="semaine" id="semaine" hidden>
     <div class="semaine__head">
@@ -74,7 +76,8 @@
       <div><p class="eyebrow">Historique</p><h2 class="semaine__title">Mes paies</h2></div>
       <p class="semaine__reset" id="paiesTotal"></p>
     </div>
-    <div class="table-wrap"><table class="admin-table dash-table"><thead id="paiesHead"></thead><tbody id="paiesRows"></tbody></table></div>
+    <p id="paiesAction"><button class="btn btn--ghost btn--sm" id="paiesVoir" type="button">Afficher mes 8 dernières semaines</button></p>
+    <div class="table-wrap" id="paiesTable" hidden><table class="admin-table dash-table"><thead id="paiesHead"></thead><tbody id="paiesRows"></tbody></table></div>
     <p class="semaine__hint">Calculé par le bot pour chaque semaine (lundi → dimanche), avec les taux de paie actuels.</p>
   </section>
 </main>
@@ -98,7 +101,7 @@
   }
   fetch('../api/me', { credentials: 'same-origin' })
     .then(r => { if (r.status === 401) { location.replace('./'); throw 0; } return r.json(); })
-    .then(m => { if (m.status !== 'approved') { location.replace('attente.html'); return; } ME = m; espaceNav(m); render(m); $('loading').hidden = true; $('perfil').hidden = false; loadSemaine(); })
+    .then(m => { if (m.status !== 'approved') { location.replace('attente.html'); return; } ME = m; espaceNav(m); render(m); $('loading').hidden = true; $('profil').hidden = false; loadSemaine(); })
     .catch(() => {});
 
   // ---- Ma semaine & mes paies (données du bot Discord, en lecture seule)
@@ -107,6 +110,7 @@
   const dlong = ms => new Date(ms).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
   let ME = null;
   async function loadSemaine() {
+    if (!ME.isMember) { $('sansRole').hidden = false; return; }   // le bot refuserait de toute façon
     const st = await espaceBot.gate($('botGate'));
     if (!st.configured) return;
     $('semaine').hidden = false;
@@ -122,17 +126,19 @@
       const count = q.byQuotaType[k] || 0, target = cfg.targets[k], rate = cfg.salaryRates[k];
       const pct = target ? Math.min(100, Math.round(count / target * 100)) : 0;
       return `<div class="quota ${target && count >= target ? 'is-done' : ''}">
-        <div class="quota__head"><span>${esc(espaceBot.label(k))}</span><b>${count}${target ? ` / ${target}` : ''}</b></div>
+        <div class="quota__head"><span>${esc(espaceBot.label(k))}</span><b>${esc(count)}${target ? ` / ${esc(target)}` : ''}</b></div>
         <div class="quota__bar"><i style="width:${target ? pct : (count ? 100 : 0)}%"></i></div>
-        <small>${target ? (count >= target ? 'Objectif atteint ✦' : `${target - count} restant${target - count > 1 ? 's' : ''}`) : 'Pas d’objectif fixé'}${rate ? ` · ${rate} $ / unité` : ''}</small>
+        <small>${target ? (count >= target ? 'Objectif atteint ✦' : `${target - count} restant${target - count > 1 ? 's' : ''}`) : 'Pas d’objectif fixé'}${rate ? ` · ${esc(rate)} $ / unité` : ''}</small>
       </div>`; }).join('') || '<p class="muted">Aucune catégorie de quota configurée dans le bot.</p>';
     $('salaire').textContent = money(pay.salaire);
     $('salaireNote').textContent = pay.salaire ? 'selon les taux du bot, hors primes' : 'déclare tes activités sur Discord pour la faire monter';
     const acts = Object.entries(q.map).filter(([, v]) => v.count);
-    if (acts.length) $('activities').innerHTML = acts.map(([key, v]) => `<li><span>${esc(cfg.activities[key]?.label || key)}</span><b>${v.count}</b></li>`).join('');
-    if (ventes.detail.length) $('ventes').innerHTML = ventes.detail.map(v => `<li><span>${esc(v.item)}</span><b>${v.quantite}</b></li>`).join('');
+    if (acts.length) $('activities').innerHTML = acts.map(([key, v]) => `<li><span>${esc(cfg.activities[key]?.label || key)}</span><b>${esc(v.count)}</b></li>`).join('');
+    if (ventes.detail.length) $('ventes').innerHTML = ventes.detail.map(v => `<li><span>${esc(v.item)}</span><b>${esc(v.quantite)}</b></li>`).join('');
     loadCooldowns();
-    loadPaies(cats);
+    // historique des paies : 8 lectures du bot, faites à la demande — le profil est la page d'arrivée de chaque connexion
+    $('paies').hidden = false;
+    $('paiesVoir').addEventListener('click', () => { $('paiesVoir').disabled = true; loadPaies(cats); }, { once: true });
   }
   // cooldowns en cours (le bot ne renvoie à un non-admin que les siens ; un admin reçoit tout le monde : on filtre).
   // Bloc masqué si le bot ne les expose pas ; décompte rafraîchi chaque minute, le bot relu toutes les 5 min (cache du site).
@@ -148,17 +154,18 @@
     renderCooldowns();
   }
   setInterval(() => { if (cooldowns) renderCooldowns(); }, 60000);
-  setInterval(() => { if (cooldowns) loadCooldowns(); }, 5 * 60000);
+  espaceBot.every(async () => { if (cooldowns) await loadCooldowns(); });
   // les 8 dernières semaines (lundi → dimanche), calculées par le bot
   async function loadPaies(cats) {
     const weeks = Array.from({ length: 8 }, (_, i) => espaceBot.isoWeek(i + 1));
     const list = (await Promise.all(weeks.map(w => espaceBot.get(`quotas/pay/${ME.discordId}?week=${w}`).then(p => ({ week: w, ...p })).catch(() => null)))).filter(p => p && (p.salaire || Object.values(p.byQuotaType).some(Boolean)));
-    if (!list.length) return;
-    $('paies').hidden = false;
+    $('paiesAction').hidden = true;
+    if (!list.length) { $('paiesTotal').textContent = 'Aucune paie sur les 8 dernières semaines'; return; }
+    $('paiesTable').hidden = false;
     const total = list.reduce((s, p) => s + p.salaire, 0), best = Math.max(...list.map(p => p.salaire));
     $('paiesTotal').innerHTML = `${list.length} semaine${list.length > 1 ? 's' : ''} · <b>${money(total)}</b> cumulés`;
     $('paiesHead').innerHTML = `<tr><th>Semaine</th>${cats.map(k => `<th>${esc(espaceBot.label(k))}</th>`).join('')}<th>Paie</th></tr>`;
-    $('paiesRows').innerHTML = list.map(p => `<tr><td><b>${p.week.replace('-W', ' · semaine ')}</b></td>${cats.map(k => `<td>${p.byQuotaType[k] || 0}</td>`).join('')}<td><b class="pay">${money(p.salaire)}</b>${p.salaire === best && best > 0 ? ' ✦' : ''}</td></tr>`).join('');
+    $('paiesRows').innerHTML = list.map(p => `<tr><td><b>${p.week.replace('-W', ' · semaine ')}</b></td>${cats.map(k => `<td>${esc(p.byQuotaType[k] || 0)}</td>`).join('')}<td><b class="pay">${money(p.salaire)}</b>${p.salaire === best && best > 0 ? ' ✦' : ''}</td></tr>`).join('');
   }
 
   $('form').addEventListener('submit', async e => {

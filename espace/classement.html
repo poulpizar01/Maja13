@@ -53,12 +53,12 @@
     const etat = !v ? 'is-vide' : t && v >= t ? 'is-done' : 'is-cours';
     const pct = t ? Math.min(100, Math.round(v / t * 100)) : (v ? 100 : 0);
     return `<div class="jauge ${etat}" role="cell" data-label="${esc(label)}">
-      <span class="jauge__val">${v ? `<b>${v}</b>${t ? `<small> / ${t}</small>` : ''}` : '<small>—</small>'}</span>
+      <span class="jauge__val">${v ? `<b>${esc(v)}</b>${t ? `<small> / ${esc(t)}</small>` : ''}` : '<small>—</small>'}</span>
       <i class="jauge__barre"><b style="width:${pct}%"></b></i></div>`;
   }
   async function load() {
     const [cfg, pay, ranking, ventes, users, annuaire] = await Promise.all([espaceBot.get('quotas/config'), espaceBot.get('quotas/pay'), espaceBot.get('quotas/ranking'), espaceBot.get('ventes'), espaceBot.get('users'),
-      fetch('../api/membres', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []).catch(() => [])]);
+      fetch('../api/membres/noms', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []).catch(() => [])]);
     const name = await espaceBot.names(users);
     const avatars = Object.fromEntries(annuaire.map(m => [m.discordId, m.avatarUrl]));
     const points = Object.fromEntries(ranking.map(r => [r.userId, r.points]));
@@ -80,7 +80,7 @@
       <article class="podium__carte${r.userId === me.discordId ? ' is-me' : ''}">
         <span class="podium__rang" aria-label="Rang ${i + 1}">${rang(i)}</span>
         <div class="podium__qui">${espaceAvatar(avatars[r.userId], i === 0 ? 58 : 48)}<div><b>${esc(name(r.userId))}${toi(r)}</b>
-          <small>${withTargets.length ? `${faits(r)} / ${withTargets.length} objectif${withTargets.length > 1 ? 's' : ''} rempli${faits(r) > 1 ? 's' : ''}` : ''}${avecPoints ? ` · ${r.points} pts` : ''}</small></div></div>
+          <small>${withTargets.length ? `${faits(r)} / ${withTargets.length} objectif${withTargets.length > 1 ? 's' : ''} rempli${faits(r) > 1 ? 's' : ''}` : ''}${avecPoints ? ` · ${esc(r.points)} pts` : ''}</small></div></div>
         <p class="podium__paie"><span>Paie estimée</span><b>${money(r.salaire)}</b></p>
         <div class="podium__jauges">${withTargets.map(k => jauge(r.byQuotaType[k] || 0, targets[k], espaceBot.label(k))).join('')}</div>
       </article>`).join('');
@@ -90,24 +90,25 @@
     pal.classList.toggle('has-points', avecPoints);
     pal.innerHTML = !rows.length ? `<p class="admin-empty">Personne n'a encore déclaré d'activité cette semaine.</p>` : `
       <div class="palmares__tete" role="row"><span role="columnheader">#</span><span role="columnheader">Membre</span>
-        ${cats.map(k => `<span role="columnheader">${esc(espaceBot.label(k))}${targets[k] ? ` <small>/ ${targets[k]}</small>` : ''}</span>`).join('')}
+        ${cats.map(k => `<span role="columnheader">${esc(espaceBot.label(k))}${targets[k] ? ` <small>/ ${esc(targets[k])}</small>` : ''}</span>`).join('')}
         ${avecPoints ? '<span role="columnheader">Points</span>' : ''}<span role="columnheader">Paie</span></div>
       ${rows.map((r, i) => `<div class="palmares__ligne${r.userId === me.discordId ? ' is-me' : ''}${i < 3 ? ' is-podium' : ''}" role="row">
         <span class="palmares__rang" role="cell">${rang(i)}</span>
         <span class="palmares__qui" role="cell">${espaceAvatar(avatars[r.userId])}<b>${esc(name(r.userId))}</b>${toi(r)}</span>
         ${cats.map(k => jauge(r.byQuotaType[k] || 0, targets[k], espaceBot.label(k))).join('')}
-        ${avecPoints ? `<span class="palmares__points" role="cell">${r.points}</span>` : ''}
+        ${avecPoints ? `<span class="palmares__points" role="cell">${esc(r.points)}</span>` : ''}
         <span class="palmares__paie" role="cell">${money(r.salaire)}</span></div>`).join('')}`;
     $('page').hidden = false;
   }
   async function start() {
     me = await api('../api/me');
     if (me.status !== 'approved') { location.replace('attente.html'); return; }
+    if (!me.isMember) { location.replace('profil.html'); return; }
     espaceNav(me);
     const st = await espaceBot.gate($('botGate'));
     $('loading').hidden = true;
     if (!st.linked) return;
-    try { await load(); setInterval(() => load().catch(() => {}), 5 * 60000); }   // 5 min : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    try { await load(); espaceBot.every(load); }   // toutes les 5 min, onglet visible seulement : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
     catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(espaceBot.error(e))}</p>`; }
   }
   $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });
