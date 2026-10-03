@@ -12,7 +12,7 @@ Les commandes ci-dessous visent un VPS Debian / Ubuntu, avec un utilisateur qui 
 ### 1. Avant de commencer
 - **Domaine** : un enregistrement DNS `A` (et `AAAA` si le VPS a une IPv6) du domaine vers l'IP du VPS. Vérifier avec `dig +short <domaine>` : certbot échoue tant que le domaine ne pointe pas sur la machine.
 - **Application Discord** : créée et configurée (voir [Application Discord](#application-discord)), avec la redirection `https://<domaine>/auth/discord/callback`.
-- **Bot Discord** (facultatif) : l'URL publique HTTPS de son API.
+- **Bot Discord** (facultatif) : l'URL publique HTTPS de son API, et un bot **à jour** (rôle membre et route `/api/roles`, voir [Bot Discord](#bot-discord)).
 
 ### 2. Préparer le VPS (une seule fois par machine)
 ```bash
@@ -50,9 +50,14 @@ sudo certbot --nginx -d <domaine>                      # certificat + redirectio
 **Ne pas tester la connexion avant certbot** : avec `BASE_URL` en `https://`, le cookie de session n'est envoyé qu'en HTTPS, la connexion Discord échoue donc en `http://`. Rôle de chaque réglage nginx, plusieurs sites, dépannage : [docs/nginx.md](../docs/nginx.md).
 
 ### 5. Première connexion
-La base de prod démarre **vide** (rien n'est repris du dev). Le **propriétaire du serveur Discord** se connecte le premier : il est validé d'office avec tous les droits et crée les grades dans l'espace membre → Gestion → Hiérarchie. Il renseigne aussi, dans Hiérarchie, l'identifiant du **rôle Discord membre** : sans lui, seule la Gestion a accès au-delà du profil. Les autres membres qui se connectent attendent ensuite sa validation, puis ont accès à l'espace s'ils portent ce rôle.
+La base de prod démarre **vide** (rien n'est repris du dev). Dans cet ordre :
+1. **Bot** (s'il est utilisé) : déclarer le site externe et le rôle membre du bot (`/config site-externe set …`, `/config role set membre @Rôle`, voir [Bot Discord](#bot-discord)).
+2. Le **propriétaire du serveur Discord** se connecte le premier au site : il est validé d'office avec tous les droits. Il relie son compte au bot (bouton « Connecter mon compte au bot », page Mon profil), puis, dans l'espace membre → Gestion → Hiérarchie :
+   - choisit le **rôle Discord membre** (dans la liste des rôles du serveur quand son compte est relié au bot ; sinon, coller l'identifiant du rôle). Sans ce réglage, seule la Gestion a accès au-delà du profil ;
+   - crée les grades (nom, ordre, couleur, droits, rôle Discord lié éventuel).
+3. Les autres membres se connectent : leur demande attend la validation (Gestion → Administration, réservée aux pouvoirs complets), puis ils ont accès à l'espace s'ils portent le rôle membre.
 
-Puis, si le bot est utilisé : voir [Bot Discord](#bot-discord).
+Niveaux d'accès et pages de chacun : [docs/api.md](../docs/api.md#niveaux-daccès).
 
 Le domaine n'est écrit nulle part dans les fichiers : `robots.txt`, `sitemap.xml` et les aperçus de partage le prennent dans `BASE_URL`.
 
@@ -76,7 +81,7 @@ Faire une sauvegarde juste avant une mise à jour qui touche la base : `docker c
 ### Sauvegardes de la base
 Le service `backup` (dans `compose.yaml`) sauvegarde la base au démarrage puis toutes les 24 h, dans le dossier `backups/` du site sur la machine (7 jours conservés). C'est un dossier et non un volume Docker : il survit à un `docker compose down -v`. Les photos de la galerie n'y sont pas (elles sont sur le stockage d'images), les sessions non plus (elles portent les jetons personnels du bot) : après une restauration, chacun se reconnecte.
 
-Une sauvegarde contient tout le chat et les identifiants Discord des membres : les fichiers ne sont lisibles que par le propriétaire du dossier `backups/`. Sur un site installé avant cette consigne, le dossier appartient à root : `sudo chown -R $USER: backups && chmod 700 backups` (les fichiers suivent à la sauvegarde suivante).
+Une sauvegarde contient tout le chat et les identifiants Discord des membres : les fichiers ne sont lisibles que par le propriétaire du dossier `backups/`. Le dossier est créé à l'installation (`mkdir -m 700 backups`) : s'il a été créé par Docker, il appartient à root ; le rendre : `sudo chown -R $USER: backups && chmod 700 backups`.
 - Sauvegarde immédiate : `docker compose restart backup`
 - Restaurer (remplace le contenu actuel de la base) :
   ```bash
@@ -95,14 +100,16 @@ Une sauvegarde contient tout le chat et les identifiants Discord des membres : l
   0 4 * * * rclone copy ~/<dossier-du-site>/backups sauvegardes:<SITE_ID>/ --max-age 48h >> ~/rclone-<SITE_ID>.log 2>&1
   ```
   Côté stockage objet, une règle de cycle de vie (suppression après 30 jours, par exemple) évite que les copies s'accumulent. Les photos, elles, sont sur le CDN (voir « Images »).
-- Le `.env` contient les secrets (base, Discord, stockage) : il doit rester lisible par vous seul (`chmod 600 .env`, fait à l'installation — à vérifier sur un site installé avant cette consigne : `ls -l .env` doit afficher `-rw-------`).
+- Le `.env` contient les secrets (base, Discord, stockage) : il doit rester lisible par vous seul (`chmod 600 .env`, fait à l'installation ; `ls -l .env` doit afficher `-rw-------`).
 
 ### Bot Discord
 Géré à part ([roxwood-network-famille](https://github.com/poulpizar01/roxwood-network-famille)). Détail de la liaison, des rubriques lues, du cache et des limites : [docs/api.md](../docs/api.md#api-du-bot-discord-relayée). L'espace membre lit ses données via son **API REST, en lecture seule** : rien n'est écrit dans le bot ni stocké côté site.
 - `.env` : `BOT_API_URL` = URL publique de l'API du bot (vide = pages liées au bot désactivées).
 - Discord : un admin du serveur déclare le site comme site externe du bot : `/config site-externe set url:https://<domaine>/espace/bot-callback.html`.
 - **Une seule URL par serveur Discord** : le bot renvoie chaque connexion vers le dernier site externe déclaré. Déclarer `http://localhost:3000/…` pour tester en dev coupe la connexion au bot en prod (et inversement). Tester le bot en dev sur un **serveur Discord de test**, ou redéclarer l'URL de prod juste après.
-- Chaque membre connecte son compte au bot depuis l'espace membre (bouton « Connecter mon compte au bot ») : le bot vérifie son identité Discord et renvoie un jeton personnel (7 jours), gardé dans sa session. Les droits (admin) sont ceux de ses rôles Discord, revérifiés par le bot à chaque lecture.
+- **Rôle membre du bot** : `/config role set membre @Rôle`. Le bot ne délivre de jeton et ne répond qu'aux porteurs de ce rôle (et à ses admins) ; tant qu'il n'est pas réglé, seuls ses admins passent. C'est en principe le même rôle que le rôle membre du site (Gestion → Hiérarchie).
+- Version du bot : celle qui porte le rôle membre et la route `/api/roles` (liste des rôles du serveur, pour choisir un rôle par son nom dans Hiérarchie). Avec un bot plus ancien, Hiérarchie retombe sur l'identifiant à coller.
+- Chaque membre connecte son compte au bot depuis l'espace membre (bouton « Connecter mon compte au bot ») : le bot vérifie son identité Discord et renvoie un jeton personnel (7 jours), gardé dans sa session. Les droits (rôle membre, admin) sont ceux de ses rôles Discord, revérifiés par le bot à chaque lecture.
 
 ## Application Discord
 Une par site.
@@ -111,7 +118,7 @@ Une par site.
 3. OAuth2 → Redirects → ajouter `https://<domaine>/auth/discord/callback`
 4. `DISCORD_GUILD_ID` = ID du serveur (mode développeur → clic droit sur le serveur → Copier l'identifiant). Seuls ses membres peuvent entrer.
 5. Le **propriétaire du serveur Discord** est propriétaire du site : validé d'office, tous les droits quel que soit son grade (vérifié à chaque connexion). C'est lui qui crée les premiers grades.
-6. Grades : ils se créent et se règlent dans l'espace membre → Gestion → Hiérarchie (nom, ordre, couleur, droits, grade par défaut). Pour que le grade suive un rôle Discord, renseigner l'ID du rôle sur le grade concerné.
+6. Grades et rôle membre : ils se règlent dans l'espace membre → Gestion → Hiérarchie (nom, ordre, couleur, droits, grade par défaut, rôle Discord lié). Les rôles Discord se choisissent par leur nom quand le compte est relié au bot ; sinon, coller leur identifiant. Rôles et grades sont relus à chaque connexion (au plus tard 7 jours, durée d'une session).
 
 ## Images (galerie)
 - **Dev** : les photos sont écrites dans `uploads/` à la racine du dépôt, sur le poste.
