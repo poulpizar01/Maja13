@@ -31,6 +31,12 @@
   --accent-light:#f0d79a;
   /* texte posé sur l'accent (badges, bouton d'envoi du chat) : sombre, l'or est clair */
   --on-accent:#120e08;
+  /* La Casa : rail sans bord perforé (motif de la DA par défaut du modèle, étranger au blason), repère de la page
+     active dans la surbrillance — réglages lus par espace.css */
+  --rail-perforations:none;
+  --rail-retrait:22px;
+  --rail-repere-gauche:0;
+  --rail-repere-marge:0;
   /* noms historiques de la vitrine (styles.css) */
   --gold:var(--accent);
   --gold2:var(--accent-dark);

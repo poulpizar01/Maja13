@@ -50,7 +50,7 @@ p{margin:0 0 1em}
 /* ---------- BUTTONS ---------- */
 .btn{display:inline-block;background:none;color:var(--gold);font-family:var(--serif);font-size:12px;letter-spacing:.26em;text-transform:uppercase;padding:15px 30px;border:1px solid var(--gold);transition:.3s;position:relative;cursor:pointer}
 /* btn--accent : nom utilisé par La Casa (espace membre commun à tous les sites) */
-.btn--gold,.btn--accent{background:linear-gradient(135deg,var(--gold3),var(--gold) 45%,var(--gold2));color:#120e08;font-weight:700;box-shadow:0 0 30px rgba(201,164,92,.25)}
+.btn--gold,.btn--accent{background:linear-gradient(135deg,var(--gold3),var(--gold) 45%,var(--gold2));color:var(--on-accent);font-weight:700;box-shadow:0 0 30px rgba(201,164,92,.25)}
 .btn--gold:hover,.btn--accent:hover{box-shadow:0 0 45px rgba(201,164,92,.5);transform:translateY(-2px)}
 .btn--ghost{color:var(--gold)}
 .btn--ghost:hover{background:rgba(201,164,92,.1)}
@@ -332,9 +332,3 @@ html:root:active-view-transition-type(depuis-passage)::view-transition-new(*){an
 }
 [hidden]{display:none!important}
 
-/* ---------- LA CASA : retouches de DA (espace.css est commun à tous les sites : on l'habille ici, sans le modifier) ----------
-   Pas de bord perforé façon pellicule (rail, et au-dessus des onglets sur mobile) : motif de la DA par défaut du modèle,
-   étranger au blason de la Maja. Le repère de la page active passe dans la surbrillance, au lieu de chevaucher le bord. */
-html .rail::before,html .onglets::before{display:none}
-html .rail{padding-left:22px}
-html .rail__lien.is-active::before{left:0;top:0;bottom:0}
