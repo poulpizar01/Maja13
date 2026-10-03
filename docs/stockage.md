@@ -4,7 +4,7 @@ Les photos de la galerie sont publiées par les membres depuis l'espace membre (
 
 ## Parcours d'une photo
 1. **Réception** (`server/src/routes/gallery.ts`) : membre validé, 10 photos maximum par membre toutes les 10 minutes, 15 Mo maximum, une seule photo par envoi. Les photos sont traitées **une à la fois** (le traitement d'une photo de 25 Mpx occupe ~210 Mo ; deux en parallèle dépasseraient la mémoire du conteneur) : un envoi simultané attend son tour quelques secondes.
-2. **Contrôle du contenu réel** (pas seulement l'extension) : jpg, png, webp ou heic ; ni GIF ni image animée ; 25 mégapixels maximum (au-delà, le décodage demanderait trop de mémoire au conteneur).
+2. **Contrôle du contenu réel** (pas seulement l'extension) : jpg, png ou webp ; ni GIF ni image animée, ni HEIC (le serveur ne sait pas le décoder ; un iPhone envoie de lui-même un JPEG, la page n'annonçant pas ce format) ; 25 mégapixels maximum (au-delà, le décodage demanderait trop de mémoire au conteneur).
 3. **Réencodage** : une grande version (1 800 px maximum, WebP qualité 84) et une miniature (600 px, qualité 78). L'orientation du téléphone est appliquée, les métadonnées (position GPS…) disparaissent.
 4. **Enregistrement** (`server/src/storage.ts`) des deux fichiers, puis de leur adresse publique en base.
 

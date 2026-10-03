@@ -27,6 +27,7 @@ Prérequis de certbot : le domaine pointe déjà sur le VPS (`dig +short <domain
 | `proxy_pass http://127.0.0.1:__PORT__` | Transmet la requête au conteneur du site. |
 | `Host`, `X-Real-IP`, `X-Forwarded-For` | Donnent au site le vrai domaine et la vraie adresse IP du visiteur (le site fait confiance à un seul proxy : `trust proxy 1`). Sans eux, les limites de requêtes compteraient tous les visiteurs comme un seul. |
 | `X-Forwarded-Proto` | Indique au site que le visiteur est en HTTPS. Indispensable : le cookie de session est marqué `Secure` et ne serait jamais envoyé sans cette information. |
+| `location = /api/gallery` | Envoi d'une photo : le traitement puis le dépôt sur le stockage peuvent dépasser les 60 s que nginx accorde par défaut. `proxy_read_timeout 120s` évite une erreur affichée au membre alors que sa photo est publiée (et un doublon s'il réessaie). |
 | `location = /api/chat/stream` | Le chat reçoit les messages en direct par un flux (Server-Sent Events). `proxy_buffering off` les transmet immédiatement, `proxy_read_timeout 1h` évite une coupure toutes les 60 s, `Connection ''` garde la connexion ouverte. |
 
 Ne pas ajouter de cache nginx sur les pages : elles sont personnalisées par site et par session. Les images de `assets/` portent déjà leur propre durée de cache (7 jours).

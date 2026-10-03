@@ -13,7 +13,7 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 
 - La **vitrine** et la **direction artistique** sont libres dans chaque site.
 - La **partie gestion** (espace membre + serveur) ne se modifie **pas** dans un site : on corrige dans le modèle, puis chaque site fait `git fetch modele && git merge modele/main` (voir README). Un site qui modifie un fichier mutualisé se crée des conflits à chaque mise à jour.
-- La DA **s'applique** à la partie gestion sans la modifier : l'espace membre ne contient aucune couleur de marque ni police en dur, tout passe par les variables de `theme.css` (`--bg`, `--ink`, `--accent`, `--display`…). Seules les couleurs d'état (succès, alerte, erreur) sont fixes dans `espace.css`.
+- La DA **s'applique** à la partie gestion sans la modifier : l'espace membre ne contient aucune couleur de marque ni police en dur, tout passe par les variables de `theme.css` (`--bg`, `--ink`, `--accent`, `--display`…, et `--on-accent` pour le texte posé sur l'accent, blanc à défaut). Seules les couleurs d'état (succès, alerte, erreur) et les séries des graphiques (`--viz-*`) sont fixes, déclarées une fois en tête de `espace.css` : une page ou un script les lit (`var(--viz-1)`, `espaceCouleurs()`), sans jamais réécrire un code couleur.
 - Dans le dépôt **modèle** : ne jamais réintroduire de contenu propre à un groupe (noms, lieux, termes espagnols « familia », « casa », etc.). Les textes de l'espace membre sont neutres ; le nom et le vocabulaire du groupe viennent de `site.json`.
 
 ## Identité du site : `site.json` et `server/src/site.ts`
@@ -26,21 +26,22 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 ## Stack et commandes
 
 - Serveur : Node 22, Express 5, TypeScript (ESM), Prisma 7 + PostgreSQL 17, sessions `connect-pg-simple`, `sharp` (images), `helmet`, `express-rate-limit`.
-- Dev (Docker Desktop) : `docker compose up` → http://localhost:3000. `compose.override.yaml` monte le code, lance `tsx`, active `DEV_LOGIN` (connexion sans Discord). Après modification de `server/src` : `docker compose restart app`.
+- Dev (Docker Desktop) : `docker compose up` → http://localhost:3000. `compose.override.yaml` monte le code, lance `tsx`, active `DEV_LOGIN` (connexion sans Discord : `/auth/discord` ouvre le compte « Dev local », `/auth/discord?compte=<ID Discord>` un compte existant, pour essayer chaque niveau d'accès). Après modification de `server/src` : `docker compose restart app`.
 - Vérifier le typage : `docker exec -w /app/server <SITE_ID ou site>-app npx tsc -p . --noEmit` (sous Git Bash Windows, préfixer `MSYS_NO_PATHCONV=1`).
 - Migration : modifier `server/prisma/schema.prisma`, puis `docker compose exec app npx prisma migrate dev --name <description>` et **committer le dossier créé** (la prod applique les migrations au démarrage, `prisma migrate deploy`). Une migration ne s'annule pas : retour arrière = restauration d'une sauvegarde.
 - Prod : voir `server/README.md` (VPS, nginx, certbot, `.env` avec `COMPOSE_FILE=compose.yaml` qui écarte l'override de dev).
 
 ## Espace membre (mutualisé)
 
-- Pages dans `espace/` : `index` (connexion), `attente`, `profil`, `membres`, `galerie`, `chat` (flux SSE), `classement`, `garages`, puis sous « Gestion » : `admin`, `tableau`, `stats`, `taxes`, `armurerie`, `organigramme` ; `bot-callback` pour la liaison au bot.
-- Droits par grade (espace membre → Gestion → Hiérarchie) : Membre / Gestion (`canAdmin`) / Pouvoirs complets (`canManage`). Le **propriétaire du serveur Discord** a toujours tout (`isOwner`, revérifié à chaque connexion). Gardes serveur : `member`, `admin`, `manager` dans `server/src/http.ts` ; toute route ajoutée en utilise une.
+- Pages dans `espace/` : `index` (connexion), `attente`, `profil` ; pour le rôle membre : `chat` (flux SSE), `galerie`, `classement`, `taxes`, `armurerie` ; sous « Gestion » : `tableau`, `stats`, `garages`, `admin` (pouvoirs complets), `membres`, `organigramme` (pouvoirs complets) ; `bot-callback` pour la liaison au bot. Le menu (`ESPACE_NAV`, `espace.js`) porte le niveau de chaque rubrique (`acces`).
+- Pages de `espace/` : servies seulement à qui y a droit (`NIVEAU_PAGE`, `server/src/index.ts`, mêmes règles que l'API), sinon `refuse.html` (403), la connexion ou l'attente. Une nouvelle page s'y déclare avec son niveau.
+- Accès : compte validé = son profil seul ; **rôle membre** = rôle Discord dont l'identifiant se règle dans Gestion → Hiérarchie (table `settings`), relu à chaque connexion (`hasMemberRole`), implicite pour la Gestion, et personne ne l'a tant qu'il n'est pas réglé (`canMember`, `ranks.ts`) ; puis grades Gestion (`canAdmin`) / Pouvoirs complets (`canManage`). Le **propriétaire du serveur Discord** a toujours tout (`isOwner`, revérifié à chaque connexion). Gardes serveur : `approved`, `member`, `admin`, `manager` dans `server/src/http.ts` ; toute route ajoutée en utilise une. Le bot applique en plus ses propres règles (son rôle membre et son rôle admin).
 - Détail des routes, droits et limites de requêtes : `docs/api.md`.
 
 ## Bot Discord Roxwood (API relayée)
 
-- Code : `server/src/routes/bot.ts`. Le site relaie **en lecture seule** l'API REST du bot ([roxwood-network-famille](https://github.com/poulpizar01/roxwood-network-famille)) : `/api/bot/data/<rubrique>/…` → `<BOT_API_URL>/api/<rubrique>/…` avec le jeton personnel du membre (gardé en session, jamais renvoyé au navigateur). Rubriques autorisées : `me`, `users`, `stocks`, `quotas`, `taxes`, `armurerie`, `ventes`, `garages`.
-- Le bot limite **tout le site** à 300 requêtes par quart d'heure : cache mémoire par membre (5 min, 24 h pour `?week=` passé) limite de 150 lectures par membre, et part réservée aux autres quand le site approche du plafond (240 appels : ceux qui en ont fait 60 attendent). Toute nouvelle page qui lit le bot passe par `espaceBot.get()` et ne se rafraîchit pas plus souvent que toutes les 5 minutes.
+- Code : `server/src/routes/bot.ts`. Le site relaie **en lecture seule** l'API REST du bot ([roxwood-network-famille](https://github.com/poulpizar01/roxwood-network-famille)) : `/api/bot/data/<rubrique>/…` → `<BOT_API_URL>/api/<rubrique>/…` avec le jeton personnel du membre (gardé en session, jamais renvoyé au navigateur). Rubriques autorisées : `me`, `users`, `stocks`, `quotas`, `taxes`, `armurerie`, `ventes`, `garages`, `roles` (rôles du serveur Discord, pour choisir un rôle par son nom dans Hiérarchie).
+- Le bot limite **tout le site** à 300 requêtes par quart d'heure : cache mémoire par membre (5 min, jusqu'à 24 h pour `?week=` passé, plafonné en taille), limite de 150 lectures par membre, et part réservée aux autres quand le site approche du plafond (240 appels : ceux qui en ont fait 60 attendent). Toute nouvelle page qui lit le bot passe par `espaceBot.get()`, se rafraîchit par `espaceBot.every()` (5 minutes, onglet visible seulement) et ne lit à l'arrivée que ce qu'elle affiche d'emblée.
 - Un serveur Discord n'a **qu'un seul site externe** déclaré (`/config site-externe set`) : tester le bot en dev sur un serveur Discord de test.
 - Quand le bot change son API, vérifier la compatibilité : cloner son dépôt, comparer `src/api/` aux adresses appelées par `espace/*.html` et aux champs lus (voir le tableau des rubriques dans `docs/api.md`).
 
@@ -52,16 +53,17 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 
 ## Sécurité (à préserver)
 
-- `helmet` avec une CSP stricte (`server/src/security.ts`) : scripts depuis le site et cdnjs uniquement, **scripts en ligne seulement avec le jeton (nonce) de la réponse**, que `site.ts` ajoute à chaque `<script>` des pages servies — un `<script>` écrit dans une page fonctionne donc tel quel, mais un attribut `onclick=…` ou un script inséré par `innerHTML` ne s'exécute jamais (écouteurs en JS uniquement) ; images depuis le site, Discord et l'origine de `STORAGE_URL`, polices Google. Ajouter une ressource externe impose de l'y déclarer.
+- `helmet` avec une CSP stricte (`server/src/security.ts`) : scripts, styles et polices depuis le site uniquement (aucun hébergeur tiers), **scripts en ligne seulement avec le jeton (nonce) de la réponse**, que `site.ts` ajoute à chaque `<script>` des pages servies — un `<script>` écrit dans une page fonctionne donc tel quel, mais un attribut `onclick=…` ou un script inséré par `innerHTML` ne s'exécute jamais (écouteurs en JS uniquement) ; images depuis le site, Discord et l'origine de `STORAGE_URL`. Une bibliothèque ou une police se copie dans le dépôt (`assets/`, `espace/vendor/`) plutôt que de se charger d'ailleurs.
+- Requêtes qui modifient des données : refusées si l'en-tête `Origin` n'est pas celui de `BASE_URL` (un site voisin sur le même domaine ne peut pas agir au nom d'un membre).
 - Seuls `espace/`, `assets/` et les fichiers de premier niveau (`*.html|css|js|txt|xml`) sont servis : jamais `server/`, `site.json`, `compose.yaml`, `.env`. Vérifier avec `curl` qu'un nouveau fichier sensible reste en 404.
-- Sessions : cookie `site.sid` `HttpOnly`, `SameSite=Lax`, `Secure` en HTTPS, 7 jours ; nouvelle session à chaque connexion. Le middleware de session ne tourne que sur `/api`, `/auth` et l'accueil de `/espace/` (jamais sur les fichiers statiques), sans écriture en base à chaque requête (`disableTouch`) : une route qui lit `req.session` doit vivre sous `/api` ou `/auth`.
+- Sessions : cookie `site.sid` `HttpOnly`, `SameSite=Lax`, `Secure` en HTTPS, 7 jours ; nouvelle session à chaque connexion. Le middleware de session ne tourne que sur `/api`, `/auth` et les pages HTML de `/espace/` (jamais sur les css, js et images), sans écriture en base à chaque requête (`disableTouch`) : une route qui lit `req.session` doit vivre sous `/api` ou `/auth`.
 - Photos : en production, le stockage distant (`STORAGE_URL`/`STORAGE_TOKEN`) est obligatoire ; sans lui, les envois sont refusés (le disque local ne sert qu'en dev). Voir `docs/stockage.md`. `DEV_LOGIN=1` est refusé si `BASE_URL` n'est pas `http://localhost`.
 
 ## Déploiement : pièges connus
 
 - Base : en prod, le site se connecte avec `site_app` (propriétaire des tables, pas super-utilisateur), créé par le service `db-roles` ; en dev il garde `site` (`prisma migrate dev` crée une base temporaire). Une migration qui exige un super-utilisateur (`CREATE EXTENSION`…) passerait en dev et échouerait en prod. Restaurer une sauvegarde avec `psql -U site_app`.
 - Sauvegardes : sans les sessions (jetons du bot), fichiers en `600`. Ne stocker aucun secret en base hors de la table `session` sans l'exclure aussi de `pg_dump` (`compose.yaml`).
-- Aucune ressource tierce dans les pages (polices dans `assets/fonts/`, three.js dans `assets/vendor/`, SortableJS dans `espace/vendor/`) : la page `confidentialite.html` l'affirme, la garder vraie.
+- Aucune ressource tierce dans les pages (polices dans `assets/fonts/`, bibliothèques dans `assets/vendor/` ou `espace/vendor/`) : la page `confidentialite.html` l'affirme, la garder vraie.
 - `SITE_ID` et `HOST_PORT` uniques par VPS (conteneurs `<SITE_ID>-app/-db/-backup` et `-db-roles`, qui ne tourne qu'au démarrage ; volumes préfixés).
 - Ne pas tester la connexion avant certbot : cookie `Secure` → la connexion échoue en `http://`.
 - nginx doit transmettre `X-Forwarded-Proto` et garder le bloc `location = /api/chat/stream` (SSE) : voir `docs/nginx.md`.
@@ -70,7 +72,7 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 
 ## Vérifier un changement visuel
 
-Le site doit rester propre de 360 px à l'écran large : aucun débordement horizontal, menu burger sous 1 180 px, hero empilé sous 1 000 px. Après un changement de mise en page, contrôler au minimum 375, 768, 1 024 et 1 280 px (vitrine, profil, admin, chat), menu burger ouvert compris.
+Le site doit rester propre de 360 px à l'écran large : aucun débordement horizontal, menu utilisable à toutes les largeurs où son bouton s'affiche (toujours dans une vitrine qui porte la classe `vitrine`, sous 1 180 px sinon), hero empilé sous 1 000 px. Après un changement de mise en page, contrôler au minimum 375, 768, 1 024 et 1 280 px (vitrine, profil, admin, chat), menu burger ouvert compris.
 
 ## Audits
 
