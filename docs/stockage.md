@@ -37,9 +37,11 @@ La clé ressemble à `galerie/lz3k9p2a-1f2e3d4c.webp` (et `…-t.webp` pour la m
 L'adresse publique renvoyée doit être sur le même domaine que `STORAGE_URL` : la politique de sécurité du site (`Content-Security-Policy`, `server/src/security.ts`) n'autorise l'affichage d'images que depuis le site lui-même, Discord (avatars) et l'origine de `STORAGE_URL`.
 
 ## Retrait d'une photo
-L'auteur ou un membre avec les droits de Gestion retire la photo : elle disparaît du site immédiatement (marquée supprimée en base), puis ses deux fichiers sont effacés du stockage. Si le stockage échoue à ce moment, il reste seulement un fichier orphelin, sans effet sur le site.
+L'auteur ou un membre avec les droits de Gestion retire la photo : elle disparaît du site immédiatement (marquée supprimée en base), puis ses deux fichiers sont effacés du stockage. Si le stockage échoue à ce moment, la ligne de la photo reste 7 jours en base et la purge quotidienne (`server/src/purge.ts`) redemande la suppression des fichiers avant de l'effacer ; tant que le stockage échoue, la ligne est gardée.
 
-La suppression d'un compte (Gestion → Administration) retire aussi du stockage les fichiers de toutes ses photos.
+La suppression d'un compte (Administration, ou par la personne elle-même) retire d'abord du stockage les fichiers de toutes ses photos, puis le compte. Si le stockage ne répond pas, rien n'est supprimé (`503`) : on réessaie plus tard, et aucun fichier ne reste en ligne sans compte.
+
+Le service doit renvoyer une adresse publique sur l'origine de `STORAGE_URL` : une autre est refusée à l'envoi (la photo ne s'afficherait pas, la politique de sécurité ne l'autorisant pas). Retirer `STORAGE_URL`/`STORAGE_TOKEN` alors que des photos y sont encore : leur retrait échoue (et leurs lignes sont gardées) jusqu'à ce que le stockage soit de nouveau configuré.
 
 ## Auteur affiché
 Pour les visiteurs de la vitrine, `GET /api/gallery` ne donne que le nom RP et le grade de l'auteur. Le pseudo Discord, l'avatar et l'identifiant ne sont renvoyés qu'à un membre connecté.

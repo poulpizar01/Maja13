@@ -23,7 +23,7 @@ docker compose up          # http://localhost:3000  ·  La Casa : http://localho
 - Créer un `.env` à la racine (ignoré par git) contenant au moins `SITE_ID=maja13` : sans lui, le projet Docker s'appelle `site`, comme celui du modèle, et les deux partageraient la même base.
 - Connexion sans Discord (bouton de connexion → compte « Dev local » avec tous les droits). Pour essayer un autre niveau d'accès : `http://localhost:3000/auth/discord?compte=<ID Discord>` ouvre la session d'un compte existant (dev uniquement, refusé en production).
 - Pages, CSS, JS et `site.json` : rafraîchir le navigateur suffit. Serveur (`server/src`) : `docker compose restart app`.
-- Tester avec le bot Discord : ajouter au `.env` **uniquement** `BOT_API_URL`, `DISCORD_GUILD_ID` et `DEV_DISCORD_ID`, et déclarer `http://localhost:3000/espace/bot-callback.html` comme site externe du bot **sur un serveur Discord de test**. Ne pas copier `.env.example` en dev (sa ligne `COMPOSE_FILE` désactive les réglages de dev).
+- Tester avec le bot Discord : ajouter au `.env` (avec `SITE_ID`) `BOT_API_URL`, `DISCORD_GUILD_ID` et `DEV_DISCORD_ID`, rien d'autre, et déclarer `http://localhost:3000/espace/bot-callback.html` comme site externe du bot **sur un serveur Discord de test**. Ne pas copier `.env.example` en dev (sa ligne `COMPOSE_FILE` désactive les réglages de dev).
 
 ## Production
 Déploiement, mises à jour, sauvegardes et retour en arrière : [server/README.md](server/README.md) ; nginx : [docs/nginx.md](docs/nginx.md).

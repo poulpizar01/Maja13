@@ -104,7 +104,7 @@ Une sauvegarde contient tout le chat et les identifiants Discord des membres : l
 
 ### Bot Discord
 Géré à part ([roxwood-network-famille](https://github.com/poulpizar01/roxwood-network-famille)). Détail de la liaison, des rubriques lues, du cache et des limites : [docs/api.md](../docs/api.md#api-du-bot-discord-relayée). L'espace membre lit ses données via son **API REST, en lecture seule** : rien n'est écrit dans le bot ni stocké côté site.
-- `.env` : `BOT_API_URL` = URL publique de l'API du bot (vide = pages liées au bot désactivées).
+- `.env` : `BOT_API_URL` = URL publique de l'API du bot (vide = pages liées au bot désactivées). Le bot limite chaque adresse IP à 300 requêtes par quart d'heure : avec plusieurs sites sur le même VPS, répartir ces 300 entre eux avec `BOT_BUDGET` (ex. 140 chacun pour deux sites).
 - Discord : un admin du serveur déclare le site comme site externe du bot : `/config site-externe set url:https://<domaine>/espace/bot-callback.html`.
 - **Une seule URL par serveur Discord** : le bot renvoie chaque connexion vers le dernier site externe déclaré. Déclarer `http://localhost:3000/…` pour tester en dev coupe la connexion au bot en prod (et inversement). Tester le bot en dev sur un **serveur Discord de test**, ou redéclarer l'URL de prod juste après.
 - **Rôle membre du bot** : `/config role set membre @Rôle`. Le bot ne délivre de jeton et ne répond qu'aux porteurs de ce rôle (et à ses admins) ; tant qu'il n'est pas réglé, seuls ses admins passent. C'est en principe le même rôle que le rôle membre du site (Gestion → Hiérarchie).

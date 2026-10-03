@@ -30,11 +30,11 @@ Pages : **validé** — Mon profil ; **membre** — Classement, Chat, Galerie, T
 | `GET /auth/discord/callback` | public | Retour de Discord : vérifie l'appartenance au serveur, crée ou met à jour le compte |
 | `POST /auth/logout` | public | Ferme la session |
 | `GET /api/me` / `PATCH /api/me` | connecté / validé | Mon compte (droits, statut) / modifier nom RP, téléphone RP, bio |
-| `DELETE /api/me` | connecté | Supprimer son propre compte, validé ou non : profil, messages et photos (fichiers compris), puis fin de session |
+| `DELETE /api/me` | connecté | Supprimer son propre compte, validé ou non : fichiers des photos retirés du stockage d'abord, puis profil, messages et photos, puis fin de session. Stockage injoignable : `503`, rien n'est supprimé |
 | `GET /api/membres` | gestion | Annuaire des membres validés (page Membres) |
 | `GET /api/membres/noms` | membre | Nom RP et avatar des membres validés, par ID Discord (noms des joueurs dans le classement) |
 | `GET`/`PUT /api/admin/reglages` | hiérarchie | Réglages d'accès : `memberRoleId` (rôle Discord membre, chiffres ; vide = aucun) |
-| `GET /api/admin/members` · `PATCH`/`DELETE /api/admin/members/:id` | hiérarchie | Comptes (en attente, validés, refusés) : valider, refuser, changer nom RP ou grade, supprimer (pas son propre compte) |
+| `GET /api/admin/members` · `PATCH`/`DELETE /api/admin/members/:id` | hiérarchie | Comptes (en attente, validés, refusés), sans bio ni téléphone RP : valider, refuser, changer nom RP ou grade, supprimer (pas son propre compte). Le compte du propriétaire du serveur Discord ne se modifie et ne se supprime que par lui (`403`). Suppression : `503` si le stockage des photos ne répond pas (rien n'est supprimé) |
 | `GET /api/ranks` | membre | Grades complets (nom, couleur, ordre, droits, rôle Discord) |
 | `POST /api/admin/ranks` · `PUT /api/admin/ranks/order` · `PATCH`/`DELETE /api/admin/ranks/:key` | hiérarchie | Créer, ordonner, modifier, supprimer des grades |
 | `GET /api/org` | public | Organigramme de la vitrine (grades sans leurs droits ni rôle Discord) |
@@ -43,10 +43,10 @@ Pages : **validé** — Mon profil ; **membre** — Classement, Chat, Galerie, T
 | `POST /api/gallery` (formulaire, champ `photo` + `caption`) | membre | Publier une photo (voir [stockage.md](stockage.md)) ; `503` en production si le stockage (CDN) n'est pas configuré, ou si 3 envois sont déjà en cours sur le site (en-tête `Retry-After`) |
 | `DELETE /api/gallery/:id` | membre (auteur) ou gestion | Retirer une photo |
 | `GET`/`POST /api/chat/messages` · `DELETE /api/chat/messages/:id` | membre | Messages du chat (supprimer : auteur ou gestion) |
-| `GET /api/chat/stream` | membre | Flux temps réel des messages (Server-Sent Events, voir [nginx.md](nginx.md)) ; 5 flux ouverts au plus par membre, le plus ancien est fermé au-delà ; fermé aussi dès que le compte est refusé ou supprimé, à l'échéance de la session et à l'arrêt du serveur. Avant de fermer, le serveur envoie l'événement `closed` (`"limit"`, `"access"` ou `"stop"`) : la page ne se reconnecte d'elle-même que sur `stop` |
+| `GET /api/chat/stream` | membre | Flux temps réel des messages (Server-Sent Events, voir [nginx.md](nginx.md)) ; 5 flux ouverts au plus par membre, le plus ancien est fermé au-delà. Un flux est fermé dès que son compte perd l'accès au chat (refus, suppression, grade ou rôle membre retiré, à la reconnexion comme après une modification dans Gestion), à la déconnexion (tous les onglets de la session), à l'échéance de la session et à l'arrêt du serveur. Avant de fermer, le serveur envoie l'événement `closed` (`"limit"`, `"access"` ou `"stop"`) : la page ne se reconnecte d'elle-même que sur `stop` |
 | `GET /healthz` | public | Santé du site (serveur et base) pour le contrôle Docker : `{ ok: true }` ou `503` |
 | `GET /api/chat/unread` · `POST /api/chat/read` · `GET /api/chat/mentions` | membre | Non lus, marquer comme lu, mentions `@` |
-| `GET /auth/bot` · `POST /api/bot/link` · `POST /api/bot/unlink` · `GET /api/bot/status` · `GET /api/bot/data/…` | membre | Liaison et lecture du bot (ci-dessous) ; la rubrique `garages` est réservée à la Gestion, comme sa page |
+| `GET /auth/bot` · `POST /api/bot/link` · `POST /api/bot/unlink` · `GET /api/bot/status` · `GET /api/bot/data/…` | membre | Liaison et lecture du bot (ci-dessous) ; la rubrique `garages` est réservée à la Gestion et la rubrique `roles` aux pouvoirs complets, comme leurs pages |
 
 ### Limites de requêtes
 | Portée | Limite |
@@ -56,11 +56,11 @@ Pages : **validé** — Mon profil ; **membre** — Classement, Chat, Galerie, T
 | Envoi de photos | 10 par membre toutes les 10 minutes |
 | Messages du chat | 20 par minute et par membre |
 | Liaison au bot (`POST /api/bot/link`) | 5 essais par membre et par quart d'heure (chaque essai est un vrai appel au bot) |
-| Lectures du bot | 150 par membre et par quart d'heure (les réponses servies depuis le cache ne comptent pas). Partage entre membres : dès que le site a fait 240 appels au bot dans le quart d'heure, ceux qui en ont fait 60 ou plus attendent |
+| Lectures du bot | `BOT_BUDGET` / 2 par membre et par quart d'heure (120 par défaut ; les réponses servies depuis le cache ne comptent pas). Partage entre membres : dès que le site a fait `BOT_BUDGET` appels au bot dans le quart d'heure (240 par défaut), ceux qui en ont fait le quart attendent. Si le bot répond `429`, plus aucun appel jusqu'à l'échéance qu'il annonce |
 
 Au-delà : `429` avec un message lisible.
 
-**Conservation** : un message ou une photo retiré reste 30 jours en base (marqué supprimé, invisible), puis est effacé pour de bon (`server/src/purge.ts`, au démarrage puis chaque jour). Les en-têtes `RateLimit` et `RateLimit-Policy` indiquent le quota restant.
+**Conservation** : un message ou une photo retiré reste 7 jours en base (marqué supprimé, invisible), puis est effacé pour de bon (`server/src/purge.ts`, au démarrage puis chaque jour). Les en-têtes `RateLimit` et `RateLimit-Policy` indiquent le quota restant.
 
 ## API du bot Discord (relayée)
 Activée par `BOT_API_URL` dans `.env` (vide : les pages liées au bot affichent « Le bot Discord n'est pas relié au site »). Code : `server/src/routes/bot.ts`.
@@ -90,12 +90,14 @@ Un serveur Discord ne déclare **qu'un seul site externe** : tester le bot en de
 
 Les référentiels (`/types`, `/items`) évitent au site de recopier des listes du bot. Si le bot ne les connaît pas encore, les pages se replient sur les clés brutes mises en forme.
 
-**Droits** : décidés par le bot à chaque requête, d'après les rôles Discord du membre : son **rôle membre** (`/config role set membre`, « back-office web ») ouvre tout le back-office (stocks, quotas, ventes, taxes, armurerie, garages) ; son rôle admin ajoute les coffres admin, la fourrière et les données des autres membres. Sans rôle membre configuré, le bot laisse passer tout membre du serveur Discord : à configurer dès la mise en service. Un membre non admin ne lit que ses propres données (quotas, paie, ventes, cooldowns) et ne voit ni les coffres admin ni la fourrière.
+**Droits** : décidés par le bot à chaque requête, d'après les rôles Discord du membre. Son **rôle membre** (`/config role set membre`, « back-office web ») ouvre le back-office : stocks, quotas, ventes, taxes, armurerie, garages, rôles. Tant que ce rôle n'est pas réglé dans le bot, seuls ses admins passent. Les chiffres du groupe (classement, paie et ventes de tous) sont lisibles par tout porteur du rôle ; les données d'un joueur précis (`/:userId`), la fourrière et les coffres admin sont réservés au joueur lui-même ou aux admins du bot.
 
-**Cache** : le bot limite **tout le site** à 300 requêtes par quart d'heure. Le site garde donc en mémoire chaque réponse réussie, par membre et par jeton : 5 minutes pour les données courantes ; pour une semaine passée (`?week=`), 24 heures s'il s'agit des données du membre lui-même, 1 heure sinon (elles ont été lues avec des droits d'admin du bot, qui peuvent être retirés). Le détail d'une taxe (téléphone, mot de passe) n'est jamais gardé. Le cache est plafonné à 48 Mo, balayé toutes les 5 minutes ; rien n'est écrit sur disque ni en base ; tout s'efface au redémarrage, quand le membre se relie au bot, ou quand ses droits d'admin du bot changent. Deux lectures identiques au même instant ne font qu'un appel.
+**Cache** : le bot limite chaque serveur Discord, et chaque adresse IP, à 300 requêtes par quart d'heure : des sites hébergés sur un même VPS se partagent ces 300 (régler `BOT_BUDGET` dans le `.env` de chacun, par exemple 140 pour deux sites). Le site garde donc en mémoire chaque réponse réussie, sous forme de texte (sa taille réelle), par membre et par jeton : 5 minutes pour les données courantes ; pour une semaine passée (`?week=`), 24 heures s'il s'agit des données du membre lui-même, 1 heure sinon (elles ont été lues avec des droits d'admin du bot, qui peuvent être retirés). Le détail d'une taxe (téléphone, mot de passe) n'est jamais gardé. Le cache est plafonné à 48 Mo, balayé toutes les 5 minutes ; rien n'est écrit sur disque ni en base ; tout s'efface au redémarrage, quand le membre se relie au bot, ou quand ses droits d'admin du bot changent. Deux lectures identiques au même instant ne font qu'un appel.
 
-**Charge** : les pages ne relisent le bot que toutes les 5 minutes et seulement dans un onglet visible (`espaceBot.every()`), l'historique des paies du profil se charge à la demande.
+**Charge** : les pages ne relisent le bot que toutes les 5 minutes et seulement dans un onglet visible (`espaceBot.every()`) ; les référentiels (`quotas/config`, `stocks/items`, `taxes/types`, `armurerie/types`) une fois par visite (`espaceBot.une()`) ; le contenu de chaque coffre toutes les 15 minutes ; l'historique des paies du profil à la demande. Statistiques ne se rafraîchit pas : ses lectures servent toute la visite (recharger la page pour la semaine en cours).
+
+**Semaines** : `?week=AAAA-Www` désigne une semaine de paie du bot, du dimanche 19 h (heure de Paris) au dimanche 19 h suivant (`espaceBot.isoWeek()`).
 
 **Réponses d'erreur** : `401 { error: "bot-unlinked" }` (pas de jeton, ou jeton expiré), `503 { error: "bot-off" }` (`BOT_API_URL` vide), `502` (le bot ne répond pas sous 15 s), `429` (quota du bot atteint, message lisible), et les codes du bot (`403` : réservé à un autre rôle).
 
-`GET /api/bot/status` résume l'état pour l'affichage : `{ configured, linked, isAdmin }`. Seul un jeton refusé par le bot (`401`) donne `linked: false`. Si le bot ne peut pas répondre, le compte reste relié et `error` dit pourquoi : `busy` (saturé ou en erreur), `unreachable` (injoignable), `refused` (le bot refuse ce compte : plus sur le serveur Discord, ou sans le rôle requis). Les pages affichent alors un message d'attente, pas le bouton de connexion.
+`GET /api/bot/status` résume l'état pour l'affichage : `{ configured, linked, isAdmin }`. Seul un jeton refusé par le bot (`401`) donne `linked: false`. Si le bot ne peut pas répondre, le compte reste relié et `error` dit pourquoi : `busy` (saturé ou en erreur), `unreachable` (injoignable), `refused` (le bot refuse ce compte : plus sur le serveur Discord, ou sans le rôle requis). Les pages affichent alors un message d'attente, pas le bouton de connexion ; une erreur est retenue une minute (le bot n'est pas rappelé à chaque page vue).
