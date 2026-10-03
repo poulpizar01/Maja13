@@ -8,7 +8,7 @@ export const avatarUrl = (m: Pick<Member, 'discordId' | 'avatar'>): string | nul
 export const publicMember = (m: Member) => ({
   id: m.id, discordId: m.discordId, username: m.username, avatarUrl: avatarUrl(m),
   displayName: m.displayName, ...rankInfo(m.rankKey), bio: m.bio, phoneRp: m.phoneRp,
-  isMember: canMember(m), isAdmin: canAdmin(m), canManage: canManage(m), status: m.status,
+  isMember: canMember(m), isAdmin: canAdmin(m), canManage: canManage(m), isOwner: m.isOwner, status: m.status,
   joinedAt: m.joinedAt, lastLogin: m.lastLogin, approvedAt: m.approvedAt,
 });
 

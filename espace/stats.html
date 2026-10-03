@@ -90,7 +90,7 @@
             <div class="viz__plot" id="pay"></div>
           </div>
         </div>
-        <p class="admin-block__hint">Semaines du lundi au dimanche ; la semaine en cours part du dernier reset du bot. Taux de paie et objectifs : ceux configurés aujourd'hui dans le bot.</p>
+        <p class="admin-block__hint">Semaines de paie du bot : du dimanche 19 h au dimanche 19 h suivant ; la semaine en cours part du dernier reset. Taux de paie et objectifs : ceux configurés aujourd'hui dans le bot.</p>
       </section>
 
       <div class="dash-cols">
@@ -133,7 +133,7 @@
   // semaine en cours ('') puis les 12 semaines ISO précédentes
   const WEEKS = [{ key: '', short: 'En cours', kicker: 'Semaine en cours', dates: '' },   // dates : posées une fois la config du bot lue
     ...Array.from({ length: 12 }, (_, i) => { const key = espaceBot.isoWeek(i + 1), m = mondayOf(key);
-      return { key, short: `S${key.slice(-2)}`, kicker: `Semaine ${Number(key.slice(-2))}`, dates: `${dshort(m)} → ${dshort(m + 6 * DAY)}` }; })];
+      return { key, short: `S${key.slice(-2)}`, kicker: `Semaine ${Number(key.slice(-2))}`, dates: `${dshort(m - DAY)} → ${dshort(m + 6 * DAY)}` }; })];   // du dimanche 19 h au dimanche 19 h
   const weekLabel = w => w.dates ? `${w.kicker} · ${w.dates}` : w.kicker;
 
   // navigateur de semaine : flèches + bloc central qui ouvre la liste des semaines
@@ -220,7 +220,7 @@
       <span class="hbar__label" title="${esc(r.label)}">${esc(r.label)}</span>
       <span class="hbar__track"><i style="width:${r.value / max * 100}%"></i></span>
       <span class="hbar__value">${esc(format(r.value))}${r.note ? ` <small>${esc(r.note)}</small>` : ''}</span></div>`).join('')
-      : `<p class="muted">${empty}</p>`;
+      : `<p class="muted">${esc(empty)}</p>`;
   }
 
   // ---------- données ----------

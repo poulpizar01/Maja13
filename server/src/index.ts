@@ -117,8 +117,10 @@ app.use((_req, res) => {
 });
 
 // erreur imprévue dans une route : journalisée, réponse générique
+// Corps JSON illisible : 400, sans le journaliser (il peut contenir un jeton). Ailleurs, seuls le message et la pile.
 const onError: ErrorRequestHandler = (err, _req, res, _next) => {
-  console.error(err);
+  if ((err as { type?: string }).type === 'entity.parse.failed') { if (!res.headersSent) res.status(400).json({ error: 'requête illisible' }); return; }
+  console.error((err as Error).stack || (err as Error).message || 'erreur inconnue');
   if (!res.headersSent) res.status(500).json({ error: 'erreur serveur' });
 };
 app.use(onError);

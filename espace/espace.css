@@ -3,8 +3,11 @@
    les couleurs d’état (--ok, --warn, --err) et les séries des graphiques (--viz-*), choisies pour rester distinctes entre elles.
    Le texte posé sur l’accent prend --on-accent de theme.css (blanc à défaut) : à régler dans le thème si l’accent est clair.
    Une amélioration de l’espace membre se fait dans le modèle, puis se récupère dans chaque site.
-   DA « l'Atelier » : l'espace de travail du photographe (voir la vitrine « Pellicule ») — rail de navigation perforé,
-   numéros de pose, titres condensés, libellés en mono ; l'accent sert de repère, jamais de décor. */
+   Mise en page : rail de navigation (bord perforé réglable par le thème, voir --rail-perforations), rubriques numérotées,
+   titres condensés, petits libellés ; l'accent sert de repère, jamais de décor.
+   Réglages du rail dans theme.css (facultatifs) : --rail-perforations (block | none : bord perforé du rail et des onglets),
+   --rail-retrait (marge gauche du rail, 36px), --rail-repere-gauche (-15px) et --rail-repere-marge (7px) : position du
+   repère de la page active. Sans bord perforé, par exemple : none, 22px, 0, 0. */
 .espace-body{--rail:252px;--ok:#6fcf8e;--warn:#e5b453;--err:#ef6f6c;
   --viz-1:#c98500;--viz-2:#d0485a;--viz-3:#3987e5;--viz-4:#199e70;--viz-5:#9085e9;--viz-autres:#6b6558;
   --viz-6:#6ea8fe;--viz-7:#c792ea;--viz-8:#9aa0a6;--viz-9:#f28b82;--viz-10:#80cbc4;
@@ -43,10 +46,10 @@ html:active-view-transition-type(interne)::view-transition-new(*){animation:none
 
 /* ================= COQUE ================= */
 /* rail : bord perforé, rubriques numérotées comme des poses, carte du membre en bas */
-.rail{position:fixed;inset:0 auto 0 0;z-index:40;width:var(--rail);display:flex;flex-direction:column;gap:20px;padding:22px 18px 18px 36px;overflow-y:auto;scrollbar-width:none;
+.rail{position:fixed;inset:0 auto 0 0;z-index:40;width:var(--rail);display:flex;flex-direction:column;gap:20px;padding:22px 18px 18px var(--rail-retrait,36px);overflow-y:auto;scrollbar-width:none;
   background:var(--bg2);border-right:1px solid var(--line)}
 .rail::-webkit-scrollbar{display:none}
-.rail::before{content:"";position:absolute;left:11px;top:0;bottom:0;width:7px;background:repeating-linear-gradient(transparent 0 9px,color-mix(in srgb,var(--ink) 13%,transparent) 9px 19px)}
+.rail::before{content:"";display:var(--rail-perforations,block);position:absolute;left:11px;top:0;bottom:0;width:7px;background:repeating-linear-gradient(transparent 0 9px,color-mix(in srgb,var(--ink) 13%,transparent) 9px 19px)}
 .rail__marque{display:flex;align-items:center;gap:10px;min-width:0;font-family:var(--serif);font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}
 .rail__marque span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rail__marque img{flex:none;width:32px;height:32px;object-fit:contain}
@@ -58,7 +61,7 @@ html:active-view-transition-type(interne)::view-transition-new(*){animation:none
 .rail__lien b{flex:none;width:18px;font-family:var(--serif);font-size:10px;font-weight:500;color:color-mix(in srgb,var(--ink2) 70%,transparent)}
 .rail__lien:hover{color:var(--ink);background:color-mix(in srgb,var(--ink) 5%,transparent)}
 .rail__lien.is-active{color:var(--ink);background:color-mix(in srgb,var(--ink) 7%,transparent)}
-.rail__lien.is-active::before{content:"";position:absolute;left:-15px;top:7px;bottom:7px;width:3px;background:var(--accent)}
+.rail__lien.is-active::before{content:"";position:absolute;left:var(--rail-repere-gauche,-15px);top:var(--rail-repere-marge,7px);bottom:var(--rail-repere-marge,7px);width:3px;background:var(--accent)}
 .rail__lien.is-active b{color:var(--accent)}
 .rail__lien .nav__badge{margin-left:auto}
 .rail__moi{display:flex;align-items:center;gap:10px;min-width:0;padding-top:14px;border-top:1px solid var(--line)}
@@ -139,7 +142,8 @@ html:active-view-transition-type(interne)::view-transition-new(*){animation:none
 .admin-input::placeholder{color:color-mix(in srgb,var(--ink2) 70%,transparent)}
 .admin-input:focus,.admin-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
 .admin-select{appearance:none;-webkit-appearance:none;padding-right:34px;cursor:pointer;
-  background:var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238c8a85' stroke-width='1.4'/%3E%3C/svg%3E") no-repeat right 12px center}
+  /* flèche dessinée en CSS : elle prend la couleur du thème (une image SVG la figerait) */
+  background:linear-gradient(45deg,transparent 50%,var(--ink2) 50%) right 17px center/5px 5px no-repeat,linear-gradient(135deg,var(--ink2) 50%,transparent 50%) right 12px center/5px 5px no-repeat,var(--bg)}
 .admin-select option{background:var(--bg2);color:var(--ink)}
 .admin-select:disabled{opacity:.5}
 textarea.admin-input{resize:vertical;max-width:100%;min-height:60px}
@@ -685,7 +689,7 @@ label.modal__label{cursor:pointer}
 /* choix du membre (statistiques) : bouton + liste maison avec recherche, photo et grade */
 .stats-member{position:relative;min-width:260px}
 .stats-member__btn{display:flex;flex-direction:column;justify-content:center;gap:2px;width:100%;height:100%;padding:6px 40px 6px 14px;text-align:left;cursor:pointer;
-  background:var(--bg2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238c8a85' stroke-width='1.4'/%3E%3C/svg%3E") no-repeat right 14px center;
+  background:linear-gradient(45deg,transparent 50%,var(--ink2) 50%) right 19px center/5px 5px no-repeat,linear-gradient(135deg,var(--ink2) 50%,transparent 50%) right 14px center/5px 5px no-repeat,var(--bg2);
   border:1px solid var(--line);color:var(--ink);font:inherit;transition:border-color .2s,background-color .2s}
 .stats-member__btn:hover,.stats-member__btn[aria-expanded="true"]{background-color:var(--bg3);border-color:color-mix(in srgb,var(--ink) 25%,transparent)}
 .stats-member__btn small{font-family:var(--serif);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
@@ -890,7 +894,7 @@ label.modal__label{cursor:pointer}
   .barre__cherche{width:42px;height:42px;background:none;border:1px solid var(--line);font-size:20px;color:var(--ink);cursor:pointer}
   .onglets{position:fixed;left:0;right:0;bottom:0;z-index:45;display:grid;grid-template-columns:repeat(5,1fr);height:calc(64px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);
     background:color-mix(in srgb,var(--bg2) 94%,transparent);backdrop-filter:blur(12px);border-top:1px solid var(--line)}
-  .onglets::before{content:"";position:absolute;left:0;right:0;top:4px;height:4px;background:repeating-linear-gradient(90deg,transparent 0 9px,color-mix(in srgb,var(--ink) 12%,transparent) 9px 17px);pointer-events:none}
+  .onglets::before{content:"";display:var(--rail-perforations,block);position:absolute;left:0;right:0;top:4px;height:4px;background:repeating-linear-gradient(90deg,transparent 0 9px,color-mix(in srgb,var(--ink) 12%,transparent) 9px 17px);pointer-events:none}
   .onglets a,.onglets button{position:relative;display:flex;align-items:center;justify-content:center;padding-top:8px;background:none;border:0;font-family:var(--serif);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);cursor:pointer}
   .onglets .is-active,.onglets [aria-expanded="true"]{color:var(--ink)}
   .onglets .is-active::after,.onglets [aria-expanded="true"]::after{content:"";position:absolute;left:30%;right:30%;bottom:10px;height:2px;background:var(--accent)}

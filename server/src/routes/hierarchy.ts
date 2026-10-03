@@ -5,6 +5,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { body, entier, intParam, manager, member, text } from '../http.js';
 import { allRanks, loadRanks, publicRank, rankIndex, rankOf, vitrineRank } from '../ranks.js';
 import { memberRoleId, setMemberRoleId } from '../settings.js';
+import { revaliderFluxPlusTard } from './chat.js';
 
 export const hierarchy = Router();
 
@@ -19,7 +20,7 @@ async function orgPayload(gestion = true) {
   };
 }
 
-// grades complets (droits, rôle Discord) : membres validés seulement (page Administration)
+// grades complets (droits, rôle Discord) : porteurs du rôle membre (pages Administration, Membres…)
 hierarchy.get('/api/ranks', ...member, (_req, res) => { res.json(allRanks().map(publicRank)); });
 hierarchy.get('/api/org', async (_req, res) => { res.json(await orgPayload(false)); });
 
@@ -38,6 +39,7 @@ hierarchy.put('/api/admin/reglages', ...manager, async (req, res) => {
   const id = text(body(req).memberRoleId, 32);
   if (id && !/^\d{5,32}$/.test(id)) { res.status(400).json({ error: 'Identifiant de rôle Discord invalide (des chiffres uniquement)' }); return; }
   await setMemberRoleId(id || null);
+  revaliderFluxPlusTard();
   res.json({ memberRoleId: memberRoleId() });
 });
 
@@ -101,7 +103,7 @@ hierarchy.patch('/api/admin/ranks/:key', ...manager, async (req, res) => {
   if (f.label === '') { res.status(400).json({ error: 'nom du grade requis' }); return; }
   // garde-fou : on ne se retire pas à soi-même les pouvoirs complets (sauf le propriétaire, qui les garde de toute façon)
   if (f.canManage === false && req.member.rankKey === r.key && !req.member.isOwner) { res.status(400).json({ error: 'Tu perdrais tes propres pouvoirs complets' }); return; }
-  try { await saveRank(r.key, f, false); res.json(await orgPayload()); } catch (e) { rankError(res, e); }
+  try { await saveRank(r.key, f, false); revaliderFluxPlusTard(); res.json(await orgPayload()); } catch (e) { rankError(res, e); }
 });
 
 hierarchy.delete('/api/admin/ranks/:key', ...manager, async (req, res) => {

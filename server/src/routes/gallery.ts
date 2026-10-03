@@ -1,4 +1,4 @@
-// Galerie photo : lecture publique, dépôt par les membres validés, retrait par l'auteur ou la Gestion.
+// Galerie photo : lecture publique, dépôt par les porteurs du rôle membre, retrait par l'auteur ou la Gestion.
 import crypto from 'node:crypto';
 import express, { Router, type RequestHandler } from 'express';
 import multer from 'multer';
@@ -51,9 +51,16 @@ const unParUn = <T>(travail: () => Promise<T>): Promise<T> => {
   return tour;
 };
 
-// fichiers d'une photo (grande image et miniature) ; un échec du stockage laisse seulement un fichier orphelin
-export const retirerFichiers = async (p: Pick<Photo, 'file' | 'url' | 'thumb' | 'thumbUrl'>) => {
+// fichiers d'une photo (grande image et miniature)
+type Fichiers = Pick<Photo, 'file' | 'url' | 'thumb' | 'thumbUrl'>;
+// au mieux : un échec du stockage laisse un fichier orphelin (journalisé) — retrait d'une photo, dont la ligne reste
+// 7 jours en base et que la purge (purge.ts) redemandera
+export const retirerFichiers = async (p: Fichiers) => {
   for (const [key, url] of [[p.file, p.url], [p.thumb, p.thumbUrl]]) await storage.remove(key, url).catch(e => console.error(e));
+};
+// sans échec toléré : l'appelant n'efface la ligne qu'une fois les fichiers retirés (suppression d'un compte)
+export const retirerFichiersOuEchouer = async (p: Fichiers) => {
+  for (const [key, url] of [[p.file, p.url], [p.thumb, p.thumbUrl]]) await storage.remove(key, url);
 };
 
 const withAuthor = { member: true } as const;
@@ -79,18 +86,27 @@ const stockagePret: RequestHandler = (_req, res, next) => {
   else res.status(503).json({ error: 'L’envoi de photos n’est pas encore configuré sur ce site (stockage des images manquant).' });
 };
 
-// Chaque envoi reçu garde son fichier en mémoire (15 Mo au plus) jusqu'à son tour de traitement : au-delà de quelques
+// Chaque envoi reçu garde son fichier en mémoire (15 Mo au plus) jusqu'à la fin de son traitement : au-delà de quelques
 // envois en même temps, tous membres confondus, le plafond mémoire du conteneur serait dépassé. Les suivants repassent.
+// La place n'est rendue qu'à la fin du traitement (res.locals.liberer), pas quand le navigateur abandonne : sinon un
+// envoi abandonné libérerait sa place tout en gardant son fichier en mémoire, et le plafond ne protégerait plus rien.
 const ENVOIS_MAX = 3;
 let envois = 0;
 const envoisBornes: RequestHandler = (_req, res, next) => {
   if (envois >= ENVOIS_MAX) { res.status(503).set('Retry-After', '10').json({ error: 'Trop de photos en cours d’envoi, réessaie dans quelques secondes.' }); return; }
   envois++;
-  res.once('close', () => { envois--; });
+  let libre = false;
+  res.locals.liberer = () => { if (!libre) { libre = true; envois--; } };
+  // refusé avant le traitement (fichier refusé, erreur) : la place est rendue avec la réponse
+  res.once('close', () => { if (!res.locals.traitement) res.locals.liberer(); });
   next();
 };
 
 gallery.post('/api/gallery', ...member, stockagePret, limits.upload, envoisBornes, receivePhoto, async (req, res) => {
+  res.locals.traitement = true;
+  try { await publier(req, res); } finally { res.locals.liberer(); }
+});
+async function publier(req: express.Request, res: express.Response) {
   if (!req.file) { res.status(400).json({ error: 'Aucune image (jpg, png, webp — pas de gif ni de heic)' }); return; }
   const buffer = req.file.buffer;
   const refus = await refusImage(buffer);
@@ -98,6 +114,9 @@ gallery.post('/api/gallery', ...member, stockagePret, limits.upload, envoisBorne
   let big: { data: Buffer; info: OutputInfo }, thumb: Buffer;
   try {
     ({ big, thumb } = await unParUn(async () => {
+      // envoi abandonné pendant l'attente (connexion coupée) : on ne traite pas une photo que personne ne recevra.
+      // Pas req.destroyed : vrai dès que le corps de la requête est lu, donc pour tout envoi
+      if (req.socket.destroyed) throw new Error('envoi abandonné');
       const img = sharp(buffer, { animated: false, limitInputPixels: MAX_PIXELS }).rotate();
       return {
         big: await img.clone().resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true }).webp({ quality: 84 }).toBuffer({ resolveWithObject: true }),
@@ -113,8 +132,10 @@ gallery.post('/api/gallery', ...member, stockagePret, limits.upload, envoisBorne
     url = await storage.put(file, big.data);
     thumbUrl = await storage.put(thumbKey, thumb);
   } catch (e) {
+    // un envoi en échec (délai dépassé) a pu être enregistré quand même : les deux fichiers sont retirés à tout hasard
     console.error(e);
-    if (url) storage.remove(file, url).catch(() => {});
+    storage.remove(file, url ?? '').catch(() => {});
+    storage.remove(thumbKey, '').catch(() => {});
     res.status(502).json({ error: 'Le stockage des images ne répond pas, réessaie dans un instant' });
     return;
   }
@@ -130,7 +151,7 @@ gallery.post('/api/gallery', ...member, stockagePret, limits.upload, envoisBorne
     await retirerFichiers({ file, url, thumb: thumbKey, thumbUrl });
     res.status(500).json({ error: 'La photo n’a pas pu être enregistrée, réessaie dans un instant' });
   }
-});
+}
 
 gallery.delete('/api/gallery/:id', ...member, async (req, res) => {
   const p = await prisma.photo.findFirst({ where: { id: intParam(req, 'id'), deletedAt: null } });

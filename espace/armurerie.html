@@ -156,7 +156,7 @@
   async function load() {
     // référentiel et fabrication : facultatifs (bot plus ancien → repli, bloc masqué)
     const [enCours, perdues, ammo, ventes, types, production] = await Promise.all([espaceBot.get('armurerie'), espaceBot.get('armurerie?status=lost'),
-      espaceBot.get('armurerie/ammo'), espaceBot.get('armurerie/ammo/history'), espaceBot.get('armurerie/types').catch(() => null), espaceBot.get('armurerie/ammo/production').catch(() => null)]);
+      espaceBot.get('armurerie/ammo'), espaceBot.get('armurerie/ammo/history'), espaceBot.une('armurerie/types').catch(() => null), espaceBot.get('armurerie/ammo/production').catch(() => null)]);
     if (types) catalogue(types);
     armes = [...enCours, ...perdues];
     const name = await espaceBot.names((production || []).map(p => ({ userId: p.userId, username: p.username })));

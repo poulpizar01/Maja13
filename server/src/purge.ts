@@ -1,10 +1,10 @@
-// Conservation : un message ou une photo retiré disparaît du site aussitôt (deletedAt), sa ligne reste 30 jours en base
+// Conservation : un message ou une photo retiré disparaît du site aussitôt (deletedAt), sa ligne reste 7 jours en base
 // (retrait par erreur, litige), puis elle est effacée pour de bon. Les fichiers des photos sont retirés du stockage dès
 // le retrait (routes/gallery.ts) ; si le stockage n'a pas répondu ce jour-là, la purge s'en charge avant d'effacer la ligne.
 import { prisma } from './db.js';
 import { storage } from './storage.js';
 
-const JOURS = 30;
+const JOURS = 7;
 
 async function purge() {
   const avant = new Date(Date.now() - JOURS * 24 * 3600e3);

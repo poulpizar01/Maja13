@@ -77,9 +77,9 @@
       <td><b>${esc(c.discordId ? name(c.discordId) : c.joueur)}</b></td><td>${esc(c.total)}</td><td><b class="pay">${money(c.montant)}</b></td></tr>`).join('')
       : '<tr><td colspan="4" class="admin-empty">Aucune mise en fourrière enregistrée.</td></tr>';
   }
-  async function load(me) {
-    // la fourrière n'est demandée qu'à la Gestion ; le bot la refuse (403) à qui n'est pas admin dans Discord → bloc masqué
-    const [sortis, classement] = await Promise.all([espaceBot.get('garages/vehicles'), me.isAdmin ? espaceBot.get('garages/impounds').catch(() => null) : null]);
+  async function load(adminBot) {
+    // la fourrière n'est demandée qu'aux admins du bot (lui seul en décide) : à un autre, il la refuserait à chaque rafraîchissement
+    const [sortis, classement] = await Promise.all([espaceBot.get('garages/vehicles'), adminBot ? espaceBot.get('garages/impounds').catch(() => null) : null]);
     vehicules = sortis;
     name = await espaceBot.names([...sortis, ...(classement || [])].filter(v => v.discordId).map(v => ({ userId: v.discordId, username: v.joueur })));
     majA = Date.now(); render(); renderFourriere(classement);
@@ -95,7 +95,7 @@
     const st = await espaceBot.gate($('botGate'));
     $('loading').hidden = true;
     if (!st.linked) return;
-    try { await load(me); espaceBot.every(() => load(me)); }   // toutes les 5 min, onglet visible seulement : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
+    try { await load(st.isAdmin); espaceBot.every(() => load(st.isAdmin)); }   // toutes les 5 min, onglet visible seulement : l’API du bot limite les requêtes (300 / 15 min pour tout le site)
     catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(e.status === 404 ? 'Le bot Discord ne fournit pas encore les garages : il doit être mis à jour.' : espaceBot.error(e))}</p>`; }
   }
   $('search').addEventListener('input', render);

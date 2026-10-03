@@ -89,7 +89,7 @@
   const when = ms => new Date(ms).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   const dlong = ms => new Date(ms).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const api = url => fetch(url, { credentials: 'same-origin' }).then(async r => { if (r.status === 401) { location.replace('./'); throw 0; } if (r.status === 403) { location.replace('profil.html'); throw 0; } return r.json(); });
-  const units = n => n.toLocaleString('fr-FR');
+  const units = n => (Number(n) || 0).toLocaleString('fr-FR');   // chiffres du bot : toujours des nombres une fois affichés
 
   // ---- le stock : tous les coffres ou un seul ; inventaire en lignes, avec recherche, tri et objets vides masqués.
   // Chaque coffre a une couleur (pastille dans la liste) ; dans la vue d'ensemble, la barre de chaque objet est
@@ -146,14 +146,26 @@
   ['vaultSearch', 'vaultSort', 'vaultEmpty'].forEach(id => $(id).addEventListener('input', renderVault));
   const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`;
 
+  // mouvement d'un coffre : le bot donne la quantité sans signe, le sens est dans action (retire / depose)
+  const delta = h => h.action === 'retire' ? -Math.abs(Number(h.quantite) || 0) : Number(h.quantite) || 0;
+  // contenu de chaque coffre : une lecture du bot par coffre, refaite toutes les 15 min seulement (le total et
+  // l'historique, eux, suivent le rafraîchissement de 5 min)
+  let coffresLus = 0, coffresGardes = [];
+  async function lireCoffres(channels) {
+    const memes = channels.length === coffresGardes.length && channels.every(c => coffresGardes.some(g => g.channelId === c.channelId));
+    if (memes && Date.now() - coffresLus < 15 * 60000) return coffresGardes;
+    coffresGardes = await Promise.all(channels.map(c => espaceBot.get('stocks/' + c.channelId).then(items => ({ ...c, items })).catch(() => ({ ...c, items: [] }))));
+    coffresLus = Date.now();
+    return coffresGardes;
+  }
   async function load() {
     const [cfg, pay, summary, ventes, users, stocks, channels, history, annuaire] = await Promise.all([
-      espaceBot.get('quotas/config'), espaceBot.get('quotas/pay'), espaceBot.get('quotas/summary'), espaceBot.get('ventes'), espaceBot.get('users'),
+      espaceBot.une('quotas/config'), espaceBot.get('quotas/pay'), espaceBot.get('quotas/summary'), espaceBot.get('ventes'), espaceBot.get('users'),
       espaceBot.get('stocks'), espaceBot.get('stocks/channels'), espaceBot.get('stocks/history?limit=40'), api('../api/membres')]);
     const name = await espaceBot.names(users);
     // catalogue et braquages : facultatifs (bot plus ancien → tri par quantité, bloc masqué)
-    const [catalogue, braquages] = await Promise.all([espaceBot.get('stocks/items').catch(() => null), espaceBot.get('quotas/braquages').catch(() => null)]);
-    let coffres = await Promise.all(channels.map(c => espaceBot.get('stocks/' + c.channelId).then(items => ({ ...c, items })).catch(() => ({ ...c, items: [] }))));
+    const [catalogue, braquages] = await Promise.all([espaceBot.une('stocks/items').catch(() => null), espaceBot.get('quotas/braquages').catch(() => null)]);
+    let coffres = await lireCoffres(channels);
     // objets masqués du Stock Général dans le bot (visibleStock) : masqués ici aussi
     let total = stocks;
     if (catalogue) {
@@ -216,7 +228,7 @@
       const j = jour(h.timestamp), tete = j !== jourCourant ? `<p class="journal__jour">${esc(j)}</p>` : ''; jourCourant = j;
       return `${tete}<div class="journal__ligne"><time>${heure(h.timestamp)}</time>
         <span class="journal__quoi"><b>${esc(h.joueur)}</b> <span class="muted">${esc(h.action)}</span> ${esc(itemName(h.item))}</span>
-        <span class="journal__delta ${h.quantite < 0 ? 'neg' : 'pos'}">${h.quantite > 0 ? '+' : ''}${units(h.quantite)}</span>
+        <span class="journal__delta ${delta(h) < 0 ? 'neg' : 'pos'}">${delta(h) > 0 ? '+' : ''}${units(delta(h))}</span>
         <small class="journal__stock">${units(h.stockAvant)} → ${units(h.stockApres)}</small></div>`;
     }).join('') : '<p class="admin-empty">Aucun mouvement enregistré.</p>';
     // bilan : barres horizontales, relatives à l'activité la plus déclarée

@@ -335,6 +335,13 @@ window.espaceBot = {
   status: () => fetch('../api/bot/status', { credentials: 'same-origin' })
     .then(r => r.ok ? r.json() : r.status === 429 || r.status >= 500 ? { configured: true, linked: true, error: 'busy' } : { configured: false })
     .catch(() => ({ configured: true, linked: true, error: 'unreachable' })),
+  // référentiel du bot (catalogue, types…) : lu une seule fois par visite de la page, il ne change presque jamais —
+  // les rafraîchissements toutes les 5 min ne le relisent pas (chaque lecture compte dans le quota du bot)
+  une(path) {
+    const memo = espaceBot._une ??= new Map();
+    if (!memo.has(path)) memo.set(path, espaceBot.get(path).catch(e => { memo.delete(path); throw e; }));
+    return memo.get(path);
+  },
   // lecture d'une rubrique de l'API du bot (ex. 'quotas/config', 'taxes?status=expired') ; lève une erreur { status, message }
   async get(path) {
     const r = await fetch('../api/bot/data/' + path, { credentials: 'same-origin' });
@@ -387,10 +394,12 @@ window.espaceBot = {
   },
   // catégorie de quota du bot (clé) → libellé affichable
   label: k => (k.charAt(0).toUpperCase() + k.slice(1)).replace(/_/g, ' '),
-  // semaine ISO (AAAA-Www) d'une date, pour ?week= ; `back` semaines avant la semaine en cours
+  // Semaine de paie du bot pour ?week= (AAAA-Www) : du dimanche 19 h (heure de Paris) au dimanche 19 h suivant, désignée
+  // par la semaine ISO qu'elle clôt ; `back` semaines avant la période en cours. +5 h : dès le dimanche 19 h, on est
+  // déjà dans la période suivante (sinon, le dimanche soir, la semaine qui vient d'être payée manquerait).
   isoWeek(back = 0) {
-    const d = new Date(Date.now() - back * 7 * 86400e3);
-    const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    const [y, m, j] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(Date.now() + 5 * 3600e3 - back * 7 * 86400e3).split('-').map(Number);
+    const t = new Date(Date.UTC(y, m - 1, j));
     t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
     const week = Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 86400e3 + 1) / 7);
     return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;

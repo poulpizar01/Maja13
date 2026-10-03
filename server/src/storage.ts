@@ -43,6 +43,10 @@ export const storage = {
       // l'adresse publique vient du service : sans elle, la photo serait enregistrée sans pouvoir être affichée
       const adresse = ((await (await cdn('PUT', key, data, 'image/webp')).json().catch(() => null)) as { url?: unknown } | null)?.url;
       if (typeof adresse !== 'string' || !adresse) throw new Error(`stockage PUT ${key} : réponse sans adresse publique`);
+      // l'adresse est insérée dans les pages (src, href) et autorisée par la CSP pour l'origine de STORAGE_URL seulement
+      let publique: URL;
+      try { publique = new URL(adresse); } catch { throw new Error(`stockage PUT ${key} : adresse publique invalide`); }
+      if (publique.origin !== new URL(base).origin || !/^https?:$/.test(publique.protocol)) throw new Error(`stockage PUT ${key} : adresse publique hors de STORAGE_URL (${publique.origin})`);
       return adresse;
     }
     const file = join(dir, key);
@@ -53,6 +57,8 @@ export const storage = {
   // supprime un fichier d'après l'URL enregistrée : un fichier local reste local même une fois le CDN activé
   async remove(key: string, publicUrl: string): Promise<void> {
     if (publicUrl.startsWith(LOCAL_PREFIX)) { try { unlinkSync(join(dir, key)); } catch { /* déjà absent */ } return; }
-    if (kind === 'cdn') await cdn('DELETE', key);
+    // fichier sur le CDN alors que le stockage n'est plus configuré : échec signalé, la ligne en base est gardée
+    if (kind !== 'cdn') throw new Error(`stockage : ${key} est sur le stockage distant, qui n'est pas configuré (STORAGE_URL / STORAGE_TOKEN)`);
+    await cdn('DELETE', key);
   },
 };

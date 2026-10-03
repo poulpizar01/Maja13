@@ -34,7 +34,7 @@ services:
     ports:
       - "127.0.0.1:${HOST_PORT:-3000}:3000"
     volumes:
-      - uploads:/app/uploads   # anciennes photos restées sur disque (les nouvelles vont au stockage distant, obligatoire en prod)
+      - uploads:/app/uploads   # photos sur disque : en dev, ou envoyées avant la mise en place du stockage distant (obligatoire en prod)
     # santé : le serveur répond et joint la base (route /healthz). « unhealthy » apparaît dans `docker compose ps`
     # et les journaux ; Docker ne redémarre pas seul un conteneur malade, seulement un conteneur arrêté (voir server/README.md)
     healthcheck:
@@ -72,7 +72,7 @@ services:
   # Compte de base du site : « site » (créé par l'image postgres) est super-utilisateur ; le site se connecte donc
   # avec « site_app », simple propriétaire des tables (il lui faut ce droit pour appliquer les migrations), sans accès
   # aux fichiers ni aux commandes de la machine. Ce service passe avant chaque démarrage du site et ne fait rien
-  # s'il n'y a rien à faire : il crée le compte et lui donne les tables existantes (site installé avant ce réglage).
+  # s'il n'y a rien à faire : il crée le compte s'il manque et lui rend toute table ou type qui ne lui appartient pas.
   # Même mot de passe que « site » : la base n'est joignable que du réseau Docker du site, le risque couvert est
   # une requête détournée à travers le site, pas une connexion directe.
   db-roles:
@@ -155,7 +155,7 @@ services:
           else
             rm -f "$$f.tmp"; echo "ÉCHEC de la sauvegarde : aucune copie écrite, les précédentes sont gardées" >&2
           fi
-          # copies d'avant ce réglage comprises : lisibles par le seul propriétaire du dossier
+          # toutes les copies du dossier : lisibles par son seul propriétaire
           chown "$$proprio" /backups/site-*.sql.gz 2>/dev/null; chmod 600 /backups/site-*.sql.gz 2>/dev/null
           sleep "$$BACKUP_INTERVAL"
         done

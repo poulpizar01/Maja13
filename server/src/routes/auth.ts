@@ -4,6 +4,8 @@ import { Router, type Request } from 'express';
 import { config } from '../config.js';
 import { prisma } from '../db.js';
 import { allRanks } from '../ranks.js';
+import { oublierBot } from './bot.js';
+import { fermerSession, revaliderFluxPlusTard } from './chat.js';
 import { memberRoleId } from '../settings.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
@@ -112,6 +114,7 @@ auth.get('/auth/discord/callback', async (req, res) => {
     });
 
     await openSession(req, m.id);
+    revaliderFluxPlusTard();   // grade ou rôle membre relus : ses onglets du chat déjà ouverts suivent
     res.redirect(m.status === 'approved' ? '/espace/profil.html' : '/espace/attente.html');
   } catch (e) {
     console.error(e);
@@ -120,5 +123,8 @@ auth.get('/auth/discord/callback', async (req, res) => {
 });
 
 auth.post('/auth/logout', (req, res) => {
+  // les autres onglets de la session (chat) se ferment, et ce que le site gardait pour le bot est oublié
+  fermerSession(req.sessionID);
+  if (req.session.memberId) oublierBot(req.session.memberId);
   req.session.destroy(() => res.clearCookie('site.sid').json({ ok: true }));
 });

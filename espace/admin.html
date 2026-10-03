@@ -89,10 +89,10 @@
         <td class="muted">${fmt(m.approvedAt || m.joinedAt)}</td>
         <td class="admin-actions">
           <button class="btn btn--accent btn--sm" data-save="${m.id}">Enregistrer</button>
-          ${m.id !== me.id ? (m.status === 'rejected'
+          ${m.id !== me.id && (!m.isOwner || me.isOwner) ? (m.status === 'rejected'
             ? `<button class="btn btn--ghost btn--sm" data-approve="${m.id}">Approuver</button>`
             : `<button class="btn btn--ghost btn--sm btn--danger" data-reject="${m.id}" title="Retirer l'accès">Exclure</button>`) : ''}
-          ${m.id !== me.id ? `<button class="btn btn--ghost btn--sm btn--danger" data-delete="${m.id}" title="Effacer le compte">Supprimer</button>` : ''}
+          ${m.id !== me.id && (!m.isOwner || me.isOwner) ? `<button class="btn btn--ghost btn--sm btn--danger" data-delete="${m.id}" title="Effacer le compte">Supprimer</button>` : ''}
         </td>
       </tr>`).join('');
   }

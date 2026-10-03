@@ -28,12 +28,16 @@
   const token = new URLSearchParams(location.hash.slice(1)).get('token');
   history.replaceState(null, '', location.pathname);   // le jeton ne reste ni dans l'adresse ni dans l'historique
   const fail = msg => { document.getElementById('lead').textContent = msg; document.getElementById('back').hidden = false; };
+  const MESSAGES = {
+    'member-role': 'Ton compte n’a pas encore accès à l’espace membre : il lui manque le rôle membre sur le serveur Discord du groupe.',
+    pending: 'Ton compte n’est pas encore validé : la connexion au bot sera possible une fois ta demande acceptée.',
+  };
   if (!token) fail('Aucun jeton reçu du bot. Relance la connexion depuis ton profil.');
   else fetch('../api/bot/link', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) })
     .then(async r => {
-      if (r.status === 401) { location.replace('./'); return; }
+      if (r.status === 401) { fail('Ta session sur le site a expiré : reconnecte-toi au site, puis relance la connexion au bot depuis ton profil.'); return; }
       const d = await r.json().catch(() => ({}));
-      if (r.ok) location.replace(d.next); else fail(d.error || 'Le bot a refusé la connexion.');
+      if (r.ok) location.replace(d.next); else fail(MESSAGES[d.error] || d.error || 'Le bot a refusé la connexion.');
     })
     .catch(() => fail('Le site ne répond pas. Réessaie dans un instant.'));
 </script>

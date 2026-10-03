@@ -120,7 +120,7 @@
   }
   const tout = () => { renderEtat(); renderTypes(); renderRows(); };
   async function load() {
-    const [actives, expirees, ref] = await Promise.all([espaceBot.get('taxes?status=active'), espaceBot.get('taxes?status=expired'), espaceBot.get('taxes/types').catch(() => null)]);
+    const [actives, expirees, ref] = await Promise.all([espaceBot.get('taxes?status=active'), espaceBot.get('taxes?status=expired'), espaceBot.une('taxes/types').catch(() => null)]);
     if (ref) { TYPES_FIXES = Object.fromEntries(ref.fixed.map(t => [t.key, t.label])); ZONES = Object.fromEntries(ref.zones.map(z => [z.key, z.label])); }
     taxes = [...expirees, ...actives];
     majA = Date.now(); tout(); $('page').hidden = false;

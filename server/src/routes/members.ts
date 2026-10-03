@@ -1,12 +1,14 @@
-// Profil du membre connecté, la liste des membres, et administration des comptes (Gestion).
+// Profil du membre connecté, annuaire des membres (Gestion), noms pour le classement (rôle membre), et administration
+// des comptes (pouvoirs complets).
 import { Router } from 'express';
 import { prisma } from '../db.js';
 import type { MemberStatus, Prisma } from '../generated/prisma/client.js';
 import { admin, approved, body, intParam, manager, member, requireAuth, text } from '../http.js';
 import { avatarUrl, byRankThenName, publicMember } from '../members.js';
 import { rankInfo, rankOf } from '../ranks.js';
-import { fermerFlux } from './chat.js';
-import { retirerFichiers } from './gallery.js';
+import { oublierBot } from './bot.js';
+import { fermerFlux, revaliderFluxPlusTard } from './chat.js';
+import { retirerFichiersOuEchouer } from './gallery.js';
 
 export const members = Router();
 
@@ -43,13 +45,16 @@ members.get('/api/membres/noms', ...member, async (_req, res) => {
 members.get('/api/admin/members', ...manager, async (_req, res) => {
   const list = await prisma.member.findMany({ include: { approvedBy: { select: { displayName: true } } } });
   list.sort((a, b) => Number(b.status === 'pending') - Number(a.status === 'pending') || byRankThenName(a, b));
-  res.json(list.map(m => ({ ...publicMember(m), approvedByName: m.approvedBy?.displayName ?? null })));
+  // la page Administration n'affiche ni bio ni téléphone RP : ils ne quittent pas le serveur
+  res.json(list.map(m => { const { bio: _bio, phoneRp: _tel, ...vue } = publicMember(m); return { ...vue, approvedByName: m.approvedBy?.displayName ?? null }; }));
 });
 
 const STATUSES: MemberStatus[] = ['pending', 'approved', 'rejected'];
 members.patch('/api/admin/members/:id', ...manager, async (req, res) => {
   const target = await prisma.member.findUnique({ where: { id: intParam(req, 'id') } });
   if (!target) { res.status(404).json({ error: 'not-found' }); return; }
+  // le propriétaire du serveur Discord a toujours tout : personne d'autre ne change son compte
+  if (target.isOwner && !req.member.isOwner) { res.status(403).json({ error: 'Le compte du propriétaire du serveur Discord ne se modifie que par lui-même.' }); return; }
   const b = body(req);
   const data: Prisma.MemberUncheckedUpdateInput = {};
   if (b.displayName !== undefined) {
@@ -72,28 +77,36 @@ members.patch('/api/admin/members/:id', ...manager, async (req, res) => {
   }
   if (!Object.keys(data).length) { res.status(400).json({ error: 'rien à modifier' }); return; }
   const m = await prisma.member.update({ where: { id: target.id }, data });
-  if (m.status !== 'approved') fermerFlux(m.id);
+  revaliderFluxPlusTard();   // statut ou grade changé : ses onglets du chat ouverts suivent
   res.json(publicMember(m));
 });
 
-// Suppression d'un compte : ses messages et ses photos partent avec lui (cascade en base) ; les fichiers des photos
-// sont retirés du stockage, sinon ils y resteraient orphelins, et ses flux du chat sont fermés.
-async function supprimerCompte(id: number) {
+// Suppression d'un compte : ses messages et ses photos partent avec lui (cascade en base). Les fichiers des photos
+// sont retirés du stockage AVANT le compte : si le stockage ne répond pas, rien n'est supprimé et on peut réessayer —
+// dans l'autre ordre, plus aucune ligne ne référencerait les fichiers, restés publics pour toujours.
+// Renvoie false si le stockage a refusé (aucune suppression faite).
+async function supprimerCompte(id: number): Promise<boolean> {
   const photos = await prisma.photo.findMany({ where: { memberId: id }, select: { file: true, url: true, thumb: true, thumbUrl: true } });
+  try { for (const p of photos) await retirerFichiersOuEchouer(p); }
+  catch (e) { console.error(e); return false; }
   await prisma.member.deleteMany({ where: { id } });
   fermerFlux(id);
-  for (const p of photos) await retirerFichiers(p);
+  oublierBot(id);
+  return true;
 }
+const STOCKAGE_EN_PANNE = 'Le stockage des photos ne répond pas : rien n’a été supprimé, réessaie dans quelques minutes.';
 
 members.delete('/api/admin/members/:id', ...manager, async (req, res) => {
   const id = intParam(req, 'id');
   if (id === req.member.id) { res.status(400).json({ error: 'self' }); return; }
-  await supprimerCompte(id);
+  const target = await prisma.member.findUnique({ where: { id }, select: { isOwner: true } });
+  if (target?.isOwner && !req.member.isOwner) { res.status(403).json({ error: 'Le compte du propriétaire du serveur Discord ne se supprime que par lui-même.' }); return; }
+  if (!await supprimerCompte(id)) { res.status(503).json({ error: STOCKAGE_EN_PANNE }); return; }
   res.json({ ok: true });
 });
 
 // chacun peut supprimer son propre compte, validé ou non (une nouvelle connexion Discord en recréerait un, en attente)
 members.delete('/api/me', requireAuth, async (req, res) => {
-  await supprimerCompte(req.session.memberId!);
+  if (!await supprimerCompte(req.session.memberId!)) { res.status(503).json({ error: STOCKAGE_EN_PANNE }); return; }
   req.session.destroy(() => res.clearCookie('site.sid').json({ ok: true }));
 });

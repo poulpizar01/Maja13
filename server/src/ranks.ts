@@ -41,5 +41,3 @@ export const canAdmin = (m: WithRank): boolean => canManage(m) || !!rankOf(m.ran
 // Porté sur Discord (relu à chaque connexion), ou implicite pour la Gestion. Rôle non réglé : la Gestion seule.
 type WithMemberRole = WithRank & Pick<Member, 'hasMemberRole'>;
 export const canMember = (m: WithMemberRole): boolean => canAdmin(m) || (!!memberRoleId() && m.hasMemberRole);
-// un grade à pouvoirs complets ne s'attribue / ne se retire que par quelqu'un qui les a lui-même
-export const managesRank = (key: string | null | undefined): boolean => !!rankOf(key)?.canManage;
