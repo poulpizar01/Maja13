@@ -20,8 +20,15 @@ export const auth = Router();
 const openSession = (req: Request, memberId: number) => new Promise<void>((ok, ko) =>
   req.session.regenerate(err => { if (err) ko(err); else { req.session.memberId = memberId; ok(); } }));
 
+// Connexion de dev : seulement pour une requête arrivée directement sur la machine (adresse localhost, sans passer par
+// un proxy). Derrière nginx, le Host est le domaine et nginx ajoute X-Forwarded-For : refusée même si DEV_LOGIN était
+// activé par erreur en production.
+const requeteLocale = (req: Request) =>
+  /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host ?? '') && !req.headers['x-forwarded-for'] && !req.headers['x-forwarded-host'];
+
 auth.get('/auth/discord', async (req, res) => {
   if (config.devLogin) {
+    if (!requeteLocale(req)) { res.status(403).send('Connexion de dev réservée à la machine locale.'); return; }
     // dev : ?compte=<ID Discord> ouvre la session d'un compte existant, pour essayer chaque niveau d'accès
     const autre = typeof req.query.compte === 'string' ? await prisma.member.findUnique({ where: { discordId: req.query.compte } }) : null;
     if (autre) {

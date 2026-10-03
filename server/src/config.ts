@@ -22,9 +22,12 @@ function adresse(name: string): string {
 
 const baseUrl = adresse('BASE_URL') || fail('Variable manquante dans .env : BASE_URL');
 
-// connexion de dev sans Discord : uniquement en local (DEV_LOGIN=1 + BASE_URL sur localhost)
+// connexion de dev sans Discord : uniquement en local (DEV_LOGIN=1 + BASE_URL sur localhost), jamais dans l'image de
+// production (NODE_ENV=production, server/Dockerfile ; le dev passe en development, compose.override.yaml). Deux verrous
+// indépendants : un .env de prod mal rempli ne suffit pas à l'ouvrir. Le troisième est dans la route (routes/auth.ts).
 const devLogin = env.DEV_LOGIN === '1';
 if (devLogin && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(baseUrl)) fail('DEV_LOGIN=1 refusé : BASE_URL doit être http://localhost');
+if (devLogin && env.NODE_ENV === 'production') fail('DEV_LOGIN=1 refusé : connexion de dev impossible dans l’image de production (NODE_ENV=production)');
 
 const required = (name: string): string => env[name] || (devLogin ? '' : fail(`Variable manquante dans .env : ${name}`));
 
