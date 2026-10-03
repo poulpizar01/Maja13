@@ -29,6 +29,8 @@
   --accent:{{couleur}};
   --accent-dark:#8a6a34;
   --accent-light:#f0d79a;
+  /* texte posé sur l'accent (badges, bouton d'envoi du chat) : sombre, l'or est clair */
+  --on-accent:#120e08;
   /* noms historiques de la vitrine (styles.css) */
   --gold:var(--accent);
   --gold2:var(--accent-dark);
