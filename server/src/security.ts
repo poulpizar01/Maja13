@@ -22,7 +22,7 @@ export const securityHeaders = helmet({
       'script-src': ["'self'", (_req, res) => `'nonce-${(res as Response).locals.cspNonce}'`],
       'style-src': ["'self'", "'unsafe-inline'"],
       'font-src': ["'self'"],
-      'img-src': ["'self'", 'data:', 'blob:', 'https://cdn.discordapp.com'],
+      'img-src': ["'self'", 'data:', 'https://cdn.discordapp.com'],   // data: : silhouettes des fiches (styles.css)
       'connect-src': ["'self'"],
       'form-action': ["'self'"],
       'frame-ancestors': ["'none'"],
