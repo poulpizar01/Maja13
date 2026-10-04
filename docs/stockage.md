@@ -3,7 +3,7 @@
 Les photos de la galerie sont publiées par les membres depuis l'espace membre (Galerie). Le serveur ne garde **jamais** le fichier reçu : il le contrôle, le réencode en WebP et en fait deux versions, puis les enregistre sur un service de stockage distant (CDN) — ou, **en dev uniquement**, sur le disque du poste.
 
 ## Parcours d'une photo
-1. **Réception** (`server/src/routes/gallery.ts`) : membre validé, 10 photos maximum par membre toutes les 10 minutes, 15 Mo maximum, une seule photo par envoi. Les photos sont traitées **une à la fois** (le traitement d'une photo de 25 Mpx occupe ~210 Mo ; deux en parallèle dépasseraient la mémoire du conteneur) : un envoi simultané attend son tour quelques secondes.
+1. **Réception** (`server/src/routes/gallery.ts`) : membre validé, 10 photos maximum par membre toutes les 10 minutes, 15 Mo maximum, une seule photo par envoi. Les photos sont traitées **une à la fois** (le traitement d'une photo de 25 Mpx occupe jusqu'à ~190 Mo ; deux en parallèle frôleraient la mémoire du conteneur) : un envoi simultané attend son tour quelques secondes.
 2. **Contrôle du contenu réel** (pas seulement l'extension) : jpg, png ou webp ; ni GIF ni image animée, ni HEIC (le serveur ne sait pas le décoder ; un iPhone envoie de lui-même un JPEG, la page n'annonçant pas ce format) ; 25 mégapixels maximum (au-delà, le décodage demanderait trop de mémoire au conteneur).
 3. **Réencodage** : une grande version (1 800 px maximum, WebP qualité 84) et une miniature (600 px, qualité 78). L'orientation du téléphone est appliquée, les métadonnées (position GPS…) disparaissent.
 4. **Enregistrement** (`server/src/storage.ts`) des deux fichiers, puis de leur adresse publique en base.
@@ -20,7 +20,7 @@ La miniature sert au bandeau de l'accueil et aux listes ; la grande version n'es
 
 **En production (`NODE_ENV=production`, c'est-à-dire l'image Docker), le CDN est obligatoire** : sans `STORAGE_URL` / `STORAGE_TOKEN`, le site démarre, la galerie reste visible, mais tout envoi est refusé (« L'envoi de photos n'est pas encore configuré sur ce site ») et un avertissement apparaît au démarrage. Le disque du VPS n'est ni sauvegardé ni fait pour garder les photos.
 
-Les deux variables vont ensemble (une seule remplie bloque le démarrage). Des photos plus anciennes restées sur le disque (volume Docker `uploads`, d'avant le CDN) gardent leur adresse et restent servies par le site.
+Les deux variables vont ensemble (une seule remplie bloque le démarrage). Aucun volume de photos n'est monté en production : une photo d'avant le CDN, restée dans l'ancien volume Docker `<SITE_ID>_uploads`, n'est plus affichée (lien cassé dans la galerie) ; la retirer de la galerie, ou la republier. Le volume reste sur le disque jusqu'à `docker volume rm <SITE_ID>_uploads`.
 
 **Un préfixe par site** : plusieurs sites peuvent partager le même service de stockage, chacun dans son dossier (`STORAGE_PREFIX=monsite/`). Ne jamais réutiliser le préfixe d'un autre site.
 

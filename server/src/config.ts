@@ -65,7 +65,7 @@ export const config = {
   },
   // API REST du bot Discord (géré à part) ; vide = pages liées au bot désactivées
   botApiUrl: adresse('BOT_API_URL'),
-  // Part des 300 requêtes / 15 min que le bot accorde par serveur Discord et par adresse IP : des sites hébergés sur un
-  // même VPS sortent par la même adresse et se partagent ces 300 (ex. deux sites : 140 chacun). 30 au moins.
+  // Plafond d'appels au bot par quart d'heure, sous les 300 que le bot accorde à chaque serveur Discord (routes/bot.ts).
+  // 30 au moins.
   botBudget: Math.max(30, Math.min(300, Number(env.BOT_BUDGET) || 240)),
 };

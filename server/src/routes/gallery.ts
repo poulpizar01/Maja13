@@ -13,7 +13,7 @@ import { limits } from '../security.js';
 
 export const gallery = Router();
 
-// toujours servi : en dev c'est le stockage, en prod il sert les photos restées sur le disque
+// photos sur le disque : le stockage du dev (en prod, aucun volume n'y est monté : le dossier reste vide)
 gallery.use('/uploads', express.static(storage.dir, { maxAge: '30d', immutable: true }));
 
 // Images acceptées : photos fixes uniquement (pas de GIF ni d'image animée). Deux contrôles :
@@ -23,6 +23,11 @@ gallery.use('/uploads', express.static(storage.dir, { maxAge: '30d', immutable: 
 // de lui-même en JPEG quand le champ de la page n'annonce pas le HEIC (espace/galerie.html).
 const FORMATS_ACCEPTES = ['jpeg', 'png', 'webp'];
 const MAX_PIXELS = 25_000_000;                               // garde-fou contre les images piégées (décompression géante)
+// Mémoire de sharp : ni cache d'opérations (chaque photo n'est traitée qu'une fois) ni plusieurs fils par image.
+// Mesuré sur 25 Mpx, pic du processus : JPEG 125 Mo, PNG 16 bits avec transparence 156 à 191 Mo — contre 175 et 348 Mo
+// avec les réglages par défaut de sharp, trop près du plafond du conteneur (512 Mo).
+sharp.cache(false);
+sharp.concurrency(1);
 const upload = multer({
   storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 1 },
   fileFilter: (_req, f, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(f.mimetype)),
@@ -42,7 +47,7 @@ async function refusImage(buffer: Buffer): Promise<string | null> {
   return null;
 }
 
-// Une photo à la fois : une image de 25 Mpx occupe ~210 Mo pendant son traitement ; deux en parallèle dépasseraient
+// Une photo à la fois : une image de 25 Mpx occupe jusqu'à ~190 Mo pendant son traitement ; deux en parallèle frôleraient
 // le plafond mémoire du conteneur (512 Mo). Les envois simultanés attendent leur tour (quelques secondes au plus).
 let fileAttente: Promise<unknown> = Promise.resolve();
 const unParUn = <T>(travail: () => Promise<T>): Promise<T> => {

@@ -33,8 +33,8 @@ services:
       NODE_OPTIONS: --max-old-space-size=${APP_NODE_HEAP:-320}
     ports:
       - "127.0.0.1:${HOST_PORT:-3000}:3000"
-    volumes:
-      - uploads:/app/uploads   # photos sur disque : en dev, ou envoyées avant la mise en place du stockage distant (obligatoire en prod)
+    # aucun volume de photos : en prod elles vont au stockage distant (obligatoire, docs/stockage.md), le dossier
+    # /app/uploads ne sert qu'au dev (monté par compose.override.yaml)
     # santé : le serveur répond et joint la base (route /healthz). « unhealthy » apparaît dans `docker compose ps`
     # et les journaux ; Docker ne redémarre pas seul un conteneur malade, seulement un conteneur arrêté (voir server/README.md)
     healthcheck:
@@ -161,4 +161,3 @@ services:
         done
 volumes:
   db:
-  uploads:

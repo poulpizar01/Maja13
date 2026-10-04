@@ -54,6 +54,18 @@ auth.get('/auth/discord', async (req, res) => {
   res.redirect(url.toString());
 });
 
+// Comptes encore marqués propriétaires alors qu'un autre l'est devenu : plus de pouvoirs d'office, et leur grade sans
+// rôle Discord (celui donné d'office au propriétaire) revient au grade par défaut. Un grade lié à un rôle est gardé,
+// revérifié à leur prochaine connexion.
+async function retirerProprietaires(saufDiscordId: string) {
+  const anciens = await prisma.member.findMany({ where: { isOwner: true, discordId: { not: saufDiscordId } }, select: { id: true, rankKey: true } });
+  const parDefaut = allRanks().find(r => r.isDefault)?.key ?? null;
+  for (const a of anciens) {
+    const lie = !!allRanks().find(r => r.key === a.rankKey)?.discordRoleId;
+    await prisma.member.update({ where: { id: a.id }, data: { isOwner: false, ...(!lie && { rankKey: parDefaut }) } });
+  }
+}
+
 auth.get('/auth/discord/callback', async (req, res) => {
   try {
     const { code, state, error } = req.query;
@@ -84,7 +96,7 @@ auth.get('/auth/discord/callback', async (req, res) => {
     if (!/^\d{5,32}$/.test(String(user.id)) || !Array.isArray(guildMember.roles) || !Array.isArray(guilds)) { res.redirect('/espace/?error=server'); return; }
     if (user.avatar && !/^(a_)?[0-9a-f]{32}$/.test(user.avatar)) user.avatar = null;
     const owner = guilds.some(g => g.id === config.discord.guildId && g.owner === true);
-    const roleMembre = memberRoleId(), hasMemberRole = !!roleMembre && guildMember.roles.includes(roleMembre);
+    const roleMembre = memberRoleId(), memberRole = roleMembre && guildMember.roles.includes(roleMembre) ? roleMembre : null;
 
     // 3. grade : le plus élevé dont le rôle Discord est porté ; nouveau compte = grade par défaut (propriétaire : premier grade à pouvoirs complets)
     const ranks = allRanks();
@@ -94,20 +106,24 @@ auth.get('/auth/discord/callback', async (req, res) => {
     // 4. compte : créé en attente de validation, validé d'office pour le propriétaire
     const existing = await prisma.member.findUnique({ where: { discordId: user.id } });
     // grade actuel lié à un rôle Discord que le membre ne porte plus (rétrogradé ou retiré sur Discord) : il le perd
-    // et revient au grade par défaut. Un grade sans rôle Discord (attribué à la main dans Gestion) est conservé.
+    // et revient au grade par défaut. Un grade sans rôle Discord (attribué à la main dans Gestion) est conservé, sauf
+    // pour un ancien propriétaire (serveur transféré) : ce grade a pu lui venir d'office, ou de lui seul.
     const gradeActuel = ranks.find(r => r.key === existing?.rankKey);
     const roleRetire = !!gradeActuel?.discordRoleId && !guildMember.roles.includes(gradeActuel.discordRoleId);
-    const gradeConserve = roleRetire ? ranks.find(r => r.isDefault)?.key : existing?.rankKey;
+    const exProprio = !!existing?.isOwner && !owner && !gradeActuel?.discordRoleId;
+    const gradeConserve = roleRetire || exProprio ? ranks.find(r => r.isDefault)?.key : existing?.rankKey;
+    // nouveau propriétaire : l'ancien perd aussitôt ce que la propriété lui donnait, sans attendre sa reconnexion
+    if (owner) await retirerProprietaires(user.id);
     const m = await prisma.member.upsert({
       where: { discordId: user.id },
       create: {
         discordId: user.id, username: user.username, avatar: user.avatar,
         displayName: guildMember.nick || user.global_name || user.username,
-        rankKey: rankFromRole ?? startRank ?? null, isOwner: owner, hasMemberRole,
+        rankKey: rankFromRole ?? startRank ?? null, isOwner: owner, memberRole,
         status: owner ? 'approved' : 'pending', approvedAt: owner ? new Date() : null, lastLogin: new Date(),
       },
       update: {
-        username: user.username, avatar: user.avatar, isOwner: owner, hasMemberRole, lastLogin: new Date(),
+        username: user.username, avatar: user.avatar, isOwner: owner, memberRole, lastLogin: new Date(),
         rankKey: rankFromRole ?? gradeConserve ?? (owner ? startRank ?? null : null),
         ...(owner && { status: 'approved' as const }),
       },

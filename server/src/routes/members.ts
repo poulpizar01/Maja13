@@ -2,7 +2,7 @@
 // des comptes (pouvoirs complets).
 import { Router } from 'express';
 import { prisma } from '../db.js';
-import type { MemberStatus, Prisma } from '../generated/prisma/client.js';
+import type { Member, MemberStatus, Prisma } from '../generated/prisma/client.js';
 import { admin, approved, body, intParam, manager, member, requireAuth, text } from '../http.js';
 import { avatarUrl, byRankThenName, publicMember } from '../members.js';
 import { rankInfo, rankOf } from '../ranks.js';
@@ -42,11 +42,12 @@ members.get('/api/membres/noms', ...member, async (_req, res) => {
 });
 
 // ---------- administration (pouvoirs complets : valider, refuser, nom RP, grade, suppression) ----------
+// compte vu par l'administration : ni bio ni téléphone RP, que seul le membre voit (confidentialite.html)
+const vueAdmin = (m: Member) => { const { bio: _bio, phoneRp: _tel, ...vue } = publicMember(m); return vue; };
 members.get('/api/admin/members', ...manager, async (_req, res) => {
   const list = await prisma.member.findMany({ include: { approvedBy: { select: { displayName: true } } } });
   list.sort((a, b) => Number(b.status === 'pending') - Number(a.status === 'pending') || byRankThenName(a, b));
-  // la page Administration n'affiche ni bio ni téléphone RP : ils ne quittent pas le serveur
-  res.json(list.map(m => { const { bio: _bio, phoneRp: _tel, ...vue } = publicMember(m); return { ...vue, approvedByName: m.approvedBy?.displayName ?? null }; }));
+  res.json(list.map(m => ({ ...vueAdmin(m), approvedByName: m.approvedBy?.displayName ?? null })));
 });
 
 const STATUSES: MemberStatus[] = ['pending', 'approved', 'rejected'];
@@ -78,7 +79,7 @@ members.patch('/api/admin/members/:id', ...manager, async (req, res) => {
   if (!Object.keys(data).length) { res.status(400).json({ error: 'rien à modifier' }); return; }
   const m = await prisma.member.update({ where: { id: target.id }, data });
   revaliderFluxPlusTard();   // statut ou grade changé : ses onglets du chat ouverts suivent
-  res.json(publicMember(m));
+  res.json(vueAdmin(m));
 });
 
 // Suppression d'un compte : ses messages et ses photos partent avec lui (cascade en base). Les fichiers des photos

@@ -123,9 +123,14 @@ chat.get('/api/chat/stream', ...member, (req, res) => {
   broadcast('presence', presence());
   // le flux ne survit pas à la session : à son échéance, il est fermé
   const fin = req.session.cookie.expires?.getTime() ?? Infinity;
+  // Un flux fermé par le serveur (ferme) reste ouvert côté réseau jusqu'à ce que l'onglet coupe : le ping s'arrête
+  // dès la fin de la réponse. Une écriture sur un flux déjà fermé émet une erreur sur la réponse, qui sans écouteur
+  // arrêterait tout le serveur.
+  res.on('error', () => oublie(res));
   const ping = setInterval(() => {
+    if (res.writableEnded || res.destroyed) { clearInterval(ping); return; }
     if (Date.now() > fin) { ferme(res, 'access'); return; }
-    try { res.write(': ping\n\n'); } catch { /* flux fermé */ }
+    res.write(': ping\n\n');
   }, 25000);
-  req.on('close', () => { clearInterval(ping); oublie(res); broadcast('presence', presence()); });
+  res.on('close', () => { clearInterval(ping); oublie(res); broadcast('presence', presence()); });
 });

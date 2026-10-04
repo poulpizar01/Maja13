@@ -440,7 +440,9 @@
       renderTable(pay, ranking); };
   }
 
-  const refresh = () => render().catch(e => espaceToast(espaceBot.error(e), false));   // l'état de chargement est levé par render()
+  // l'état de chargement est levé par render() ; affiche : le dernier rendu a abouti (tout est en mémoire)
+  let affiche = false;
+  const refresh = () => render().then(() => { affiche = true; }, e => { affiche = false; espaceToast(espaceBot.error(e), false); });
   // ---- choix des membres : liste avec recherche et cases à cocher ; « Afficher » applique (1 = sa vue, 2 à 4 = comparaison)
   let gens = [], coches = new Set();   // gens : [id, nom] triés par nom ; coches : choix en cours dans la liste, pas encore appliqué
   const normalise = t => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -494,7 +496,9 @@
   });
   document.addEventListener('click', e => { const b = e.target.closest('.hbar.is-link, .link-btn'); if (b) pickMember(b.dataset.id); if (e.target.closest('[data-groupe]')) pickMember(''); const seul = e.target.closest('.comp-carte__seul'); if (seul) pickMember(seul.dataset.id); });
   document.addEventListener('keydown', e => { const b = e.target.closest?.('.hbar.is-link'); if (b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pickMember(b.dataset.id); } });
-  let resizeTimer; addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(refresh, 200); });
+  // redessin à la nouvelle largeur, seulement si l'écran est complet : après un échec, redimensionner ne relance pas
+  // les lectures (limite de requêtes du bot), les boutons de la page le font
+  let resizeTimer; addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (affiche) refresh(); }, 200); });
 
   async function start() {
     const me = await api('../api/me');
@@ -518,7 +522,7 @@
       state.week = Math.max(0, WEEKS.findIndex(w => w.key === (params.get('week') || '')));
       state.sel = [...new Set((params.get('member') || '').split(','))].filter(id => people.has(id)).slice(0, MAX_COMPARE);
       $('page').hidden = false;
-      await render();
+      await render(); affiche = true;
     } catch (e) { $('botGate').hidden = false; $('botGate').innerHTML = `<p class="admin-empty">${esc(espaceBot.error(e))}</p>`; }
   }
   $('logout').addEventListener('click', async () => { await fetch('../auth/logout', { method: 'POST', credentials: 'same-origin' }); location.href = './'; });

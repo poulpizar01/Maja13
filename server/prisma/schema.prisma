@@ -27,7 +27,7 @@ model Member {
   phoneRp      String?      @map("phone_rp") @db.VarChar(32)
   status       MemberStatus @default(pending)
   isOwner      Boolean      @default(false) @map("is_owner") // propriétaire du serveur Discord
-  hasMemberRole Boolean     @default(false) @map("has_member_role") // porte le rôle Discord membre (relu à chaque connexion)
+  memberRole   String?      @map("member_role") @db.VarChar(32) // rôle Discord membre porté à la dernière connexion (null = aucun)
   joinedAt     DateTime     @default(now()) @map("joined_at") @db.Timestamptz(6)
   lastLogin    DateTime?    @map("last_login") @db.Timestamptz(6)
   approvedAt   DateTime?    @map("approved_at") @db.Timestamptz(6)

@@ -40,14 +40,9 @@ docker compose up -d --build
 Vérifier : `docker compose ps` (les trois services `Up`, la base `healthy` ; `db-roles`, qui prépare le compte de base du site puis s'arrête, n'y figure pas) et `docker logs <SITE_ID>-app`, qui doit finir par `<nom du site> en écoute sur le port 3000 (https://<domaine>)`. Le premier démarrage crée les tables (migrations Prisma).
 
 ### 4. nginx et HTTPS
-```bash
-sudo cp server/deploy/nginx.conf.example /etc/nginx/sites-available/<SITE_ID>
-sudo nano /etc/nginx/sites-available/<SITE_ID>          # remplacer __DOMAIN__, __PORT__ (= HOST_PORT) et __SITE_ID__
-sudo ln -s /etc/nginx/sites-available/<SITE_ID> /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d <domaine>                      # certificat + redirection http → https, renouvelé automatiquement
-```
-**Ne pas tester la connexion avant certbot** : avec `BASE_URL` en `https://`, le cookie de session n'est envoyé qu'en HTTPS, la connexion Discord échoue donc en `http://`. Rôle de chaque réglage nginx, plusieurs sites, dépannage : [docs/nginx.md](../docs/nginx.md).
+Un fichier `/etc/nginx/sites-available/<domaine>.conf` tiré de [`server/deploy/nginx.conf.example`](deploy/nginx.conf.example) : un bloc HTTP réservé au défi ACME (certificat) et un bloc HTTPS pour le site. Au premier déploiement, le bloc HTTPS n'est ajouté qu'une fois le certificat obtenu (`certbot certonly --webroot`) : commandes dans l'ordre dans [docs/nginx.md](../docs/nginx.md#mise-en-place).
+
+**Ne pas tester la connexion avant le certificat** : avec `BASE_URL` en `https://`, le cookie de session n'est envoyé qu'en HTTPS, la connexion Discord échoue donc en `http://`. Rôle de chaque réglage nginx, plusieurs sites, dépannage : [docs/nginx.md](../docs/nginx.md).
 
 ### 5. Première connexion
 La base de prod démarre **vide** (rien n'est repris du dev). Dans cet ordre :
@@ -104,7 +99,7 @@ Une sauvegarde contient tout le chat et les identifiants Discord des membres : l
 
 ### Bot Discord
 Géré à part ([roxwood-network-famille](https://github.com/poulpizar01/roxwood-network-famille)). Détail de la liaison, des rubriques lues, du cache et des limites : [docs/api.md](../docs/api.md#api-du-bot-discord-relayée). L'espace membre lit ses données via son **API REST, en lecture seule** : rien n'est écrit dans le bot ni stocké côté site.
-- `.env` : `BOT_API_URL` = URL publique de l'API du bot (vide = pages liées au bot désactivées). Le bot limite chaque adresse IP à 300 requêtes par quart d'heure : avec plusieurs sites sur le même VPS, répartir ces 300 entre eux avec `BOT_BUDGET` (ex. 140 chacun pour deux sites).
+- `.env` : `BOT_API_URL` = URL publique de l'API du bot (vide = pages liées au bot désactivées). Le bot limite chaque serveur Discord à 300 requêtes par quart d'heure ; le site s'arrête à `BOT_BUDGET` (240 par défaut, la marge couvre les appels simultanés) et se recale sur le compteur du bot, y compris après un redémarrage.
 - Discord : un admin du serveur déclare le site comme site externe du bot : `/config site-externe set url:https://<domaine>/espace/bot-callback.html`.
 - **Une seule URL par serveur Discord** : le bot renvoie chaque connexion vers le dernier site externe déclaré. Déclarer `http://localhost:3000/…` pour tester en dev coupe la connexion au bot en prod (et inversement). Tester le bot en dev sur un **serveur Discord de test**, ou redéclarer l'URL de prod juste après.
 - **Rôle membre du bot** : `/config role set membre @Rôle`. Le bot ne délivre de jeton et ne répond qu'aux porteurs de ce rôle (et à ses admins) ; tant qu'il n'est pas réglé, seuls ses admins passent. C'est en principe le même rôle que le rôle membre du site (Gestion → Hiérarchie).

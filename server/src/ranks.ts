@@ -39,5 +39,7 @@ export const canManage = (m: WithRank): boolean => m.isOwner || !!rankOf(m.rankK
 export const canAdmin = (m: WithRank): boolean => canManage(m) || !!rankOf(m.rankKey)?.canAdmin;
 // Rôle membre : accès à l'espace membre au-delà de son profil (classement, chat, galerie, taxes, armurerie, bot).
 // Porté sur Discord (relu à chaque connexion), ou implicite pour la Gestion. Rôle non réglé : la Gestion seule.
-type WithMemberRole = WithRank & Pick<Member, 'hasMemberRole'>;
-export const canMember = (m: WithMemberRole): boolean => canAdmin(m) || (!!memberRoleId() && m.hasMemberRole);
+// On compare au rôle réglé maintenant : le changer dans Hiérarchie retire l'accès à qui n'avait que l'ancien, sans
+// attendre sa reconnexion (qui porte le nouveau l'obtient à sa prochaine connexion).
+type WithMemberRole = WithRank & Pick<Member, 'memberRole'>;
+export const canMember = (m: WithMemberRole): boolean => canAdmin(m) || (!!memberRoleId() && m.memberRole === memberRoleId());

@@ -72,14 +72,28 @@ const forget = (req: Request) => oublierBot(req.session.memberId!);
 setInterval(() => { const now = Date.now(); for (const [key, e] of cache) if (e.expires < now) retire(key); }, 5 * 60e3).unref();
 
 // ---------- partage des requêtes que le bot accorde ----------
-// Le bot limite à 300 requêtes / 15 min par serveur Discord ET par adresse IP : des sites hébergés sur un même VPS se
-// partagent ces 300 (BOT_BUDGET, .env, à répartir entre eux). Une fois BUDGET appels faits par le site dans le quart
-// d'heure, ceux qui en ont déjà fait PART attendent : le reste va aux autres membres.
-const FENETRE = 15 * 60e3, BUDGET = config.botBudget, PART = Math.ceil(config.botBudget / 4);
+// Le bot limite chaque serveur Discord à 300 requêtes / 15 min (un serveur n'a qu'un site externe), et chaque adresse
+// IP bien plus largement. Deux paliers sur BUDGET (BOT_BUDGET, .env) : aux trois quarts, ceux qui ont déjà fait PART
+// appels attendent (le reste va aux autres membres) ; à BUDGET, plus aucun appel jusqu'à la fin du quart d'heure — la
+// marge sous les 300 couvre les appels partis au même instant.
+const FENETRE = 15 * 60e3, BUDGET = config.botBudget, PART = Math.ceil(BUDGET / 4), PARTAGE = Math.floor(BUDGET * 3 / 4);
 let debut = Date.now(), total = 0;
 const parMembre = new Map<number, number>();
 const fenetre = () => { if (Date.now() - debut > FENETRE) { debut = Date.now(); total = 0; parMembre.clear(); } };
-const partEpuisee = (req: Request) => { fenetre(); return total >= BUDGET && (parMembre.get(req.session.memberId!) ?? 0) >= PART; };
+const plafond = () => { fenetre(); return total >= BUDGET; };
+const partEpuisee = (req: Request) => { fenetre(); return total >= PARTAGE && (parMembre.get(req.session.memberId!) ?? 0) >= PART; };
+// Le compte du site repart de zéro à son redémarrage, pas celui du bot : chaque réponse du bot annonce ce qu'il a déjà
+// compté (RateLimit-Limit − RateLimit-Remaining) et quand son quart d'heure finit (RateLimit-Reset, en secondes), et le
+// site s'y recale. Jamais à la baisse dans un même quart d'heure : des appels du site sont peut-être encore en route.
+// Pas sur un 401 ou un 403 : le bot a refusé avant son compteur par serveur, l'en-tête est celui de l'adresse IP.
+function recale(r: globalThis.Response) {
+  const [limite, restant, reset] = ['limit', 'remaining', 'reset'].map(n => Number(r.headers.get(`ratelimit-${n}`) ?? NaN));
+  if (r.status === 401 || r.status === 403 || ![limite, restant, reset].every(Number.isFinite)) return;
+  const debutBot = Date.now() + reset * 1000 - FENETRE;
+  if (debutBot > debut + 5e3) { total = 0; parMembre.clear(); }   // le bot a ouvert un nouveau quart d'heure
+  debut = debutBot;
+  total = Math.max(total, limite - restant);
+}
 // Le bot a répondu 429 : plus aucun appel jusqu'à l'échéance qu'il annonce (Retry-After, RateLimit-Reset, en secondes),
 // au lieu de continuer à frapper un bot déjà saturé — chaque appel refusé compte encore contre la limite.
 let pauseJusqua = 0;
@@ -91,11 +105,12 @@ const echeance = (r: globalThis.Response) => {
 // appel à l'API du bot ; un jeton refusé est oublié avec ce qui a été lu grâce à lui — s'il est encore celui de la
 // session (une reliaison a pu le remplacer pendant l'appel)
 async function botGet(req: Request, path: string, token = req.session.botToken): Promise<Reponse> {
-  if (Date.now() < pauseJusqua) return { status: 429, texte: erreur(SATURE) };
-  fenetre(); total++; parMembre.set(req.session.memberId!, (parMembre.get(req.session.memberId!) ?? 0) + 1);
+  if (Date.now() < pauseJusqua || plafond()) return { status: 429, texte: erreur(SATURE) };
+  total++; parMembre.set(req.session.memberId!, (parMembre.get(req.session.memberId!) ?? 0) + 1);
   const r = await fetch(`${config.botApiUrl}/api/${path}`, {
     headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000),
   });
+  recale(r);
   if (r.status === 429) pauseJusqua = echeance(r);
   if (r.status === 401 && req.session.botToken === token) { forget(req); delete req.session.botToken; }
   const texte = await r.text().catch(() => '');

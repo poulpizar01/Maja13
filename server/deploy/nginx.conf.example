@@ -1,17 +1,37 @@
-# Site nginx. Copier dans /etc/nginx/sites-available/<SITE_ID> (voir .env), remplacer __DOMAIN__ (domaine),
-# __PORT__ (HOST_PORT du .env) et __SITE_ID__ (SITE_ID du .env, tirets remplacés par des _), activer (lien dans
-# sites-enabled), nginx -t, recharger.
-# HTTPS : ensuite `certbot --nginx -d __DOMAIN__`, qui ajoute le certificat et la redirection.
+# Site nginx. Copier dans /etc/nginx/sites-available/<domaine>.conf, remplacer __DOMAIN__ (domaine), __PORT__ (HOST_PORT
+# du .env) et __SITE_ID__ (SITE_ID du .env, tirets remplacés par des _), activer (lien dans sites-enabled), nginx -t,
+# recharger. Ordre complet, certificat compris : docs/nginx.md.
 
 # Limite de débit par adresse IP, devant le site : 30 requêtes par seconde (une page charge une vingtaine de fichiers),
 # rafales absorbées plus bas par « burst ». Le site a ses propres limites sur l'API ; celle-ci couvre aussi les pages
 # et les fichiers, qu'il ne compte pas. Une zone par site : son nom doit être unique sur la machine.
 limit_req_zone $binary_remote_addr zone=__SITE_ID__:10m rate=30r/s;
 
+# HTTP : uniquement le défi ACME de Let's Encrypt (obtention et renouvellement du certificat), tout le reste part en HTTPS
 server {
     listen 80;
     listen [::]:80;
     server_name __DOMAIN__;
+    server_tokens off;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+    }
+    location / { return 301 https://$host$request_uri; }
+}
+
+# --- bloc HTTPS : à ajouter une fois le premier certificat obtenu (docs/nginx.md), nginx refuse un certificat absent ---
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name __DOMAIN__;
+
+    ssl_certificate     /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
+
+    include snippets/deny-hidden.conf;   # fichiers et dossiers cachés (.env, .git…) : jamais servis
 
     server_tokens off;                 # ne pas annoncer la version de nginx
     client_max_body_size 16m;          # photos de la galerie : 15 Mo max côté site
@@ -33,6 +53,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
     }
 
     # envoi d'une photo : traitement puis dépôt sur le stockage, parfois plus d'une minute (délai par défaut de nginx : 60 s,
@@ -46,6 +67,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
         proxy_read_timeout 120s;
     }
 
@@ -57,8 +79,10 @@ server {
         proxy_pass http://127.0.0.1:__PORT__;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
         proxy_set_header Connection '';
         proxy_buffering off;
         proxy_read_timeout 1h;
