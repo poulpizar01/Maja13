@@ -37,7 +37,7 @@ type WithRank = Pick<Member, 'rankKey' | 'isOwner'>;
 // propriétaire du site = propriétaire du serveur Discord (vérifié à chaque connexion) : pouvoirs complets quel que soit le grade
 export const canManage = (m: WithRank): boolean => m.isOwner || !!rankOf(m.rankKey)?.canManage;
 export const canAdmin = (m: WithRank): boolean => canManage(m) || !!rankOf(m.rankKey)?.canAdmin;
-// Rôle membre : accès à l'espace membre au-delà de son profil (classement, chat, galerie, taxes, armurerie, bot).
+// Rôle membre : accès à l'espace membre au-delà de son profil (classement, chat, taxes, armurerie, bot).
 // Porté sur Discord (relu à chaque connexion), ou implicite pour la Gestion. Rôle non réglé : la Gestion seule.
 // On compare au rôle réglé maintenant : le changer dans Hiérarchie retire l'accès à qui n'avait que l'ancien, sans
 // attendre sa reconnexion (qui porte le nouveau l'obtient à sa prochaine connexion).

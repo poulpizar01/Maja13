@@ -12,7 +12,7 @@ export const publicMember = (m: Member) => ({
   joinedAt: m.joinedAt, lastLogin: m.lastLogin, approvedAt: m.approvedAt,
 });
 
-// auteur d'un message ou d'une photo
+// auteur d'un message
 export const author = (m: Pick<Member, 'id' | 'displayName' | 'username' | 'rankKey' | 'discordId' | 'avatar'>) => ({
   id: m.id, displayName: m.displayName, username: m.username, ...rankInfo(m.rankKey), avatarUrl: avatarUrl(m),
 });

@@ -37,7 +37,6 @@ model Member {
   approvedBy Member?   @relation("Approvals", fields: [approvedById], references: [id], onDelete: SetNull)
   approved   Member[]  @relation("Approvals")
   messages   Message[]
-  photos     Photo[]
   chatRead   ChatRead?
 
   @@index([rankKey])
@@ -102,27 +101,6 @@ model ChatRead {
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@map("chat_reads")
-}
-
-// Photo de la galerie ; file / thumb = clés de stockage, url / thumbUrl = adresses publiques
-model Photo {
-  id        Int       @id @default(autoincrement())
-  memberId  Int       @map("member_id")
-  file      String    @db.VarChar(200)
-  thumb     String    @db.VarChar(200)
-  url       String
-  thumbUrl  String    @map("thumb_url")
-  width     Int?
-  height    Int?
-  caption   String?   @db.VarChar(200)
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
-
-  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
-
-  @@index([createdAt(sort: Desc)])
-  @@index([memberId])
-  @@map("photos")
 }
 
 // Réglages du site modifiables depuis l'espace membre (Gestion → Hiérarchie), clé → valeur

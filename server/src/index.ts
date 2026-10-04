@@ -9,14 +9,12 @@ import { pool, prisma } from './db.js';
 import { planifierPurge } from './purge.js';
 import { loadRanks } from './ranks.js';
 import { loadSettings } from './settings.js';
-import { storage } from './storage.js';
 import { cspNonce, limits, securityHeaders } from './security.js';
 import { site, pages, renderFile, withNonce } from './site.js';
 import { canAdmin, canManage, canMember } from './ranks.js';
 import { auth } from './routes/auth.js';
 import { members } from './routes/members.js';
 import { hierarchy } from './routes/hierarchy.js';
-import { gallery } from './routes/gallery.js';
 import { chat, fermerTousLesFlux } from './routes/chat.js';
 import { bot } from './routes/bot.js';
 
@@ -51,8 +49,8 @@ app.use(['/api', '/auth'], sessions);
 app.use(['/api', '/auth'], (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
 // Requêtes qui modifient quelque chose : acceptées seulement depuis les pages du site. Le cookie SameSite=Lax arrête
-// les autres sites, pas un voisin du même domaine (a.exemple.fr → b.exemple.fr), qui pourrait sinon publier une photo
-// au nom d'un membre. Le navigateur joint toujours l'en-tête Origin à ces requêtes ; absent (curl, script), rien à craindre.
+// les autres sites, pas un voisin du même domaine (a.exemple.fr → b.exemple.fr), qui pourrait sinon écrire dans le
+// chat au nom d'un membre. Le navigateur joint toujours l'en-tête Origin à ces requêtes ; absent (curl, script), rien à craindre.
 const origine = new URL(config.baseUrl).origin;
 app.use(['/api', '/auth'], (req, res, next) => {
   const recue = req.get('origin');
@@ -62,7 +60,7 @@ app.use(['/api', '/auth'], (req, res, next) => {
 
 app.use('/auth', limits.auth);
 app.use('/api', limits.api);
-app.use(auth, members, hierarchy, gallery, chat, bot);
+app.use(auth, members, hierarchy, chat, bot);
 
 // ---------- site statique : uniquement ce qui est public ----------
 // espace/ et assets/, plus les fichiers de la racine du site (pages, css, js, robots.txt, sitemap.xml) ;
@@ -83,7 +81,7 @@ app.get(['/espace', '/espace/', '/espace/index.html'], sessions, async (req, res
 // « accès refusé » (403). Une lecture de session et de compte par page ouverte, jamais pour les css, js et images.
 const NIVEAU_PAGE: Record<string, 'connecte' | 'valide' | 'membre' | 'gestion' | 'complet'> = {
   attente: 'connecte', profil: 'valide',
-  chat: 'membre', galerie: 'membre', classement: 'membre', taxes: 'membre', armurerie: 'membre',
+  chat: 'membre', classement: 'membre', taxes: 'membre', armurerie: 'membre',
   tableau: 'gestion', stats: 'gestion', garages: 'gestion', membres: 'gestion',
   admin: 'complet', organigramme: 'complet',
 };
@@ -128,11 +126,9 @@ const onError: ErrorRequestHandler = (err, _req, res, _next) => {
 };
 app.use(onError);
 
-console.log(`Stockage des images : ${storage.kind === 'cdn' ? 'CDN' : storage.kind === 'local' ? `local, dev uniquement (${storage.dir})` : 'aucun (envoi désactivé)'}`);
 const serveur = app.listen(config.port, '0.0.0.0', () => console.log(`${site.nom} en écoute sur le port ${config.port} (${config.baseUrl})`));
 
-// Arrêt demandé par Docker (mise à jour, redémarrage) : plus de nouvelle requête, celles en cours se terminent — un
-// envoi de photo ne reste pas à moitié fait —, puis la base est rendue. Après 8 s, on sort quand même (Docker coupe à 10).
+// Arrêt demandé par Docker (mise à jour, redémarrage) : plus de nouvelle requête, celles en cours se terminent, puis la base est rendue. Après 8 s, on sort quand même (Docker coupe à 10).
 for (const signal of ['SIGTERM', 'SIGINT'] as const) process.once(signal, () => {
   fermerTousLesFlux();
   serveur.close(() => { pool.end().catch(() => {}).finally(() => process.exit(0)); });

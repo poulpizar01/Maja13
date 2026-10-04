@@ -2,7 +2,7 @@
 
 Express + PostgreSQL + Discord OAuth. Sert aussi le site vitrine (racine du dépôt). Pour créer un site à partir du modèle et pour le développement, voir le [README de la racine](../README.md).
 
-Documentation détaillée : [nginx](../docs/nginx.md) · [stockage des photos (CDN)](../docs/stockage.md) · [API du site et du bot](../docs/api.md).
+Documentation détaillée : [nginx](../docs/nginx.md) · [API du site et du bot](../docs/api.md).
 
 ## Production
 Tout tourne dans Docker, avec le même [`compose.yaml`](../compose.yaml) qu'en dev (site + base + sauvegardes). Le site n'écoute que sur `127.0.0.1:<HOST_PORT>` ; **nginx**, sur la machine, l'expose en HTTPS.
@@ -94,8 +94,8 @@ Une sauvegarde contient tout le chat et les identifiants Discord des membres : l
   # crontab -e : chaque nuit à 4 h, copie des sauvegardes du site hors du serveur (copy : n'efface rien là-bas)
   0 4 * * * rclone copy ~/<dossier-du-site>/backups sauvegardes:<SITE_ID>/ --max-age 48h >> ~/rclone-<SITE_ID>.log 2>&1
   ```
-  Côté stockage objet, une règle de cycle de vie (suppression après 30 jours, par exemple) évite que les copies s'accumulent. Les photos, elles, sont sur le CDN (voir « Images »).
-- Le `.env` contient les secrets (base, Discord, stockage) : il doit rester lisible par vous seul (`chmod 600 .env`, fait à l'installation ; `ls -l .env` doit afficher `-rw-------`).
+  Côté stockage objet, une règle de cycle de vie (suppression après 30 jours, par exemple) évite que les copies s'accumulent.
+- Le `.env` contient les secrets (base, Discord) : il doit rester lisible par vous seul (`chmod 600 .env`, fait à l'installation ; `ls -l .env` doit afficher `-rw-------`).
 
 ### Bot Discord
 Géré à part ([roxwood-network-famille](https://github.com/poulpizar01/roxwood-network-famille)). Détail de la liaison, des rubriques lues, du cache et des limites : [docs/api.md](../docs/api.md#api-du-bot-discord-relayée). L'espace membre lit ses données via son **API REST, en lecture seule** : rien n'est écrit dans le bot ni stocké côté site.
@@ -114,9 +114,5 @@ Une par site.
 4. `DISCORD_GUILD_ID` = ID du serveur (mode développeur → clic droit sur le serveur → Copier l'identifiant). Seuls ses membres peuvent entrer.
 5. Le **propriétaire du serveur Discord** est propriétaire du site : validé d'office, tous les droits quel que soit son grade (vérifié à chaque connexion). C'est lui qui crée les premiers grades.
 6. Grades et rôle membre : ils se règlent dans l'espace membre → Gestion → Hiérarchie (nom, ordre, couleur, droits, grade par défaut, rôle Discord lié). Les rôles Discord se choisissent par leur nom quand le compte est relié au bot ; sinon, coller leur identifiant. Rôles et grades sont relus à chaque connexion (au plus tard 7 jours, durée d'une session).
-
-## Images (galerie)
-- **Dev** : les photos sont écrites dans `uploads/` à la racine du dépôt, sur le poste.
-- **Prod** : `STORAGE_URL`, `STORAGE_TOKEN` et `STORAGE_PREFIX` (un par site) sont **obligatoires** pour envoyer des photos : elles partent sur le service de stockage (CDN) et la base garde leur URL publique. Sans eux, le site fonctionne mais refuse tout envoi (jamais de photo sur le disque du VPS). Fonctionnement complet et contrat attendu du service : [docs/stockage.md](../docs/stockage.md).
 
 Toutes les variables : [`.env.example`](../.env.example).

@@ -120,10 +120,10 @@
     if (!b) return;
     if (b.dataset.save) return patch(b.dataset.save, fieldsOf(b.dataset.save), 'Enregistré ✦');
     if (b.dataset.approve) return patch(b.dataset.approve, { ...fieldsOf(b.dataset.approve), status: 'approved' }, 'Membre validé ✦');
-    // suppression : définitive (profil, messages, photos), contrairement à l'exclusion
+    // suppression : définitive (profil, messages), contrairement à l'exclusion
     if (b.dataset.delete) {
       const name = b.closest('[data-row]')?.querySelector('[data-field="displayName"]')?.value || 'Ce compte';
-      if (!await espaceConfirm(`Le compte de ${name} sera effacé pour de bon, avec ses messages et ses photos. Impossible de revenir en arrière : pour revenir, la personne devra refaire une demande. Pour seulement lui retirer l'accès, utilise plutôt « Exclure ».`, { title: 'Supprimer ce compte ?', ok: 'Supprimer définitivement', danger: true })) return;
+      if (!await espaceConfirm(`Le compte de ${name} sera effacé pour de bon, avec ses messages. Impossible de revenir en arrière : pour revenir, la personne devra refaire une demande. Pour seulement lui retirer l'accès, utilise plutôt « Exclure ».`, { title: 'Supprimer ce compte ?', ok: 'Supprimer définitivement', danger: true })) return;
       try { await api(`../api/admin/members/${b.dataset.delete}`, { method: 'DELETE' }); toast('Compte supprimé'); load(); }
       catch (err) { if (err) toast('Erreur : ' + err.message, false); }
       return;

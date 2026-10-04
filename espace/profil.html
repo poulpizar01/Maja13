@@ -176,9 +176,9 @@
     const r = await fetch('../api/me', { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (r.ok) { render(await r.json()); $('saved').hidden = false; setTimeout(() => $('saved').hidden = true, 2500); }
   });
-  // suppression de son propre compte : profil, messages et photos, sans retour possible
+  // suppression de son propre compte : profil et messages, sans retour possible
   $('supprimer').addEventListener('click', async () => {
-    if (!await espaceConfirm('Ton profil, tes messages et tes photos seront effacés pour de bon. Pour revenir, il faudra refaire une demande et attendre sa validation.', { title: 'Supprimer mon compte ?', ok: 'Supprimer mon compte', danger: true })) return;
+    if (!await espaceConfirm('Ton profil et tes messages seront effacés pour de bon. Pour revenir, il faudra refaire une demande et attendre sa validation.', { title: 'Supprimer mon compte ?', ok: 'Supprimer mon compte', danger: true })) return;
     const r = await fetch('../api/me', { method: 'DELETE', credentials: 'same-origin' });
     if (r.ok) location.href = '../'; else espaceToast('La suppression a échoué. Réessaie dans un instant.', false);
   });

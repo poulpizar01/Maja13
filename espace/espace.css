@@ -416,26 +416,6 @@ label.modal__label{cursor:pointer}
 .tier__add{width:40px;height:40px;background:none;border:1px dashed var(--line);font-size:20px;line-height:1;color:var(--ink2);cursor:pointer;transition:border-color .2s,color .2s}
 .tier__add:hover{border-style:solid;border-color:var(--accent);color:var(--ink)}
 
-/* ================= GALERIE (dépôt) ================= */
-.upload{display:grid;grid-template-columns:1.25fr 1fr;gap:24px;padding:22px;background:var(--bg2);border:1px solid var(--line)}
-.upload__drop{position:relative;display:flex;align-items:center;justify-content:center;min-height:240px;padding:24px;text-align:center;font:15px/1.5 var(--body);color:var(--ink2);cursor:pointer;
-  background:var(--bg);border:1px dashed color-mix(in srgb,var(--ink) 25%,transparent);transition:border-color .2s,background .2s}
-.upload__drop:hover{border-color:var(--ink2)}
-.upload__drop small{display:block;margin-top:8px;font-size:12px;color:var(--ink2)}
-.upload__drop.is-over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
-.upload__drop img{max-width:100%;max-height:320px;object-fit:contain}
-.upload__side{display:flex;flex-direction:column;gap:14px}
-.upload__side label{font-family:var(--serif);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
-.upload__side label small{font:13px var(--body);letter-spacing:0;text-transform:none}
-.gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
-.gal-item{display:flex;flex-direction:column;margin:0;background:var(--bg2);border:1px solid var(--line)}
-.gal-item img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}
-.gal-item figcaption{display:flex;flex-direction:column;gap:4px;padding:12px 14px;font-size:14px}
-.gal-item figcaption b{font-weight:600;color:var(--ink)}
-.gal-item figcaption i{color:var(--ink2)}
-.gal-item figcaption .btn{align-self:flex-start;margin-top:6px}
-.gal-item .muted{font-family:var(--serif);font-size:10px}
-
 /* ================= TABLEAU DE BORD, CLASSEMENT, STATISTIQUES ================= */
 /* tuiles de chiffres : une planche de cases jointives */
 /* grilles à traits fins : le trait entre deux cases est dessiné par chaque case (contour de 1 px dans l'espace de 1 px),
@@ -919,7 +899,6 @@ label.modal__label{cursor:pointer}
   .chat__envoi{width:40px;justify-content:center;padding:0}
 }
 @media (max-width:760px){
-  .upload{grid-template-columns:1fr}
   .profil__card{grid-template-columns:1fr;text-align:center;justify-items:center}
   .profil__card>*{grid-column:1!important}
   .profil__avatar-wrap{grid-row:auto;margin-bottom:24px}

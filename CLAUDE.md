@@ -9,7 +9,7 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 
 | Personnalisable par site | Mutualisé (identique partout) |
 |---|---|
-| `site.json`, `theme.css`, `index.html`, `styles.css`, `assets/`, `galerie.js` (liste `EXEMPLES`), `pellicule.js` | `espace/` (pages, `espace.js`, `espace.css`), `server/`, `org.js`, `main.js`, `404.html`, `compose*.yaml`, `docs/`, `.claude/skills/` |
+| `site.json`, `theme.css`, `index.html`, `styles.css`, `assets/`, `pellicule.js` | `espace/` (pages, `espace.js`, `espace.css`), `server/`, `org.js`, `main.js`, `404.html`, `compose*.yaml`, `docs/`, `.claude/skills/` |
 
 - La **vitrine** et la **direction artistique** sont libres dans chaque site.
 - La **partie gestion** (espace membre + serveur) ne se modifie **pas** dans un site : on corrige dans le modèle, puis chaque site fait `git fetch modele && git merge modele/main` (voir README). Un site qui modifie un fichier mutualisé se crée des conflits à chaque mise à jour.
@@ -26,7 +26,7 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 
 ## Stack et commandes
 
-- Serveur : Node 22, Express 5, TypeScript (ESM), Prisma 7 + PostgreSQL 17, sessions `connect-pg-simple`, `sharp` (images), `helmet`, `express-rate-limit`.
+- Serveur : Node 22, Express 5, TypeScript (ESM), Prisma 7 + PostgreSQL 17, sessions `connect-pg-simple`, `helmet`, `express-rate-limit`.
 - Dev (Docker Desktop) : `docker compose up` → http://localhost:3000. `compose.override.yaml` monte le code, lance `tsx`, active `DEV_LOGIN` (connexion sans Discord : `/auth/discord` ouvre le compte « Dev local », `/auth/discord?compte=<ID Discord>` un compte existant, pour essayer chaque niveau d'accès). Après modification de `server/src` : `docker compose restart app`.
 - Vérifier le typage : `docker exec -w /app/server <SITE_ID ou site>-app npx tsc -p . --noEmit` (sous Git Bash Windows, préfixer `MSYS_NO_PATHCONV=1`).
 - Migration : modifier `server/prisma/schema.prisma`, puis `docker compose exec app npx prisma migrate dev --name <description>` et **committer le dossier créé** (la prod applique les migrations au démarrage, `prisma migrate deploy`). Une migration ne s'annule pas : retour arrière = restauration d'une sauvegarde.
@@ -34,7 +34,7 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 
 ## Espace membre (mutualisé)
 
-- Pages dans `espace/` : `index` (connexion), `attente`, `profil` ; pour le rôle membre : `chat` (flux SSE), `galerie`, `classement`, `taxes`, `armurerie` ; sous « Gestion » : `tableau`, `stats`, `garages`, `admin` (pouvoirs complets), `membres`, `organigramme` (pouvoirs complets) ; `bot-callback` pour la liaison au bot. Le menu (`ESPACE_NAV`, `espace.js`) porte le niveau de chaque rubrique (`acces`).
+- Pages dans `espace/` : `index` (connexion), `attente`, `profil` ; pour le rôle membre : `chat` (flux SSE), `classement`, `taxes`, `armurerie` ; sous « Gestion » : `tableau`, `stats`, `garages`, `admin` (pouvoirs complets), `membres`, `organigramme` (pouvoirs complets) ; `bot-callback` pour la liaison au bot. Le menu (`ESPACE_NAV`, `espace.js`) porte le niveau de chaque rubrique (`acces`).
 - Pages de `espace/` : servies seulement à qui y a droit (`NIVEAU_PAGE`, `server/src/index.ts`, mêmes règles que l'API), sinon `refuse.html` (403), la connexion ou l'attente. Une nouvelle page s'y déclare avec son niveau.
 - Accès : compte validé = son profil seul ; **rôle membre** = rôle Discord dont l'identifiant se règle dans Gestion → Hiérarchie (table `settings`), relu à chaque connexion (`memberRole` : l'identifiant porté, comparé au réglage actuel, si bien que changer le rôle retire aussitôt l'accès à qui n'avait que l'ancien), implicite pour la Gestion, et personne ne l'a tant qu'il n'est pas réglé (`canMember`, `ranks.ts`) ; puis grades Gestion (`canAdmin`) / Pouvoirs complets (`canManage`). Le **propriétaire du serveur Discord** a toujours tout (`isOwner`, revérifié à chaque connexion ; quand un nouveau propriétaire se connecte, l'ancien perd ses pouvoirs et son grade sans rôle Discord). Gardes serveur : `approved`, `member`, `admin`, `manager` dans `server/src/http.ts` ; toute route ajoutée en utilise une. Le bot applique en plus ses propres règles (son rôle membre et son rôle admin).
 - Détail des routes, droits et limites de requêtes : `docs/api.md`.
@@ -46,24 +46,24 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 - Un serveur Discord n'a **qu'un seul site externe** déclaré (`/config site-externe set`) : tester le bot en dev sur un serveur Discord de test.
 - Quand le bot change son API, vérifier la compatibilité : cloner son dépôt, comparer `src/api/` aux adresses appelées par `espace/*.html` et aux champs lus (voir le tableau des rubriques dans `docs/api.md`).
 
-## Photos et mémoire
+## Mémoire et fichiers
 
-- Envoi : 15 Mo, 25 mégapixels maximum, réencodage WebP (1 800 px + miniature 600 px) ; disque local ou CDN (`STORAGE_URL`/`STORAGE_TOKEN`/`STORAGE_PREFIX`, un préfixe par site). Contrat du service : `docs/stockage.md`.
-- Plafonds Docker par défaut : site 512 Mo (Node : 320 Mo de tas, `NODE_OPTIONS`), base 256 Mo, sauvegardes 128 Mo — réglables dans `.env`. La limite de 25 mégapixels est calée sur le plafond du site (pic mesuré : ~190 Mo pour une photo de 25 Mpx, PNG 16 bits compris, avec `sharp.cache(false)` et `sharp.concurrency(1)`) : ne pas la relever sans relever `APP_MEMORY`.
-- `assets/exemples/` : photos d'exemple de la galerie, fichiers du projet, **jamais** envoyés au stockage.
+- **Aucun envoi d'images** sur les sites de famille (galerie retirée en octobre 2026) : pas de route d'envoi, pas de stockage de fichiers, rien n'est écrit sur le disque, tout est en base. Ne pas en réintroduire sans décision explicite (le modèle entreprise, lui, en a).
+- Plafonds Docker par défaut : site 512 Mo (Node : 320 Mo de tas, `NODE_OPTIONS`), base 256 Mo, sauvegardes 128 Mo — réglables dans `.env`.
+- `assets/exemples/` : images de la vitrine à remplacer par celles du groupe (fichiers du projet).
 
 ## Sécurité (à préserver)
 
-- `helmet` avec une CSP stricte (`server/src/security.ts`) : scripts, styles et polices depuis le site uniquement (aucun hébergeur tiers), **scripts en ligne seulement avec le jeton (nonce) de la réponse**, que `site.ts` ajoute à chaque `<script>` des pages servies — un `<script>` écrit dans une page fonctionne donc tel quel, mais un attribut `onclick=…` ou un script inséré par `innerHTML` ne s'exécute jamais (écouteurs en JS uniquement) ; images depuis le site, Discord et l'origine de `STORAGE_URL`. Une bibliothèque ou une police se copie dans le dépôt (`assets/`, `espace/vendor/`) plutôt que de se charger d'ailleurs.
+- `helmet` avec une CSP stricte (`server/src/security.ts`) : scripts, styles et polices depuis le site uniquement (aucun hébergeur tiers), **scripts en ligne seulement avec le jeton (nonce) de la réponse**, que `site.ts` ajoute à chaque `<script>` des pages servies — un `<script>` écrit dans une page fonctionne donc tel quel, mais un attribut `onclick=…` ou un script inséré par `innerHTML` ne s'exécute jamais (écouteurs en JS uniquement) ; images depuis le site et Discord (avatars). Une bibliothèque ou une police se copie dans le dépôt (`assets/`, `espace/vendor/`) plutôt que de se charger d'ailleurs.
 - Requêtes qui modifient des données : refusées si l'en-tête `Origin` n'est pas celui de `BASE_URL` (un site voisin sur le même domaine ne peut pas agir au nom d'un membre).
-- Seuls `espace/`, `assets/`, `/uploads` (photos sur disque, dev seulement : aucun volume de photos en prod) et les fichiers de premier niveau (`*.html|css|js|txt|xml`) sont servis : jamais `server/`, `site.json`, `compose.yaml`, `.env`. Vérifier avec `curl` qu'un nouveau fichier sensible reste en 404.
+- Seuls `espace/`, `assets/` et les fichiers de premier niveau (`*.html|css|js|txt|xml`) sont servis : jamais `server/`, `site.json`, `compose.yaml`, `.env`. Vérifier avec `curl` qu'un nouveau fichier sensible reste en 404.
 - Sessions : cookie `site.sid` `HttpOnly`, `SameSite=Lax`, `Secure` en HTTPS, 7 jours ; nouvelle session à chaque connexion. Le middleware de session ne tourne que sur `/api`, `/auth` et les pages HTML de `/espace/` (jamais sur les css, js et images), sans écriture en base à chaque requête (`disableTouch`) : une route qui lit `req.session` doit vivre sous `/api` ou `/auth` — seule exception, le contrôle d'accès des pages de `/espace/` (`server/src/index.ts`).
-- Photos : en production, le stockage distant (`STORAGE_URL`/`STORAGE_TOKEN`) est obligatoire ; sans lui, les envois sont refusés (le disque local ne sert qu'en dev). Voir `docs/stockage.md`. Connexion de dev (`DEV_LOGIN=1`) : trois verrous indépendants, à garder tous — refusée si `BASE_URL` n'est pas `http://localhost`, refusée dans l'image de production (`NODE_ENV=production`), et la route n'accepte qu'une requête arrivée directement sur la machine (Host `localhost`, sans en-tête `X-Forwarded-*` d'un proxy).
+- Connexion de dev (`DEV_LOGIN=1`) : trois verrous indépendants, à garder tous — refusée si `BASE_URL` n'est pas `http://localhost`, refusée dans l'image de production (`NODE_ENV=production`), et la route n'accepte qu'une requête arrivée directement sur la machine (Host `localhost`, sans en-tête `X-Forwarded-*` d'un proxy).
 
 ## Déploiement : pièges connus
 
 - Guide complet : `server/README.md` (installation, première connexion, mises à jour, sauvegardes, retour arrière). Ordre de mise en service : bot à jour et `/config role set membre`, puis le site, puis le rôle membre dans Gestion → Hiérarchie, puis chaque membre se reconnecte.
-- `config.ts` refuse de démarrer sur un `.env` incomplet ou douteux (secret de session de moins de 32 caractères, adresses invalides, `STORAGE_PREFIX` sans `/` final) : vérifier le `.env` de prod avant une mise à jour qui touche `config.ts`.
+- `config.ts` refuse de démarrer sur un `.env` incomplet ou douteux (secret de session de moins de 32 caractères, adresses invalides) : vérifier le `.env` de prod avant une mise à jour qui touche `config.ts`.
 - Base : en prod, le site se connecte avec `site_app` (propriétaire des tables, pas super-utilisateur), créé par le service `db-roles` ; en dev il garde `site` (`prisma migrate dev` crée une base temporaire). Une migration qui exige un super-utilisateur (`CREATE EXTENSION`…) passerait en dev et échouerait en prod. Restaurer une sauvegarde avec `psql -U site_app`.
 - Sauvegardes : sans les sessions (jetons du bot), fichiers en `600`. Ne stocker aucun secret en base hors de la table `session` sans l'exclure aussi de `pg_dump` (`compose.yaml`).
 - Aucune ressource tierce dans les pages (polices dans `assets/fonts/`, bibliothèques dans `assets/vendor/` ou `espace/vendor/`) : la page `confidentialite.html` l'affirme, la garder vraie.
@@ -84,4 +84,4 @@ Le site doit rester propre de 360 px à l'écran large : aucun débordement hori
 ## Git
 
 - Commits en français, préfixés par le domaine (`Espace membre : …`, `Vitrine : …`, `Docker : …`, `Docs : …`), corps expliquant le pourquoi.
-- Ne pas committer : `.env`, `uploads/`, `backups/`, `node_modules/`, `server/src/generated/`, `server/dist/` (déjà ignorés).
+- Ne pas committer : `.env`, `backups/`, `node_modules/`, `server/src/generated/`, `server/dist/` (déjà ignorés).

@@ -28,7 +28,7 @@ Classe les problèmes par gravité. Ne signale rien que tu n'as pas vérifié da
 Audite uniquement le contrôle d'accès du serveur (server/src).
 Cherche :
 - toute route /api ou /auth sans garde (member, admin, manager de server/src/http.ts) ou avec une garde plus faible que celle annoncée dans docs/api.md ;
-- les vérifications « auteur ou gestion » (photos, messages du chat) contournables en changeant un identifiant dans l'adresse ou le corps ;
+- les vérifications « auteur ou gestion » (messages du chat) contournables en changeant un identifiant dans l'adresse ou le corps ;
 - l'escalade de droits : un membre qui se donne un grade, modifie un grade supérieur au sien, ou garde ses droits après retrait d'un rôle Discord ; le propriétaire du serveur revérifié à chaque connexion ;
 - la connexion Discord : paramètre state, appartenance au serveur vérifiée, session régénérée à la connexion, comptes en attente ou refusés qui accèdent quand même à des données ;
 - DEV_LOGIN activable en production, ou tout autre raccourci de dev qui survit en prod ;
@@ -41,11 +41,11 @@ Cherche :
 ```
 Audite uniquement ce qui s'exécute ou s'affiche dans le navigateur, et ce que le serveur expose comme fichiers.
 Cherche :
-- toute donnée venant d'un utilisateur, de Discord ou du bot (nom RP, bio, légende de photo, message du chat, pseudo, nom d'item, note de taxe) insérée par innerHTML, insertAdjacentHTML ou dans un attribut sans échappement, dans espace/*.html, espace/espace.js, galerie.js, org.js et les autres scripts ;
+- toute donnée venant d'un utilisateur, de Discord ou du bot (nom RP, bio, message du chat, pseudo, nom d'item, note de taxe) insérée par innerHTML, insertAdjacentHTML ou dans un attribut sans échappement, dans espace/*.html, espace/espace.js, org.js et les autres scripts ;
 - les URL construites depuis une donnée utilisateur (href, src) qui accepteraient javascript: ou une autre origine ;
 - la CSP (server/src/security.ts) : directives trop larges, nonce réutilisé ou prévisible, ressource externe chargée sans y être déclarée ;
 - les {{…}} placés dans une chaîne JavaScript (piège documenté dans CLAUDE.md) et l'échappement des valeurs de site.json dans site.ts ;
-- les fichiers servis : vérifie que server/, site.json, compose*.yaml, .env, docs/, uploads/ hors photos publiques restent inaccessibles, y compris via encodage (%2e%2e, double slash, majuscules) ;
+- les fichiers servis : vérifie que server/, site.json, compose*.yaml, .env, docs/ restent inaccessibles, y compris via encodage (%2e%2e, double slash, majuscules) ;
 - les données sensibles renvoyées au navigateur sans besoin (jeton du bot, identifiants internes, champs de profil d'autres membres sur des routes publiques).
 ```
 
@@ -68,9 +68,8 @@ Cherche :
 ```
 Audite uniquement la fiabilité en exploitation et la consommation de ressources.
 Cherche :
-- les erreurs non attrapées qui arrêtent le serveur (routes async, flux SSE, traitement d'image, appels au stockage ou au bot) ;
-- la mémoire : traitement d'image (sharp) par rapport au plafond du conteneur, caches en mémoire sans borne (cache du bot, flux SSE, listes de membres), fuites de connexions SSE ;
-- l'envoi de photos : taille, mégapixels, type réel du fichier (pas seulement l'extension), fichiers orphelins sur le stockage après une erreur ou une suppression ;
+- les erreurs non attrapées qui arrêtent le serveur (routes async, flux SSE, appels au bot) ;
+- la mémoire : caches en mémoire sans borne (cache du bot, flux SSE, listes de membres), fuites de connexions SSE ;
 - la base : tables qui grossissent sans fin (sessions, messages du chat, lus/non lus), requêtes sans index sur des colonnes filtrées, migrations non commitées ;
 - le démarrage : variables d'environnement manquantes ou invalides détectées tôt avec un message clair, ou erreur obscure plus tard ;
 - le déploiement : compose.yaml (limites mémoire, redémarrage, ports publiés en loopback, sauvegardes réellement restaurables), nginx (docs/nginx.md, en-têtes transmis, flux SSE), cookies Secure derrière le proxy.

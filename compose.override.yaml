@@ -5,7 +5,7 @@
 #   docker compose restart app
 # - migrations Prisma appliquées au démarrage ; nouvelle migration après une modification de schema.prisma :
 #   docker compose exec app npx prisma migrate dev --name <description>
-# - connexion sans Discord (DEV_LOGIN) ; photos de la galerie dans ./uploads sur le poste
+# - connexion sans Discord (DEV_LOGIN)
 services:
   app:
     user: root                 # l'image tourne en « node » ; en dev, npm ci écrit dans le volume des dépendances
@@ -21,7 +21,6 @@ services:
       DEV_LOGIN: "1"
     volumes:
       - .:/app
-      - ./uploads:/app/uploads
       - server-modules:/app/server/node_modules   # dépendances Linux, séparées de celles du poste
   db:
     environment:

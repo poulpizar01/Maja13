@@ -35,12 +35,6 @@ const required = (name: string): string => env[name] || (devLogin ? '' : fail(`V
 const sessionSecret = env.SESSION_SECRET || fail('Variable manquante dans .env : SESSION_SECRET');
 if (!devLogin && sessionSecret.length < 32) fail('SESSION_SECRET trop court dans .env (32 caractères au moins) : openssl rand -hex 32');
 
-// dossier du site sur le stockage partagé : sans « / » final, les photos iraient dans « monsitegalerie/… » ;
-// vide, à la racine commune à tous les sites
-const storageUrl = adresse('STORAGE_URL');
-const storagePrefix = env.STORAGE_PREFIX ?? 'site/';
-if (storageUrl && !/^[\w.-]+(\/[\w.-]+)*\/$/.test(storagePrefix)) fail(`STORAGE_PREFIX dans .env doit être un dossier terminé par « / » (ex. monsite/) : « ${storagePrefix} »`);
-
 // racine du dépôt (index.html, styles.css, espace/…) : dist/ ou src/ → server/ → racine
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -57,12 +51,6 @@ export const config = {
     guildId: required('DISCORD_GUILD_ID'),
   },
   root,
-  storage: {
-    url: storageUrl,
-    token: env.STORAGE_TOKEN || '',
-    prefix: storagePrefix,
-    dir: env.UPLOAD_DIR || join(root, 'uploads'),
-  },
   // API REST du bot Discord (géré à part) ; vide = pages liées au bot désactivées
   botApiUrl: adresse('BOT_API_URL'),
   // Plafond d'appels au bot par quart d'heure, sous les 300 que le bot accorde à chaque serveur Discord (routes/bot.ts).

@@ -29,12 +29,10 @@ services:
         required: false        # absent en dev : compose.override.yaml fournit les valeurs
     environment:
       PORT: 3000               # port interne au conteneur ; celui de la machine est HOST_PORT
-      # mémoire JavaScript de Node, sous le plafond du conteneur (le reste sert au traitement des photos)
+      # mémoire JavaScript de Node, sous le plafond du conteneur
       NODE_OPTIONS: --max-old-space-size=${APP_NODE_HEAP:-320}
     ports:
       - "127.0.0.1:${HOST_PORT:-3000}:3000"
-    # aucun volume de photos : en prod elles vont au stockage distant (obligatoire, docs/stockage.md), le dossier
-    # /app/uploads ne sert qu'au dev (monté par compose.override.yaml)
     # santé : le serveur répond et joint la base (route /healthz). « unhealthy » apparaît dans `docker compose ps`
     # et les journaux ; Docker ne redémarre pas seul un conteneur malade, seulement un conteneur arrêté (voir server/README.md)
     healthcheck:

@@ -30,12 +30,10 @@ Prérequis de certbot : le domaine pointe déjà sur le VPS (`dig +short <domain
 | `include snippets/deny-hidden.conf` | Refuse tout chemin caché (`/.env`, `/.git`…) avant même qu'il n'atteigne le site, qui ne les sert déjà pas. |
 | `server_tokens off` | nginx n'annonce plus sa version dans ses réponses et ses pages d'erreur. |
 | `location = /healthz { return 404; }` | Le contrôle de santé (une lecture en base par appel) n'est pas joignable d'Internet : Docker interroge le conteneur directement. |
-| `client_max_body_size 16m` | Taille maximale d'une requête. Le site accepte des photos jusqu'à 15 Mo ; sans cette ligne, nginx refuse tout au-delà de 1 Mo (erreur 413). |
 | `proxy_pass http://127.0.0.1:__PORT__` | Transmet la requête au conteneur du site. |
 | `Host`, `X-Real-IP`, `X-Forwarded-For` | Donnent au site le vrai domaine et la vraie adresse IP du visiteur (le site fait confiance à un seul proxy : `trust proxy 1`). Sans eux, les limites de requêtes compteraient tous les visiteurs comme un seul. |
 | `X-Forwarded-Proto` | Indique au site que le visiteur est en HTTPS. Indispensable : le cookie de session est marqué `Secure` et ne serait jamais envoyé sans cette information. |
 | `X-Forwarded-Host` | Domaine demandé par le visiteur. Sa présence marque aussi la requête comme venue par le proxy : la connexion de dev (`DEV_LOGIN`) la refuse toujours. |
-| `location = /api/gallery` | Envoi d'une photo : le traitement puis le dépôt sur le stockage peuvent dépasser les 60 s que nginx accorde par défaut. `proxy_read_timeout 120s` évite une erreur affichée au membre alors que sa photo est publiée (et un doublon s'il réessaie). |
 | `location = /api/chat/stream` | Le chat reçoit les messages en direct par un flux (Server-Sent Events). `proxy_buffering off` les transmet immédiatement, `proxy_read_timeout 1h` évite une coupure toutes les 60 s, `Connection ''` garde la connexion ouverte. |
 
 Ne pas ajouter de cache nginx sur les pages : elles sont personnalisées par site et par session. Les images de `assets/` portent déjà leur propre durée de cache (7 jours).
@@ -47,7 +45,6 @@ Chaque site a son `SITE_ID`, son `HOST_PORT`, son domaine et son fichier `<domai
 | Symptôme | Cause probable |
 |---|---|
 | `502 Bad Gateway` | Le conteneur est arrêté ou redémarre : `docker compose ps`, `docker logs <SITE_ID>-app`. Ou `__PORT__` ≠ `HOST_PORT`. |
-| `413 Request Entity Too Large` à l'envoi d'une photo | `client_max_body_size` absent ou trop bas. |
 | Connexion Discord qui « ne tient pas » (retour à la page de connexion) | Site testé en `http://`, ou `X-Forwarded-Proto` absent. |
 | Le chat ne reçoit plus les messages en direct | Bloc `location = /api/chat/stream` absent. |
 | `nginx -t` : « zone … is already bound » | Deux sites ont la même zone `limit_req_zone` : `__SITE_ID__` mal remplacé. |

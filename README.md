@@ -12,7 +12,7 @@ En cas de conflit sur un fichier propre au site (`site.json`, `theme.css`, `inde
 ## Ce qui est propre à la Maja
 - `site.json` — nom, nom de l'espace membre (« La Casa »), devise, serveur, couleur d'accent (l'or), lien Discord, description ; insérés dans toutes les pages de La Casa par le serveur.
 - `theme.css` — couleurs et polices (noir, bronze, or ; Pirata One, Cinzel, EB Garamond), appliquées aussi à La Casa. Les polices sont dans `assets/fonts/`, servies par le site (rien n'est chargé depuis Google Fonts).
-- `index.html` (entrée), `accueil.html`, `styles.css` — vitrine (blason 3D `hero3d.js`, galerie en bandeau `galeria.js`) ; `assets/` — logo, médaillon, favicon, image de partage.
+- `index.html` (entrée), `accueil.html`, `styles.css` — vitrine (blason 3D `hero3d.js`) ; `assets/` — logo, médaillon, favicon, image de partage.
 - `sw.js` — désinstalle l'ancien service worker de M13 OS (supprimé le 26/09/2026). À garder jusqu'à fin novembre 2026 : un navigateur qui a encore l'ancien service worker ne s'en débarrasse qu'en récupérant ce fichier.
 
 ## Développement

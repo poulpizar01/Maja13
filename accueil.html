@@ -73,7 +73,6 @@
     <a href="#flota">Flota</a>
     <a href="#eventos">Eventos</a>
     <a href="#vocabulario">Vocabulario</a>
-    <a href="#galeria" id="navGaleria" hidden>Galería</a>
     <a href="espace/">La Casa</a>
     <a class="nav__cta" href="{{discord}}" target="_blank" rel="noopener">Discord</a>
   </nav>
@@ -311,29 +310,6 @@
   </div>
 </section>
 
-<!-- ============ GALERÍA (photos postées par les membres depuis La Casa) ============ -->
-<section class="section" id="galeria" hidden>
-  <div class="wrap">
-    <div class="section__head reveal">
-      <span class="numeral">VII</span>
-      <h2>Galería</h2>
-      <p class="sub">La familia en images</p>
-    </div>
-    <div class="galeria">
-      <button class="galeria__nav galeria__nav--prev" id="galeriaPrev" type="button" aria-label="Photos précédentes">‹</button>
-      <div class="galeria__track" id="galeriaGrid" tabindex="0" aria-label="Photos de la familia"></div>
-      <button class="galeria__nav galeria__nav--next" id="galeriaNext" type="button" aria-label="Photos suivantes">›</button>
-      <div class="galeria__progress" aria-hidden="true"><i class="galeria__bar"><b id="galeriaBar"></b></i></div>
-    </div>
-  </div>
-</section>
-<div class="lightbox" id="lightbox" hidden>
-  <button class="lightbox__close" id="lbClose" aria-label="Fermer">✕</button>
-  <button class="lightbox__nav lightbox__nav--prev" id="lbPrev" aria-label="Précédente">‹</button>
-  <figure><img id="lbImg" alt=""><figcaption id="lbCap"></figcaption></figure>
-  <button class="lightbox__nav lightbox__nav--next" id="lbNext" aria-label="Suivante">›</button>
-</div>
-
 <!-- ============ CONTACT ============ -->
 <section class="section section--contact" id="contacto">
   <div class="wrap">
@@ -367,7 +343,6 @@
 
 <script src="main.js"></script>
 <script src="org.js"></script>
-<script src="galeria.js"></script>
 <!-- blason 3D : three.js (~600 Ko) en différé, pour que le menu et l'apparition des sections n'attendent pas son téléchargement -->
 <script defer src="assets/vendor/three.min.js"></script>
 <script defer src="hero3d.js"></script>

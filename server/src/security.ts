@@ -13,7 +13,7 @@ export const cspNonce: RequestHandler = (_req, res, next) => { res.locals.cspNon
 
 // Politique de contenu : uniquement ce que les pages chargent réellement. Scripts, feuilles de style et polices
 // viennent du site lui-même (aucun hébergeur tiers : un hôte de scripts autorisé en entier servirait de contournement
-// au jeton) ; images : le site, les avatars Discord, le stockage d'images en prod. Scripts en ligne : seulement avec
+// au jeton) ; images : le site et les avatars Discord. Scripts en ligne : seulement avec
 // le jeton de la réponse ; styles en ligne autorisés (attributs style des pages, sans risque d'exécution de code).
 export const securityHeaders = helmet({
   contentSecurityPolicy: {
@@ -22,7 +22,7 @@ export const securityHeaders = helmet({
       'script-src': ["'self'", (_req, res) => `'nonce-${(res as Response).locals.cspNonce}'`],
       'style-src': ["'self'", "'unsafe-inline'"],
       'font-src': ["'self'"],
-      'img-src': ["'self'", 'data:', 'blob:', 'https://cdn.discordapp.com', ...(config.storage.url ? [new URL(config.storage.url).origin] : [])],
+      'img-src': ["'self'", 'data:', 'blob:', 'https://cdn.discordapp.com'],
       'connect-src': ["'self'"],
       'form-action': ["'self'"],
       'frame-ancestors': ["'none'"],
@@ -48,8 +48,6 @@ export const limits = {
   api: limiter(1, 240, 'Trop de requêtes, réessaie dans une minute.', byMember),
   // connexion (Discord, bot) : par adresse
   auth: limiter(15, 30, 'Trop de tentatives de connexion, réessaie dans quelques minutes.'),
-  // envoi de photos (15 Mo max chacune, traitées en mémoire)
-  upload: limiter(10, 10, 'Trop de photos envoyées d’un coup, réessaie dans quelques minutes.', byMember),
   // messages du chat
   chat: limiter(1, 20, 'Tu envoies trop de messages, ralentis un peu.', byMember),
   // (lectures relayées au bot : limite définie dans routes/bot.ts, qui ne compte que les vrais appels au bot)

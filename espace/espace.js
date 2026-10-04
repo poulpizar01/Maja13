@@ -59,7 +59,6 @@ const ESPACE_NAV = [
   { groupe: 'Moi', liens: [{ href: 'profil.html', label: 'Mon profil', court: 'Profil' }] },
   { groupe: 'Le groupe', acces: 'membre', liens: [
     { href: 'chat.html', label: 'Chat', court: 'Chat', badge: 'chat' },
-    { href: 'galerie.html', label: 'Galerie', court: 'Galerie' },
     { href: 'classement.html', label: 'Classement', court: 'Classement' },
     { href: 'taxes.html', label: 'Taxes' },
     { href: 'armurerie.html', label: 'Armurerie' },

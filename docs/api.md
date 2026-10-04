@@ -1,7 +1,7 @@
 # API
 
 Deux API distinctes :
-- **l'API du site** (ce dépôt) : ce que les pages appellent pour la connexion, les profils, les grades, la galerie, le chat ;
+- **l'API du site** (ce dépôt) : ce que les pages appellent pour la connexion, les profils, les grades, le chat ;
 - **l'API du bot Discord Roxwood** ([roxwood-network-famille](https://github.com/poulpizar01/roxwood-network-famille)), géré à part : stocks, quotas, paies, taxes, armurerie, ventes. Le site la **relaie en lecture seule** ; le navigateur ne lui parle jamais directement.
 
 ## API du site
@@ -21,7 +21,7 @@ Les droits se règlent par grade dans l'espace membre → Gestion → Hiérarchi
 
 Les pages HTML de l'espace suivent les mêmes niveaux, contrôlés par le serveur avant tout envoi (`NIVEAU_PAGE`, `server/src/index.ts`) : sans droits, la page n'est pas envoyée et le serveur répond `403` avec `espace/refuse.html` (pas connecté : renvoi à la connexion ; compte en attente ou refusé : renvoi à l'attente).
 
-Pages : **validé** — Mon profil ; **membre** — Classement, Chat, Galerie, Taxes, Armurerie ; **gestion** — Membres, Tableau de bord, Statistiques, Garage ; **hiérarchie** (pouvoirs complets) — Administration, Hiérarchie.
+Pages : **validé** — Mon profil ; **membre** — Classement, Chat, Taxes, Armurerie ; **gestion** — Membres, Tableau de bord, Statistiques, Garage ; **hiérarchie** (pouvoirs complets) — Administration, Hiérarchie.
 
 ### Routes
 | Méthode et adresse | Accès | Rôle |
@@ -30,18 +30,15 @@ Pages : **validé** — Mon profil ; **membre** — Classement, Chat, Galerie, T
 | `GET /auth/discord/callback` | public | Retour de Discord : vérifie l'appartenance au serveur, crée ou met à jour le compte |
 | `POST /auth/logout` | public | Ferme la session |
 | `GET /api/me` / `PATCH /api/me` | connecté / validé | Mon compte (droits, statut) / modifier nom RP, téléphone RP, bio |
-| `DELETE /api/me` | connecté | Supprimer son propre compte, validé ou non : fichiers des photos retirés du stockage d'abord, puis profil, messages et photos, puis fin de session. Stockage injoignable : `503`, rien n'est supprimé |
+| `DELETE /api/me` | connecté | Supprimer son propre compte, validé ou non : profil et messages, puis fin de session |
 | `GET /api/membres` | gestion | Annuaire des membres validés (page Membres) |
 | `GET /api/membres/noms` | membre | Nom RP et avatar des membres validés, par ID Discord (noms des joueurs dans le classement) |
 | `GET`/`PUT /api/admin/reglages` | hiérarchie | Réglages d'accès : `memberRoleId` (rôle Discord membre, chiffres ; vide = aucun) |
-| `GET /api/admin/members` · `PATCH`/`DELETE /api/admin/members/:id` | hiérarchie | Comptes (en attente, validés, refusés), sans bio ni téléphone RP : valider, refuser, changer nom RP ou grade, supprimer (pas son propre compte). Le compte du propriétaire du serveur Discord ne se modifie et ne se supprime que par lui (`403`). Suppression : `503` si le stockage des photos ne répond pas (rien n'est supprimé) |
+| `GET /api/admin/members` · `PATCH`/`DELETE /api/admin/members/:id` | hiérarchie | Comptes (en attente, validés, refusés), sans bio ni téléphone RP : valider, refuser, changer nom RP ou grade, supprimer (pas son propre compte). Le compte du propriétaire du serveur Discord ne se modifie et ne se supprime que par lui (`403`). |
 | `GET /api/ranks` | membre | Grades complets (nom, couleur, ordre, droits, rôle Discord) |
 | `POST /api/admin/ranks` · `PUT /api/admin/ranks/order` · `PATCH`/`DELETE /api/admin/ranks/:key` | hiérarchie | Créer, ordonner, modifier, supprimer des grades |
 | `GET /api/org` | public | Organigramme de la vitrine (grades sans leurs droits ni rôle Discord) |
 | `GET /api/admin/org` · `POST` · `PUT /api/admin/org/order` · `PATCH`/`DELETE /api/admin/org/:id` | hiérarchie | Cases de l'organigramme |
-| `GET /api/gallery?limit=` | public | Photos (60 par défaut, 200 maximum), des plus récentes aux plus anciennes. Auteur : nom RP et grade ; pseudo Discord, avatar et identifiant en plus pour un compte validé avec le rôle membre (pas pour un compte en attente, refusé ou sans le rôle) |
-| `POST /api/gallery` (formulaire, champ `photo` + `caption`) | membre | Publier une photo (voir [stockage.md](stockage.md)) ; `503` en production si le stockage (CDN) n'est pas configuré, ou si 3 envois sont déjà en cours sur le site (en-tête `Retry-After`) |
-| `DELETE /api/gallery/:id` | membre (auteur) ou gestion | Retirer une photo |
 | `GET`/`POST /api/chat/messages` · `DELETE /api/chat/messages/:id` | membre | Messages du chat (supprimer : auteur ou gestion) |
 | `GET /api/chat/stream` | membre | Flux temps réel des messages (Server-Sent Events, voir [nginx.md](nginx.md)) ; 5 flux ouverts au plus par membre, le plus ancien est fermé au-delà. Un flux est fermé dès que son compte perd l'accès au chat (refus, suppression, grade ou rôle membre retiré, à la reconnexion comme après une modification dans Gestion), à la déconnexion (tous les onglets de la session), à l'échéance de la session et à l'arrêt du serveur. Avant de fermer, le serveur envoie l'événement `closed` (`"limit"`, `"access"` ou `"stop"`) : la page ne se reconnecte d'elle-même que sur `stop` |
 | `GET /healthz` | public | Santé du site (serveur et base) pour le contrôle Docker : `{ ok: true }` ou `503` |
@@ -53,14 +50,13 @@ Pages : **validé** — Mon profil ; **membre** — Classement, Chat, Galerie, T
 |---|---|
 | Toute l'API `/api` | 240 requêtes par minute et par membre (ou par adresse IP hors connexion) |
 | Connexion `/auth` | 30 tentatives par quart d'heure et par adresse IP |
-| Envoi de photos | 10 par membre toutes les 10 minutes |
 | Messages du chat | 20 par minute et par membre |
 | Liaison au bot (`POST /api/bot/link`) | 5 essais par membre et par quart d'heure (chaque essai est un vrai appel au bot) |
 | Lectures du bot | `BOT_BUDGET` / 2 par membre et par quart d'heure (120 par défaut ; les réponses servies depuis le cache ne comptent pas). Partage entre membres : dès que le site a fait les trois quarts de `BOT_BUDGET` appels au bot dans le quart d'heure (180 par défaut), ceux qui en ont fait le quart attendent ; à `BOT_BUDGET` (240 par défaut), plus aucun appel jusqu'à la fin du quart d'heure. Le compte se recale sur celui du bot (en-têtes `RateLimit-*` de ses réponses), y compris après un redémarrage du site. Si le bot répond `429`, plus aucun appel jusqu'à l'échéance qu'il annonce |
 
 Au-delà : `429` avec un message lisible.
 
-**Conservation** : un message ou une photo retiré reste 7 jours en base (marqué supprimé, invisible), puis est effacé pour de bon (`server/src/purge.ts`, au démarrage puis chaque jour). Les en-têtes `RateLimit` et `RateLimit-Policy` indiquent le quota restant. Toutes les réponses de `/api` et `/auth` portent `Cache-Control: no-store` (rien de personnel gardé par le navigateur).
+**Conservation** : un message retiré reste 7 jours en base (marqué supprimé, invisible), puis est effacé pour de bon (`server/src/purge.ts`, au démarrage puis chaque jour). Les en-têtes `RateLimit` et `RateLimit-Policy` indiquent le quota restant. Toutes les réponses de `/api` et `/auth` portent `Cache-Control: no-store` (rien de personnel gardé par le navigateur).
 
 ## API du bot Discord (relayée)
 Activée par `BOT_API_URL` dans `.env` (vide : les pages liées au bot affichent « Le bot Discord n'est pas relié au site »). Code : `server/src/routes/bot.ts`.

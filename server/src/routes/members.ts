@@ -8,7 +8,6 @@ import { avatarUrl, byRankThenName, publicMember } from '../members.js';
 import { rankInfo, rankOf } from '../ranks.js';
 import { oublierBot } from './bot.js';
 import { fermerFlux, revaliderFluxPlusTard } from './chat.js';
-import { retirerFichiersOuEchouer } from './gallery.js';
 
 export const members = Router();
 
@@ -82,32 +81,25 @@ members.patch('/api/admin/members/:id', ...manager, async (req, res) => {
   res.json(vueAdmin(m));
 });
 
-// Suppression d'un compte : ses messages et ses photos partent avec lui (cascade en base). Les fichiers des photos
-// sont retirés du stockage AVANT le compte : si le stockage ne répond pas, rien n'est supprimé et on peut réessayer —
-// dans l'autre ordre, plus aucune ligne ne référencerait les fichiers, restés publics pour toujours.
-// Renvoie false si le stockage a refusé (aucune suppression faite).
-async function supprimerCompte(id: number): Promise<boolean> {
-  const photos = await prisma.photo.findMany({ where: { memberId: id }, select: { file: true, url: true, thumb: true, thumbUrl: true } });
-  try { for (const p of photos) await retirerFichiersOuEchouer(p); }
-  catch (e) { console.error(e); return false; }
+// Suppression d'un compte : ses messages partent avec lui (cascade en base), ses onglets du chat se ferment et ce que
+// le site gardait pour le bot est oublié.
+async function supprimerCompte(id: number): Promise<void> {
   await prisma.member.deleteMany({ where: { id } });
   fermerFlux(id);
   oublierBot(id);
-  return true;
 }
-const STOCKAGE_EN_PANNE = 'Le stockage des photos ne répond pas : rien n’a été supprimé, réessaie dans quelques minutes.';
 
 members.delete('/api/admin/members/:id', ...manager, async (req, res) => {
   const id = intParam(req, 'id');
   if (id === req.member.id) { res.status(400).json({ error: 'self' }); return; }
   const target = await prisma.member.findUnique({ where: { id }, select: { isOwner: true } });
   if (target?.isOwner && !req.member.isOwner) { res.status(403).json({ error: 'Le compte du propriétaire du serveur Discord ne se supprime que par lui-même.' }); return; }
-  if (!await supprimerCompte(id)) { res.status(503).json({ error: STOCKAGE_EN_PANNE }); return; }
+  await supprimerCompte(id);
   res.json({ ok: true });
 });
 
 // chacun peut supprimer son propre compte, validé ou non (une nouvelle connexion Discord en recréerait un, en attente)
 members.delete('/api/me', requireAuth, async (req, res) => {
-  if (!await supprimerCompte(req.session.memberId!)) { res.status(503).json({ error: STOCKAGE_EN_PANNE }); return; }
+  await supprimerCompte(req.session.memberId!);
   req.session.destroy(() => res.clearCookie('site.sid').json({ ok: true }));
 });
