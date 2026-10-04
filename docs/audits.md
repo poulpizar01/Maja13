@@ -29,7 +29,7 @@ Audite uniquement le contrôle d'accès du serveur (server/src).
 Cherche :
 - toute route /api ou /auth sans garde (member, admin, manager de server/src/http.ts) ou avec une garde plus faible que celle annoncée dans docs/api.md ;
 - les vérifications « auteur ou gestion » (messages du chat) contournables en changeant un identifiant dans l'adresse ou le corps ;
-- l'escalade de droits : un membre qui se donne un grade, modifie un grade supérieur au sien, ou garde ses droits après retrait d'un rôle Discord ; le propriétaire du serveur revérifié à chaque connexion ;
+- l'escalade de droits : un membre qui se donne un grade, modifie un grade supérieur au sien, ou garde ses droits après retrait d'un rôle Discord ; le propriétaire du serveur revérifié à chaque connexion, et l'ancien propriétaire qui perd ses pouvoirs après un transfert du serveur ; un changement du rôle membre dans Hiérarchie qui retire aussitôt l'accès à qui n'a que l'ancien rôle ;
 - la connexion Discord : paramètre state, appartenance au serveur vérifiée, session régénérée à la connexion, comptes en attente ou refusés qui accèdent quand même à des données ;
 - DEV_LOGIN activable en production, ou tout autre raccourci de dev qui survit en prod ;
 - les requêtes qui modifient des données (POST, PATCH, DELETE) déclenchables depuis un autre site (CSRF : SameSite, Content-Type, vérification d'origine) ;
@@ -46,7 +46,8 @@ Cherche :
 - la CSP (server/src/security.ts) : directives trop larges, nonce réutilisé ou prévisible, ressource externe chargée sans y être déclarée ;
 - les {{…}} placés dans une chaîne JavaScript (piège documenté dans CLAUDE.md) et l'échappement des valeurs de site.json dans site.ts ;
 - les fichiers servis : vérifie que server/, site.json, compose*.yaml, .env, docs/ restent inaccessibles, y compris via encodage (%2e%2e, double slash, majuscules) ;
-- les données sensibles renvoyées au navigateur sans besoin (jeton du bot, identifiants internes, champs de profil d'autres membres sur des routes publiques).
+- les données sensibles renvoyées au navigateur sans besoin (jeton du bot, identifiants internes, champs de profil d'autres membres sur des routes publiques), y compris dans la réponse d'une modification (PATCH) et pas seulement des lectures : la bio et le téléphone RP ne sont visibles que du membre lui-même (confidentialite.html) ;
+- les réponses personnelles que le navigateur pourrait garder en cache (en-tête Cache-Control: no-store sur /api et /auth).
 ```
 
 ## 3. Relais du bot Discord
@@ -58,7 +59,7 @@ Cherche :
 - le jeton : jamais renvoyé au navigateur, jamais écrit dans un log, oublié quand le bot répond 401 ou à la déconnexion ;
 - la liste blanche des rubriques : sortie possible de /api/<rubrique> (.., encodage, double slash, query string détournée) vers une autre route du bot ;
 - le cache par membre : une réponse d'un membre servie à un autre, clé de cache incomplète (paramètres de requête, identifiant), données d'un admin servies à un non-admin ;
-- la charge : pages qui appellent le bot sans passer par espaceBot.get() ou plus souvent que toutes les 5 minutes, risque de dépasser les 300 requêtes par quart d'heure du bot pour tout le site ;
+- la charge : pages qui appellent le bot sans passer par espaceBot.get() ou plus souvent que toutes les 5 minutes, risque de dépasser les 300 requêtes par quart d'heure du bot pour tout le site, y compris juste après un redémarrage du site (compteur recalé sur les en-têtes RateLimit-* du bot) ou avec beaucoup de membres actifs (plafond BOT_BUDGET), et les lectures relancées par un événement fréquent (redimensionnement, défilement) ;
 - le contrat avec l'API du bot : compare les adresses et les champs lus par les pages au code du bot (dépôt https://github.com/poulpizar01/roxwood-network-famille, dossier src/api/ et section API de son README) ; signale toute route ou tout champ utilisé qui n'existe plus ou a changé de forme ;
 - le comportement quand le bot est lent, coupé ou répond une erreur : page bloquée, erreur affichée, nouvelle tentative en boucle.
 ```
@@ -68,11 +69,12 @@ Cherche :
 ```
 Audite uniquement la fiabilité en exploitation et la consommation de ressources.
 Cherche :
-- les erreurs non attrapées qui arrêtent le serveur (routes async, flux SSE, appels au bot) ;
+- les erreurs non attrapées qui arrêtent le serveur (routes async, flux SSE — dont une écriture sur un flux déjà fermé sans écouteur d'erreur —, appels au bot) ;
 - la mémoire : caches en mémoire sans borne (cache du bot, flux SSE, listes de membres), fuites de connexions SSE ;
 - la base : tables qui grossissent sans fin (sessions, messages du chat, lus/non lus), requêtes sans index sur des colonnes filtrées, migrations non commitées ;
 - le démarrage : variables d'environnement manquantes ou invalides détectées tôt avec un message clair, ou erreur obscure plus tard ;
-- le déploiement : compose.yaml (limites mémoire, redémarrage, ports publiés en loopback, sauvegardes réellement restaurables), nginx (docs/nginx.md, en-têtes transmis, flux SSE), cookies Secure derrière le proxy.
+- le déploiement : compose.yaml (limites mémoire, redémarrage, ports publiés en loopback, sauvegardes réellement restaurables), nginx (docs/nginx.md, en-têtes transmis, flux SSE), cookies Secure derrière le proxy ;
+- les règles de l'hébergement (CLAUDE.md, « Déploiement ») : aucun volume Docker de médias, fichier nginx <domaine>.conf avec bloc HTTP réservé au défi ACME, include snippets/deny-hidden.conf, X-Forwarded-Proto et X-Forwarded-Host transmis.
 ```
 
 ## 5. Modèle mutualisé et pièges du projet
@@ -85,6 +87,7 @@ Cherche :
 - les attributs onclick ou scripts insérés par innerHTML, inopérants sous la CSP ;
 - les routes qui lisent req.session hors de /api et /auth ;
 - les débordements horizontaux et le menu burger aux largeurs 375, 768, 1 024 et 1 280 px (lecture du CSS, sans navigateur : signale seulement les cas certains) ;
+- toute réintroduction d'un envoi de fichiers (route multipart, champ fichier, stockage, dossier écrit sur le disque) : les sites de famille n'en acceptent aucun (CLAUDE.md) ;
 - une fonctionnalité ou une route ajoutée sans mise à jour de docs/api.md, README.md, server/README.md ou CLAUDE.md ;
 - les commentaires qui racontent une modification passée au lieu de décrire l'invariant actuel.
 ```

@@ -56,6 +56,7 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 
 - `helmet` avec une CSP stricte (`server/src/security.ts`) : scripts, styles et polices depuis le site uniquement (aucun hébergeur tiers), **scripts en ligne seulement avec le jeton (nonce) de la réponse**, que `site.ts` ajoute à chaque `<script>` des pages servies — un `<script>` écrit dans une page fonctionne donc tel quel, mais un attribut `onclick=…` ou un script inséré par `innerHTML` ne s'exécute jamais (écouteurs en JS uniquement) ; images depuis le site et Discord (avatars). Une bibliothèque ou une police se copie dans le dépôt (`assets/`, `espace/vendor/`) plutôt que de se charger d'ailleurs.
 - Requêtes qui modifient des données : refusées si l'en-tête `Origin` n'est pas celui de `BASE_URL` (un site voisin sur le même domaine ne peut pas agir au nom d'un membre).
+- Réponses de `/api` et `/auth` : `Cache-Control: no-store` (détail des taxes, paies : rien ne reste dans le cache d'un ordinateur partagé).
 - Seuls `espace/`, `assets/` et les fichiers de premier niveau (`*.html|css|js|txt|xml`) sont servis : jamais `server/`, `site.json`, `compose.yaml`, `.env`. Vérifier avec `curl` qu'un nouveau fichier sensible reste en 404.
 - Sessions : cookie `site.sid` `HttpOnly`, `SameSite=Lax`, `Secure` en HTTPS, 7 jours ; nouvelle session à chaque connexion. Le middleware de session ne tourne que sur `/api`, `/auth` et les pages HTML de `/espace/` (jamais sur les css, js et images), sans écriture en base à chaque requête (`disableTouch`) : une route qui lit `req.session` doit vivre sous `/api` ou `/auth` — seule exception, le contrôle d'accès des pages de `/espace/` (`server/src/index.ts`).
 - Connexion de dev (`DEV_LOGIN=1`) : trois verrous indépendants, à garder tous — refusée si `BASE_URL` n'est pas `http://localhost`, refusée dans l'image de production (`NODE_ENV=production`), et la route n'accepte qu'une requête arrivée directement sur la machine (Host `localhost`, sans en-tête `X-Forwarded-*` d'un proxy).
@@ -68,8 +69,8 @@ Notes de conventions et de pièges pour un agent Claude Code travaillant sur ce 
 - Sauvegardes : sans les sessions (jetons du bot), fichiers en `600`. Ne stocker aucun secret en base hors de la table `session` sans l'exclure aussi de `pg_dump` (`compose.yaml`).
 - Aucune ressource tierce dans les pages (polices dans `assets/fonts/`, bibliothèques dans `assets/vendor/` ou `espace/vendor/`) : la page `confidentialite.html` l'affirme, la garder vraie.
 - `SITE_ID` et `HOST_PORT` uniques par VPS (conteneurs `<SITE_ID>-app/-db/-backup` et `-db-roles`, qui ne tourne qu'au démarrage ; volumes préfixés).
-- Ne pas tester la connexion avant certbot : cookie `Secure` → la connexion échoue en `http://`.
-- nginx doit transmettre `X-Forwarded-Proto` et garder le bloc `location = /api/chat/stream` (SSE) : voir `docs/nginx.md`.
+- Ne pas tester la connexion avant le certificat : cookie `Secure` → la connexion échoue en `http://`.
+- Règles de l'hébergement (VPS) : aucun volume Docker de médias ; un fichier nginx par site nommé `<domaine>.conf`, avec un bloc HTTP réservé au défi ACME (certificat), `include snippets/deny-hidden.conf`, `X-Forwarded-Proto` et `X-Forwarded-Host` transmis, et le bloc `location = /api/chat/stream` (SSE) gardé. Modèle : `server/deploy/nginx.conf.example`, ordre de mise en place : `docs/nginx.md`.
 - Ne jamais copier `.env.example` en dev (sa ligne `COMPOSE_FILE` désactive l'override de dev).
 - En dev, les `assets/` ne sont pas mis en cache (`maxAge` 0) ; en prod, 7 jours : un visuel remplacé peut rester en cache chez les visiteurs.
 

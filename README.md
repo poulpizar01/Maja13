@@ -7,7 +7,7 @@ Le site est construit sur le [modèle Roxwood Network](https://github.com/poulpi
 git remote add modele https://github.com/poulpizar01/roxwood-network-site-famille-template.git   # une seule fois par clone
 git fetch modele && git merge modele/main
 ```
-En cas de conflit sur un fichier propre au site (`site.json`, `theme.css`, `index.html`, `accueil.html`, `styles.css`, `assets/`…), garder la version de la Maja.
+En cas de conflit sur un fichier propre au site (`site.json`, `theme.css`, `index.html`, `accueil.html`, `styles.css`, `assets/`…), garder la version de la Maja. Toujours passer par ce merge, jamais par une copie des fichiers ni un `git cherry-pick` : git ne saurait pas que ces corrections sont intégrées, et chaque mise à jour suivante tournerait aux conflits (marche à suivre si c'est déjà arrivé : [CLAUDE.md](CLAUDE.md)).
 
 ## Ce qui est propre à la Maja
 - `site.json` — nom, nom de l'espace membre (« La Casa »), devise, serveur, couleur d'accent (l'or), lien Discord, description ; insérés dans toutes les pages de La Casa par le serveur.
